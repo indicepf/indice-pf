@@ -168,8 +168,8 @@ function CelulaUnidade({ label }: { label: string }) {
 }
 
 // ─── Modal de fontes ───────────────────────────────────────────────────────
-function ModalFontes({ ingrediente, fontes, onClose }: {
-  ingrediente: string; fontes: FonteItem[]; onClose: () => void
+function ModalFontes({ ingrediente, fontes, data, onClose }: {
+  ingrediente: string; fontes: FonteItem[]; data: string; onClose: () => void
 }) {
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60"
@@ -177,10 +177,13 @@ function ModalFontes({ ingrediente, fontes, onClose }: {
       <div className="bg-slate-900 border border-slate-600 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto shadow-2xl"
         onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold text-slate-200">📦 Fontes — {ingrediente}</h3>
+          <div>
+            <h3 className="font-semibold text-slate-200">📦 Fontes — {ingrediente}</h3>
+            <p className="text-xs text-slate-500 mt-0.5">snapshot: {data}</p>
+          </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-200 text-xl leading-none">×</button>
         </div>
-        <p className="text-xs text-slate-500 mb-4">{fontes.length} resultado{fontes.length !== 1 ? 's' : ''} coletados do Google Shopping</p>
+        <p className="text-xs text-slate-500 mb-4">{fontes.length} resultado{fontes.length !== 1 ? 's' : ''} únicos coletados do Google Shopping</p>
         <div className="space-y-2">
           {fontes.map((f, i) => (
             <div key={i} className="bg-slate-800 rounded-lg p-3 border border-slate-700 hover:border-slate-500 transition-colors">
@@ -208,7 +211,60 @@ function ModalFontes({ ingrediente, fontes, onClose }: {
   )
 }
 
-// ─── Gradiente DP ──────────────────────────────────────────────────────────
+const PROTEINAS = ['Frango (coxa/sobrecoxa)', 'Carne Bovina', 'Bisteca Suína', 'Ovo']
+const PESO_PROTEINA: Record<string, number> = {
+  'Frango (coxa/sobrecoxa)': 1.0,
+  'Ovo': 1.0,
+  'Bisteca Suína': 1.2,
+  'Carne Bovina': 1.2,
+  'Tilápia': 1.1,
+  'Merluza': 1.1,
+}
+
+// Calcula custo do PF com média ponderada de proteínas
+function calcularCustoPF(
+  rows: HistoricoPreco[],
+  metrica: Metrica,
+  visiveis: Record<string, boolean>
+): number {
+  const ativos = rows.filter(d => visiveis[d.nome_ingrediente])
+
+  // Separa proteínas ativas
+  const proteinas = ativos.filter(d => CATEGORIA[d.nome_ingrediente] === 'Proteína')
+  const resto     = ativos.filter(d => CATEGORIA[d.nome_ingrediente] !== 'Proteína')
+
+  // Média ponderada das proteínas ativas
+  let custoProteina = 0
+  if (proteinas.length > 0) {
+    const getPreco = (d: HistoricoPreco) => {
+      const base = Number(d.preco) || 0
+      if (metrica === 'media'  && d.media)  return Number(d.media)
+      if (metrica === 'minimo' && d.minimo) return Number(d.minimo)
+      if (metrica === 'maximo' && d.maximo) return Number(d.maximo)
+      return base
+    }
+    // custo_porcao já usa 200g para proteínas — multiplica pelo peso relativo
+    const totalPeso = proteinas.reduce((s, d) => s + (PESO_PROTEINA[d.nome_ingrediente] || 1.0), 0)
+    const somaPond  = proteinas.reduce((s, d) => {
+      if (!d.custo_porcao || !d.preco) return s
+      const fator = getPreco(d) / (Number(d.preco) || 1)
+      return s + Number(d.custo_porcao) * fator * (PESO_PROTEINA[d.nome_ingrediente] || 1.0)
+    }, 0)
+    custoProteina = somaPond / totalPeso  // média ponderada = 1 porção de proteína
+  }
+
+  // Soma normal dos demais ingredientes
+  const custoResto = resto.reduce((acc, d) => {
+    if (!d.custo_porcao || !d.preco) return acc
+    let val = Number(d.preco)
+    if (metrica === 'media'  && d.media)  val = Number(d.media)
+    if (metrica === 'minimo' && d.minimo) val = Number(d.minimo)
+    if (metrica === 'maximo' && d.maximo) val = Number(d.maximo)
+    return acc + Number(d.custo_porcao) * (val / Number(d.preco))
+  }, 0)
+
+  return custoProteina + custoResto
+}
 const GradienteDP = () => (
   <defs>
     <linearGradient id="gradDP" x1="0" y1="0" x2="0" y2="1">
@@ -238,7 +294,7 @@ export default function Dashboard() {
   const [ordemDir, setOrdemDir]         = useState<OrdemDir>('asc')
   const [grafico2Tipo, setGrafico2Tipo] = useState<GraficoTipo>('barras')
   const [loading, setLoading]           = useState(true)
-  const [modalFontes, setModalFontes]   = useState<{ ingrediente: string; fontes: FonteItem[] } | null>(null)
+  const [modalFontes, setModalFontes]   = useState<{ ingrediente: string; fontes: FonteItem[]; data: string } | null>(null)
   const [fontesCache, setFontesCache]   = useState<Record<string, FonteItem[]>>({})
 
   useEffect(() => {
@@ -261,23 +317,39 @@ export default function Dashboard() {
   }, [])
 
   // Carrega fontes do ingrediente ao clicar em ...
-  async function abrirFontes(ingrediente: string) {
-    if (fontesCache[ingrediente]) {
-      setModalFontes({ ingrediente, fontes: fontesCache[ingrediente] })
+  async function abrirFontes(ingrediente: string, data?: string) {
+    const dataAlvo = data || ultimaData
+    const cacheKey = `${ingrediente}__${dataAlvo}`
+    if (fontesCache[cacheKey]) {
+      setModalFontes({ ingrediente, fontes: fontesCache[cacheKey], data: dataAlvo })
       return
     }
-    // Busca snapshot_id da última data
-    const snap = historico.find(d => d.data === ultimaData && d.nome_ingrediente === ingrediente)
-    if (!snap) return
-    const { data } = await supabase
+    // Busca snapshot_id da data selecionada
+    const { data: snaps } = await supabase
+      .from('snapshots')
+      .select('id')
+      .eq('data', dataAlvo)
+      .limit(1)
+    const snapshotId = snaps?.[0]?.id
+    if (!snapshotId) return
+
+    const { data: rows } = await supabase
       .from('resultados_brutos')
       .select('titulo, loja, preco_bruto, preco_normalizado, exibicao, link')
       .eq('nome_ingrediente', ingrediente)
+      .eq('snapshot_id', snapshotId)
       .order('preco_bruto', { ascending: true })
-      .limit(20)
-    const fontes = (data || []) as FonteItem[]
-    setFontesCache(c => ({ ...c, [ingrediente]: fontes }))
-    setModalFontes({ ingrediente, fontes })
+
+    // Deduplica por título+loja
+    const vistos = new Set<string>()
+    const fontes = ((rows || []) as FonteItem[]).filter(f => {
+      const key = `${f.titulo}__${f.loja}`
+      if (vistos.has(key)) return false
+      vistos.add(key)
+      return true
+    })
+    setFontesCache(c => ({ ...c, [cacheKey]: fontes }))
+    setModalFontes({ ingrediente, fontes, data: dataAlvo })
   }
 
   const ingredientes = useMemo(() =>
@@ -294,46 +366,33 @@ export default function Dashboard() {
   , [historico, dataInicio, dataFim])
 
   const custoPFMetrica = useMemo(() => {
-    const metrica = metricas[0]
-    return historico
-      .filter(d => d.data === ultimaData && visiveis[d.nome_ingrediente])
-      .reduce((acc, d) => {
-        if (!d.custo_porcao || !d.preco) return acc
-        let val = Number(d.preco)
-        if (metrica === 'media'  && d.media)  val = Number(d.media)
-        if (metrica === 'minimo' && d.minimo) val = Number(d.minimo)
-        if (metrica === 'maximo' && d.maximo) val = Number(d.maximo)
-        return acc + Number(d.custo_porcao) * (val / Number(d.preco))
-      }, 0)
+    const rows = historico.filter(d => d.data === ultimaData)
+    return calcularCustoPF(rows, metricas[0], visiveis)
   }, [historico, ultimaData, visiveis, metricas])
 
   // ── Dados gráfico linhas ──────────────────────────────────────────────────
   const dadosLinha = useMemo(() => {
     const datas = [...new Set(hFiltrado.map(d => d.data))].sort()
     return datas.map(data => {
-      const precosDaData = hFiltrado.filter(d => d.data === data && visiveis[d.nome_ingrediente])
+      const rowsData = hFiltrado.filter(d => d.data === data)
       const ponto: Record<string, any> = { data: fmtData(data) }
 
       if (metricas.includes('mediana')) {
-        const custoTotal = precosDaData[0]?.custo_total_pf
-        if (custoTotal) ponto['Mediana'] = Number(Number(custoTotal).toFixed(2))
+        const custo = calcularCustoPF(rowsData, 'mediana', visiveis)
+        if (custo > 0) ponto['Mediana'] = Number(custo.toFixed(2))
       }
 
       ;(['media','minimo','maximo'] as Metrica[]).forEach(m => {
         if (!metricas.includes(m)) return
         const label = m === 'media' ? 'Média' : m === 'minimo' ? 'Mínimo' : 'Máximo'
-        const custo = precosDaData.reduce((acc, d) => {
-          if (!d.custo_porcao || !d.preco) return acc
-          const val = m === 'media' ? Number(d.media) : m === 'minimo' ? Number(d.minimo) : Number(d.maximo)
-          if (!val) return acc
-          return acc + Number(d.custo_porcao) * (val / Number(d.preco))
-        }, 0)
+        const custo = calcularCustoPF(rowsData, m, visiveis)
         if (custo > 0) ponto[label] = Number(custo.toFixed(2))
       })
 
       if (mostrarDP && metricas.includes('mediana') && ponto['Mediana']) {
         const med = ponto['Mediana']
-        const dpReal = precosDaData.reduce((acc, d) => {
+        const rowsAtivos = rowsData.filter(d => visiveis[d.nome_ingrediente])
+        const dpReal = rowsAtivos.reduce((acc, d) => {
           if (!d.desvio_padrao || !d.preco || !d.custo_porcao) return acc
           return acc + (Number(d.desvio_padrao) / Number(d.preco)) * Number(d.custo_porcao)
         }, 0)
@@ -363,15 +422,31 @@ export default function Dashboard() {
   const dadosCategorias = useMemo(() => {
     const datas = [...new Set(hFiltrado.map(d => d.data))].sort()
     return datas.map(data => {
-      const precosDaData = hFiltrado.filter(d => d.data === data && visiveis[d.nome_ingrediente])
+      const rowsData = hFiltrado.filter(d => d.data === data)
       const custoCat: Record<string, number> = {}
       CATEGORIAS_ORDEM.forEach(c => custoCat[c] = 0)
-      precosDaData.forEach(d => {
-        const cat = CATEGORIA[d.nome_ingrediente] || 'Temperos'
-        if (d.custo_porcao) custoCat[cat] += Number(d.custo_porcao)
-      })
+
+      // Proteína: usa média ponderada (mesmo critério do índice)
+      const proteinas = rowsData.filter(d => CATEGORIA[d.nome_ingrediente] === 'Proteína' && visiveis[d.nome_ingrediente])
+      if (proteinas.length > 0) {
+        const totalPeso = proteinas.reduce((s, d) => s + (PESO_PROTEINA[d.nome_ingrediente] || 1.0), 0)
+        const somaPond  = proteinas.reduce((s, d) => {
+          if (!d.custo_porcao) return s
+          return s + Number(d.custo_porcao) * (PESO_PROTEINA[d.nome_ingrediente] || 1.0)
+        }, 0)
+        custoCat['Proteína'] = somaPond / totalPeso
+      }
+
+      // Demais categorias: soma normal
+      rowsData
+        .filter(d => CATEGORIA[d.nome_ingrediente] !== 'Proteína' && visiveis[d.nome_ingrediente])
+        .forEach(d => {
+          const cat = CATEGORIA[d.nome_ingrediente] || 'Temperos'
+          if (d.custo_porcao) custoCat[cat] += Number(d.custo_porcao)
+        })
+
       const total = Object.values(custoCat).reduce((a, b) => a + b, 0)
-      if (total < 1) return null
+      if (total < 0.1) return null
       const ponto: Record<string, any> = { data: fmtData(data) }
       if (grafico2Tipo === 'barras') {
         CATEGORIAS_ORDEM.forEach(c => {
@@ -476,6 +551,7 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
         <ModalFontes
           ingrediente={modalFontes.ingrediente}
           fontes={modalFontes.fontes}
+          data={modalFontes.data}
           onClose={() => setModalFontes(null)} />
       )}
 
