@@ -2,8 +2,9 @@ name: Scraper Semanal — Índice PF
 
 on:
   schedule:
+    # Toda quarta-feira às 8h (horário de Brasília = 11h UTC)
     - cron: '0 11 * * 3'
-  workflow_dispatch:
+  workflow_dispatch:  # permite rodar manualmente pelo GitHub
 
 jobs:
   scraper:
@@ -20,7 +21,8 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependências
-        run: pip install supabase python-dotenv requests
+        run: |
+          pip install supabase python-dotenv requests beautifulsoup4
 
       - name: Executar scraper
         env:
@@ -35,4 +37,13 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: python limpar_simulados.py
+        run: |
+          python limpar_simulados.py
+
+      - name: Notificar sucesso
+        if: success()
+        run: echo "✅ Índice PF atualizado com sucesso em $(date)"
+
+      - name: Notificar falha
+        if: failure()
+        run: echo "❌ Falha na atualização do Índice PF em $(date)"
