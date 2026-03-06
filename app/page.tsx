@@ -275,6 +275,34 @@ function IconeOrdem({ col, ordemCol, ordemDir }: { col: string; ordemCol: string
   return <span className="text-blue-400 ml-1">{ordemDir === 'asc' ? '↑' : '↓'}</span>
 }
 
+function ColunaHeader({ col, label, tip, ordemCol, ordemDir, onClick }: {
+  col: string; label: string; tip?: string | null
+  ordemCol: string; ordemDir: OrdemDir; onClick: () => void
+}) {
+  const [show, setShow] = useState(false)
+  return (
+    <th onClick={onClick}
+      className={`font-semibold text-slate-400 uppercase pb-3 pr-2 whitespace-nowrap cursor-pointer hover:text-slate-200 select-none transition-colors ${col === 'nome' ? 'text-left' : 'text-right'}`}>
+      <span className="relative inline-flex items-center gap-1">
+        {label}
+        {tip && (
+          <span className="text-slate-600 text-xs cursor-help relative"
+            onMouseEnter={e => { e.stopPropagation(); setShow(true) }}
+            onMouseLeave={() => setShow(false)}>
+            ⓘ
+            {show && (
+              <span className="absolute z-50 bottom-full right-0 mb-2 w-64 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 font-normal normal-case shadow-2xl leading-relaxed whitespace-normal text-left pointer-events-none">
+                {tip}
+              </span>
+            )}
+          </span>
+        )}
+        <IconeOrdem col={col} ordemCol={ordemCol} ordemDir={ordemDir} />
+      </span>
+    </th>
+  )
+}
+
 export default function Dashboard() {
   const [historico, setHistorico]       = useState<HistoricoPreco[]>([])
   const [ultimaData, setUltimaData]     = useState('')
@@ -819,18 +847,9 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
                     <thead>
                       <tr className="border-b border-slate-700">
                         {colunas.map(({ key, label, tip }) => (
-                          <th key={key} onClick={() => clicarColuna(key)}
-                            className={`font-semibold text-slate-400 uppercase pb-3 pr-2 whitespace-nowrap cursor-pointer hover:text-slate-200 select-none transition-colors ${key === 'nome' ? 'text-left' : 'text-right'}`}>
-                            <span className="relative group inline-flex items-center gap-1">
-                              {label}
-                              {tip && <span className="text-slate-600 text-xs cursor-help">ⓘ
-                                <span className="absolute z-50 bottom-full right-0 mb-2 w-64 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 font-normal normal-case shadow-2xl leading-relaxed hidden group-hover:block whitespace-normal text-left">
-                                  {tip}
-                                </span>
-                              </span>}
-                              <IconeOrdem col={key} ordemCol={ordemCol} ordemDir={ordemDir} />
-                            </span>
-                          </th>
+                          <ColunaHeader key={key} col={key} label={label} tip={tip}
+                            ordemCol={ordemCol} ordemDir={ordemDir}
+                            onClick={() => clicarColuna(key)} />
                         ))}
                         <th className="font-semibold text-slate-400 uppercase pb-3 text-center whitespace-nowrap">Fontes</th>
                       </tr>
