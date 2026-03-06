@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛒 Índice PF
 
-## Getting Started
+Dashboard de monitoramento semanal do custo de um prato feito brasileiro, com coleta automatizada de preços via Google Shopping.
 
-First, run the development server:
+## O que é
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+O Índice PF rastreia o custo de 27 ingredientes típicos de um prato feito (arroz, feijão, frango, salada, etc.) e calcula semanalmente quanto custa produzir uma porção. Os preços são coletados automaticamente via SerpAPI e armazenados no Supabase.
+
+**Acesse:** [indice-pf.vercel.app](https://indice-pf.vercel.app)
+
+## Funcionalidades
+
+- Evolução do custo do PF ao longo do tempo com banda de desvio padrão
+- Composição do custo por categoria (Proteína, Base, Guarnição, Salada, Temperos)
+- Tabela detalhada com mediana, média, mín, máx e desvio padrão por ingrediente
+- Calculadora de custo diário com simulação de desconto no atacado (5–30%)
+- Filtros por período, ingredientes e métrica de preço
+
+## Stack
+
+- **Frontend:** Next.js 15 + Tailwind CSS + Recharts
+- **Banco de dados:** Supabase (PostgreSQL)
+- **Coleta de dados:** Python + SerpAPI (Google Shopping)
+- **Deploy:** Vercel
+- **Automação:** GitHub Actions (toda quarta-feira às 8h)
+
+## Estrutura
+
+```
+indice-pf/
+├── app/
+│   └── page.tsx          # Dashboard principal
+├── lib/
+│   └── supabase.ts       # Cliente Supabase + tipos
+├── scraper_pf.py         # Coleta preços no Google Shopping
+├── salvar_supabase.py    # Salva resultados no banco
+├── limpar_simulados.py   # Remove snapshots simulados antigos
+└── .github/
+    └── workflows/
+        └── scraper-semanal.yml  # Automação semanal
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Rodando localmente
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Crie um arquivo `.env.local` na raiz com:
 
-## Learn More
+```
+NEXT_PUBLIC_SUPABASE_URL=sua_url_supabase
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anon
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Automação
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+O scraper roda automaticamente toda quarta-feira via GitHub Actions. Para rodar manualmente, acesse a aba **Actions** no GitHub e clique em **"Run workflow"**.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Os secrets necessários no GitHub são:
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `SUPABASE_URL`
+- `SUPABASE_KEY` (service role key)
+- `SERPAPI_KEY`
