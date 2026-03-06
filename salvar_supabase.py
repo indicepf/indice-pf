@@ -7,6 +7,7 @@ from datetime import datetime
 try:
     from dotenv import load_dotenv
     load_dotenv()
+    load_dotenv(".env.local")
 except ImportError:
     pass
 
@@ -111,6 +112,8 @@ def main():
             brutos_por_ingrediente[nome] = []
         brutos_por_ingrediente[nome].append(r["preco_normalizado"])
 
+    print(f"
+  DEBUG: {len(resultados)} resultados brutos, {len(brutos_por_ingrediente)} ingredientes agrupados")
     for r in resumo:
         nome    = r["ingrediente"]
         label   = r["label"]
