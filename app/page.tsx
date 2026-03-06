@@ -186,7 +186,9 @@ function ModalFontes({ ingrediente, fontes, data, onClose }: {
         <p className="text-xs text-slate-500 mb-4">{fontes.length} resultado{fontes.length !== 1 ? 's' : ''} únicos coletados do Google Shopping</p>
         <div className="space-y-2">
           {fontes.map((f, i) => (
-            <div key={i} className="bg-slate-800 rounded-lg p-3 border border-slate-700 hover:border-slate-500 transition-colors">
+            <a key={i} href={f.link || undefined} target="_blank" rel="noopener noreferrer"
+              className={`block bg-slate-800 rounded-lg p-3 border transition-colors ${f.link ? 'border-slate-700 hover:border-blue-500 hover:bg-slate-700 cursor-pointer' : 'border-slate-700 cursor-default'}`}
+              onClick={e => { if (!f.link) e.preventDefault() }}>
               <div className="flex justify-between items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-slate-200 text-sm font-medium truncate">{f.titulo}</p>
@@ -197,13 +199,8 @@ function ModalFontes({ ingrediente, fontes, data, onClose }: {
                   <p className="text-slate-500 text-xs">{f.exibicao}</p>
                 </div>
               </div>
-              {f.link && (
-                <a href={f.link} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                  🔗 ver produto
-                </a>
-              )}
-            </div>
+              {f.link && <p className="mt-2 text-xs text-blue-400">🔗 ver produto</p>}
+            </a>
           ))}
         </div>
       </div>
