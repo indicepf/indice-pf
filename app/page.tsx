@@ -8,6 +8,7 @@ import {
   ResponsiveContainer
 } from 'recharts'
 
+// ─── Paleta ───────────────────────────────────────────────────────────────────
 const PALETTE = [
   '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316',
   '#84cc16','#ec4899','#14b8a6','#a78bfa','#fb923c','#4ade80','#60a5fa',
@@ -19,8 +20,8 @@ const CATEGORIA: Record<string, string> = {
   'Frango (coxa/sobrecoxa)': 'Proteína', 'Carne Bovina': 'Proteína',
   'Bisteca Suína': 'Proteína', 'Ovo': 'Proteína',
   'Arroz Branco': 'Base', 'Feijão Carioca': 'Base',
-  'Macarrão Espaguete': 'Base', 'Farinha de Mandioca': 'Base',
   'Batata Inglesa': 'Guarnição', 'Mandioca': 'Guarnição',
+  'Macarrão Espaguete': 'Guarnição', 'Farinha de Mandioca': 'Guarnição',
   'Alface': 'Salada', 'Tomate': 'Salada', 'Pepino': 'Salada',
   'Cenoura': 'Salada', 'Beterraba': 'Salada',
   'Alho': 'Temperos', 'Cebola': 'Temperos', 'Sal': 'Temperos',
@@ -36,7 +37,7 @@ const CORES_CAT: Record<string, string> = {
   'Guarnição': '#8b5cf6', 'Salada': '#10b981', 'Temperos': '#06b6d4',
 }
 const COR_MEDIANA = '#f59e0b'
-const CORES_LINHA = ['#f59e0b','#3b82f6','#10b981','#ef4444']
+const CORES_LINHA = ['#f59e0b','#3b82f6','#10b981','#ef4444','#8b5cf6','#06b6d4']
 
 const LABEL_EXPLICACAO: Record<string, string> = {
   'kg*': 'Estimativa em R$/kg a partir de peso fixo por unidade (ex: cabeça de alface ≈ 300g). Será substituído por preço por unidade na próxima coleta.',
@@ -47,6 +48,16 @@ const LABEL_EXPLICACAO: Record<string, string> = {
 type Metrica = 'mediana' | 'media' | 'minimo' | 'maximo'
 type Aba = 'dashboard' | 'admin'
 type OrdemDir = 'asc' | 'desc'
+type GraficoTipo = 'barras' | 'linhas'
+
+type FonteItem = {
+  titulo: string
+  loja: string
+  preco_bruto: number
+  preco_normalizado: number
+  exibicao: string
+  link: string
+}
 
 function fmtData(d: string) {
   const [, m, dia] = d.split('-')
@@ -85,20 +96,22 @@ const TooltipPF = ({ active, payload, label }: any) => {
   )
 }
 
-// ─── Tooltip gráfico de barras ─────────────────────────────────────────────
-const TooltipBarras = ({ active, payload, label }: any) => {
+// ─── Tooltip gráfico de barras/linhas por categoria ───────────────────────
+const TooltipCategorias = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
+  const isPercent = payload[0]?.value != null && payload[0].value <= 100 && payload[0].value >= 0
   return (
     <div className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs shadow-xl min-w-48">
       <p className="text-slate-400 mb-2 font-semibold">{label}</p>
-      <p className="text-slate-600 mb-2 leading-relaxed">% do custo total da porção (quantidades fixas por prato).</p>
       {[...payload].reverse().map((p: any) => (
         <div key={p.dataKey} className="flex items-center justify-between gap-3 mb-1">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: p.fill }} />
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: p.fill || p.stroke }} />
             <span className="text-slate-300">{p.name}</span>
           </div>
-          <span className="font-bold text-white">{Number(p.value).toFixed(1)}%</span>
+          <span className="font-bold text-white">
+            {isPercent ? `${Number(p.value).toFixed(1)}%` : `R$${Number(p.value).toFixed(2)}`}
+          </span>
         </div>
       ))}
     </div>
@@ -129,32 +142,69 @@ function CardInfo({ label, value, sub, color, info }: {
   )
 }
 
-// ─── Célula unidade com hover (usa ref para posição real) ─────────────────
+// ─── Célula unidade com hover ──────────────────────────────────────────────
 function CelulaUnidade({ label }: { label: string }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const ref = useRef<HTMLSpanElement>(null)
   const explicacao = LABEL_EXPLICACAO[label]
-
   const handleEnter = () => {
     if (!explicacao || !ref.current) return
     const r = ref.current.getBoundingClientRect()
     setPos({ top: r.top - 8, left: r.left + r.width / 2 })
   }
-
   return (
     <span ref={ref} className="inline-flex items-center gap-1 cursor-default"
-      onMouseEnter={handleEnter}
-      onMouseLeave={() => setPos(null)}>
+      onMouseEnter={handleEnter} onMouseLeave={() => setPos(null)}>
       <span className="text-slate-500">{label}</span>
       {explicacao && <span className="text-slate-600 text-xs cursor-help">ⓘ</span>}
       {pos && explicacao && (
-        <span
-          className="fixed z-[200] w-60 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 shadow-2xl leading-relaxed whitespace-normal pointer-events-none"
+        <span className="fixed z-[200] w-60 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 shadow-2xl leading-relaxed whitespace-normal pointer-events-none"
           style={{ top: pos.top, left: pos.left, transform: 'translate(-50%, -100%)' }}>
           {explicacao}
         </span>
       )}
     </span>
+  )
+}
+
+// ─── Modal de fontes ───────────────────────────────────────────────────────
+function ModalFontes({ ingrediente, fontes, onClose }: {
+  ingrediente: string; fontes: FonteItem[]; onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60"
+      onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-600 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-slate-200">📦 Fontes — {ingrediente}</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 text-xl leading-none">×</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">{fontes.length} resultado{fontes.length !== 1 ? 's' : ''} coletados do Google Shopping</p>
+        <div className="space-y-2">
+          {fontes.map((f, i) => (
+            <div key={i} className="bg-slate-800 rounded-lg p-3 border border-slate-700 hover:border-slate-500 transition-colors">
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-slate-200 text-sm font-medium truncate">{f.titulo}</p>
+                  <p className="text-slate-500 text-xs mt-0.5">{f.loja}</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-amber-400 font-bold text-sm">R$ {Number(f.preco_bruto).toFixed(2)}</p>
+                  <p className="text-slate-500 text-xs">{f.exibicao}</p>
+                </div>
+              </div>
+              {f.link && (
+                <a href={f.link} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                  🔗 ver produto
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -174,19 +224,22 @@ function IconeOrdem({ col, ordemCol, ordemDir }: { col: string; ordemCol: string
 }
 
 export default function Dashboard() {
-  const [historico, setHistorico]     = useState<HistoricoPreco[]>([])
-  const [ultimaData, setUltimaData]   = useState('')
-  const [aba, setAba]                 = useState<Aba>('dashboard')
-  const [dataInicio, setDataInicio]   = useState('')
-  const [dataFim, setDataFim]         = useState('')
-  const [visiveis, setVisiveis]       = useState<Record<string, boolean>>({})
-  const [metricas, setMetricas]       = useState<Metrica[]>(['mediana'])
-  const [mostrarDP, setMostrarDP]     = useState(true)
-  const [qtdPratos, setQtdPratos]     = useState(50)
-  const [descAtacado, setDescAtacado] = useState(15)
-  const [ordemCol, setOrdemCol]       = useState('nome')
-  const [ordemDir, setOrdemDir]       = useState<OrdemDir>('asc')
-  const [loading, setLoading]         = useState(true)
+  const [historico, setHistorico]       = useState<HistoricoPreco[]>([])
+  const [ultimaData, setUltimaData]     = useState('')
+  const [aba, setAba]                   = useState<Aba>('dashboard')
+  const [dataInicio, setDataInicio]     = useState('')
+  const [dataFim, setDataFim]           = useState('')
+  const [visiveis, setVisiveis]         = useState<Record<string, boolean>>({})
+  const [metricas, setMetricas]         = useState<Metrica[]>(['mediana'])
+  const [mostrarDP, setMostrarDP]       = useState(true)
+  const [qtdPratos, setQtdPratos]       = useState(50)
+  const [descAtacado, setDescAtacado]   = useState(15)
+  const [ordemCol, setOrdemCol]         = useState('nome')
+  const [ordemDir, setOrdemDir]         = useState<OrdemDir>('asc')
+  const [grafico2Tipo, setGrafico2Tipo] = useState<GraficoTipo>('barras')
+  const [loading, setLoading]           = useState(true)
+  const [modalFontes, setModalFontes]   = useState<{ ingrediente: string; fontes: FonteItem[] } | null>(null)
+  const [fontesCache, setFontesCache]   = useState<Record<string, FonteItem[]>>({})
 
   useEffect(() => {
     async function carregar() {
@@ -194,7 +247,7 @@ export default function Dashboard() {
         .from('historico_precos').select('*').order('data', { ascending: true })
       if (data?.length) {
         setHistorico(data)
-        const datas  = [...new Set(data.map((d: HistoricoPreco) => d.data))].sort()
+        const datas = [...new Set(data.map((d: HistoricoPreco) => d.data))].sort()
         setUltimaData(datas[datas.length - 1])
         setDataInicio(datas[0])
         setDataFim(datas[datas.length - 1])
@@ -206,6 +259,26 @@ export default function Dashboard() {
     }
     carregar()
   }, [])
+
+  // Carrega fontes do ingrediente ao clicar em ...
+  async function abrirFontes(ingrediente: string) {
+    if (fontesCache[ingrediente]) {
+      setModalFontes({ ingrediente, fontes: fontesCache[ingrediente] })
+      return
+    }
+    // Busca snapshot_id da última data
+    const snap = historico.find(d => d.data === ultimaData && d.nome_ingrediente === ingrediente)
+    if (!snap) return
+    const { data } = await supabase
+      .from('resultados_brutos')
+      .select('titulo, loja, preco_bruto, preco_normalizado, exibicao, link')
+      .eq('nome_ingrediente', ingrediente)
+      .order('preco_bruto', { ascending: true })
+      .limit(20)
+    const fontes = (data || []) as FonteItem[]
+    setFontesCache(c => ({ ...c, [ingrediente]: fontes }))
+    setModalFontes({ ingrediente, fontes })
+  }
 
   const ingredientes = useMemo(() =>
     [...new Set(historico.map(d => d.nome_ingrediente))].sort(), [historico])
@@ -234,21 +307,18 @@ export default function Dashboard() {
       }, 0)
   }, [historico, ultimaData, visiveis, metricas])
 
-  // ── Dados gráfico de linhas ───────────────────────────────────────────────
+  // ── Dados gráfico linhas ──────────────────────────────────────────────────
   const dadosLinha = useMemo(() => {
     const datas = [...new Set(hFiltrado.map(d => d.data))].sort()
-
     return datas.map(data => {
       const precosDaData = hFiltrado.filter(d => d.data === data && visiveis[d.nome_ingrediente])
       const ponto: Record<string, any> = { data: fmtData(data) }
 
-      // Mediana: usa custo_total_pf do banco diretamente
       if (metricas.includes('mediana')) {
         const custoTotal = precosDaData[0]?.custo_total_pf
         if (custoTotal) ponto['Mediana'] = Number(Number(custoTotal).toFixed(2))
       }
 
-      // Outras métricas (só onde existem dados reais)
       ;(['media','minimo','maximo'] as Metrica[]).forEach(m => {
         if (!metricas.includes(m)) return
         const label = m === 'media' ? 'Média' : m === 'minimo' ? 'Mínimo' : 'Máximo'
@@ -261,30 +331,23 @@ export default function Dashboard() {
         if (custo > 0) ponto[label] = Number(custo.toFixed(2))
       })
 
-      // Banda DP: usa propagação real onde disponível, senão estima ±8%
       if (mostrarDP && metricas.includes('mediana') && ponto['Mediana']) {
         const med = ponto['Mediana']
-
-        // Tenta DP real (propagação de incerteza)
         const dpReal = precosDaData.reduce((acc, d) => {
           if (!d.desvio_padrao || !d.preco || !d.custo_porcao) return acc
           return acc + (Number(d.desvio_padrao) / Number(d.preco)) * Number(d.custo_porcao)
         }, 0)
-
         if (dpReal > 0) {
-          // DP real calculado a partir dos resultados brutos
           ponto['dp_superior'] = Number((med + dpReal).toFixed(2))
           ponto['dp_inferior'] = Number((med - dpReal).toFixed(2))
           ponto['dp_estimado'] = false
         } else {
-          // DP estimado: ±8% do custo (proxy para variação histórica de mercado)
-          const dpEstimado = med * 0.08
-          ponto['dp_superior'] = Number((med + dpEstimado).toFixed(2))
-          ponto['dp_inferior'] = Number((med - dpEstimado).toFixed(2))
+          const dpEst = med * 0.08
+          ponto['dp_superior'] = Number((med + dpEst).toFixed(2))
+          ponto['dp_inferior'] = Number((med - dpEst).toFixed(2))
           ponto['dp_estimado'] = true
         }
       }
-
       return ponto
     })
   }, [hFiltrado, visiveis, metricas, mostrarDP])
@@ -296,28 +359,32 @@ export default function Dashboard() {
     )
   }, [dadosLinha])
 
-  // ── Dados gráfico barras — FIX: filtra pontos sem custo ──────────────────
-  const dadosBarras = useMemo(() => {
+  // ── Dados gráfico 2 — barras (%) ou linhas (R$) por categoria ────────────
+  const dadosCategorias = useMemo(() => {
     const datas = [...new Set(hFiltrado.map(d => d.data))].sort()
-    return datas
-      .map(data => {
-        const precosDaData = hFiltrado.filter(d => d.data === data && visiveis[d.nome_ingrediente])
-        const custoCat: Record<string, number> = {}
-        CATEGORIAS_ORDEM.forEach(c => custoCat[c] = 0)
-        precosDaData.forEach(d => {
-          const cat = CATEGORIA[d.nome_ingrediente] || 'Temperos'
-          if (d.custo_porcao) custoCat[cat] += Number(d.custo_porcao)
-        })
-        const total = Object.values(custoCat).reduce((a, b) => a + b, 0)
-        if (total < 1) return null // FIX: ignora pontos sem dados reais
-        const ponto: Record<string, any> = { data: fmtData(data) }
+    return datas.map(data => {
+      const precosDaData = hFiltrado.filter(d => d.data === data && visiveis[d.nome_ingrediente])
+      const custoCat: Record<string, number> = {}
+      CATEGORIAS_ORDEM.forEach(c => custoCat[c] = 0)
+      precosDaData.forEach(d => {
+        const cat = CATEGORIA[d.nome_ingrediente] || 'Temperos'
+        if (d.custo_porcao) custoCat[cat] += Number(d.custo_porcao)
+      })
+      const total = Object.values(custoCat).reduce((a, b) => a + b, 0)
+      if (total < 1) return null
+      const ponto: Record<string, any> = { data: fmtData(data) }
+      if (grafico2Tipo === 'barras') {
         CATEGORIAS_ORDEM.forEach(c => {
           ponto[c] = Number(((custoCat[c] / total) * 100).toFixed(1))
         })
-        return ponto
-      })
-      .filter(Boolean)
-  }, [hFiltrado, visiveis])
+      } else {
+        CATEGORIAS_ORDEM.forEach(c => {
+          ponto[c] = Number(custoCat[c].toFixed(3))
+        })
+      }
+      return ponto
+    }).filter(Boolean)
+  }, [hFiltrado, visiveis, grafico2Tipo])
 
   // ── Tabela ────────────────────────────────────────────────────────────────
   const tabelaBase = useMemo(() => {
@@ -368,7 +435,16 @@ export default function Dashboard() {
     setVisiveis(novo)
   }
 
-  const EXPLICACAO_INDICE = `O Índice PF soma o custo de cada ingrediente na quantidade exata de uma porção. Exemplo: 150g de frango + 80g de feijão + 100g de arroz etc. Não é média por categoria — proteína representa mais porque carne e frango são caros por kg. A mediana é usada por ingrediente para reduzir o impacto de outliers. A banda sombreada mostra ±1 desvio padrão propagado (real no último snapshot, estimado em ±8% nos demais).`
+  const EXPLICACAO_INDICE = `O Índice PF calcula o custo de UMA porção de prato feito com quantidades fixas:
+
+• Proteína (200g): média ponderada entre frango (×1.0), peixe (×1.1) e carne vermelha (×1.2)
+• Arroz: 80g cru → ~200g cozido
+• Feijão: 60g cru → ~150g cozido
+• Guarnição (150g): média entre batata, mandioca, macarrão e farinha
+• Salada (80g total): média dos itens de salada
+• Temperos: quantidades fixas por ingrediente
+
+A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A banda sombreada mostra ±1 desvio padrão propagado (real no último snapshot, estimado ±8% nos demais).`
 
   const colunas = [
     { key: 'nome',      label: 'Produto'      },
@@ -395,6 +471,13 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 flex flex-col"
       style={{ fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+
+      {modalFontes && (
+        <ModalFontes
+          ingrediente={modalFontes.ingrediente}
+          fontes={modalFontes.fontes}
+          onClose={() => setModalFontes(null)} />
+      )}
 
       <nav className="bg-slate-950 px-6 py-4 flex justify-between items-center border-b border-slate-800">
         <h1 className="text-lg font-semibold flex items-center gap-3">
@@ -436,7 +519,7 @@ export default function Dashboard() {
                     </label>
                   )}
                 </div>
-                <p className="text-xs text-slate-600 mt-2 px-2">Média/Mín/Máx: último snapshot. Banda ±DP: estimada (±8%) para semanas históricas.</p>
+                <p className="text-xs text-slate-600 mt-2 px-2">Média/Mín/Máx: último snapshot real. Banda ±DP: estimada (±8%) para semanas históricas.</p>
               </div>
 
               <div>
@@ -447,9 +530,17 @@ export default function Dashboard() {
                   className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none" />
               </div>
 
+              {/* Ingredientes com hover explicativo */}
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Ingredientes</label>
+                  <div className="relative group">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide cursor-help">
+                      Ingredientes <span className="text-slate-600">ⓘ</span>
+                    </label>
+                    <div className="absolute z-50 bottom-full left-0 mb-2 w-64 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 shadow-2xl leading-relaxed hidden group-hover:block">
+                      Selecione os ingredientes que você usa no seu restaurante para personalizar o cálculo do custo do PF. Desmarque proteínas ou itens que não fazem parte do seu cardápio.
+                    </div>
+                  </div>
                   <div className="flex gap-2">
                     <button onClick={() => toggleTodos(true)} className="text-xs text-blue-400 hover:text-blue-300">Todos</button>
                     <button onClick={() => toggleTodos(false)} className="text-xs text-slate-500 hover:text-slate-300">Nenhum</button>
@@ -472,6 +563,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* Calculadora */}
               <div className="bg-slate-900 rounded-lg p-4 border border-slate-700 space-y-3">
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Calculadora de Custo</p>
                 <div>
@@ -534,7 +626,7 @@ export default function Dashboard() {
                   sub="selecione na sidebar" color="text-blue-400" />
               </div>
 
-              {/* Gráfico linhas */}
+              {/* Gráfico 1 — Evolução custo total */}
               <div className="bg-slate-800 border border-slate-700 rounded-xl p-5" style={{ height: 320 }}>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs text-slate-400 uppercase tracking-wide">Evolução do Custo Total do PF (R$/porção)</p>
@@ -547,7 +639,7 @@ export default function Dashboard() {
                     )}
                     {linhasKeys.map((k, i) => (
                       <span key={k} className="flex items-center gap-1">
-                        <span className="w-4 h-0.5 inline-block rounded" style={{ backgroundColor: CORES_LINHA[i % 4] }} />
+                        <span className="w-4 h-0.5 inline-block rounded" style={{ backgroundColor: CORES_LINHA[i % CORES_LINHA.length] }} />
                         {k}
                       </span>
                     ))}
@@ -570,7 +662,7 @@ export default function Dashboard() {
                     </>}
                     {linhasKeys.map((key, i) => (
                       <Line key={key} type="monotone" dataKey={key}
-                        stroke={CORES_LINHA[i % 4]}
+                        stroke={CORES_LINHA[i % CORES_LINHA.length]}
                         strokeWidth={key === 'Mediana' ? 2.5 : 1.5}
                         dot={key === 'Mediana' ? { fill: CORES_LINHA[0], r: 3 } : false}
                         strokeDasharray={key === 'Mínimo' || key === 'Máximo' ? '4 2' : undefined}
@@ -580,21 +672,54 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
 
-              {/* Gráfico barras */}
+              {/* Gráfico 2 — Categorias com toggle barras/linhas */}
               <div className="bg-slate-800 border border-slate-700 rounded-xl p-5" style={{ height: 300 }}>
-                <p className="text-xs text-slate-400 uppercase tracking-wide mb-3">
-                  Composição do Custo por Categoria (% do total · mediana)
-                </p>
-                <ResponsiveContainer width="100%" height="88%">
-                  <BarChart data={dadosBarras}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="data" tick={{ fill: '#64748b', fontSize: 11 }} />
-                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v}%`} width={40} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} />
-                    <Tooltip content={<TooltipBarras />} />
-                    {CATEGORIAS_ORDEM.map(cat => (
-                      <Bar key={cat} dataKey={cat} stackId="a" fill={CORES_CAT[cat]} />
-                    ))}
-                  </BarChart>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wide">
+                    Composição do Custo por Categoria
+                    <span className="text-slate-600 ml-2">
+                      {grafico2Tipo === 'barras' ? '(% do total)' : '(R$/porção)'}
+                    </span>
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {/* Toggle barras/linhas */}
+                    <div className="flex bg-slate-700 rounded-md p-0.5">
+                      <button onClick={() => setGrafico2Tipo('barras')}
+                        className={`px-2.5 py-1 rounded text-xs transition-colors ${grafico2Tipo === 'barras' ? 'bg-slate-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                        ▦ Barras
+                      </button>
+                      <button onClick={() => setGrafico2Tipo('linhas')}
+                        className={`px-2.5 py-1 rounded text-xs transition-colors ${grafico2Tipo === 'linhas' ? 'bg-slate-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                        ∿ Linhas
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height="85%">
+                  {grafico2Tipo === 'barras' ? (
+                    <BarChart data={dadosCategorias}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="data" tick={{ fill: '#64748b', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v}%`} width={40} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} />
+                      <Tooltip content={<TooltipCategorias />} />
+                      {CATEGORIAS_ORDEM.map(cat => (
+                        <Bar key={cat} dataKey={cat} stackId="a" fill={CORES_CAT[cat]} name={cat} />
+                      ))}
+                    </BarChart>
+                  ) : (
+                    <ComposedChart data={dadosCategorias}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="data" tick={{ fill: '#64748b', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `R$${v}`} width={62} domain={['auto','auto']} />
+                      <Tooltip content={<TooltipCategorias />} />
+                      {CATEGORIAS_ORDEM.map(cat => (
+                        <Line key={cat} type="monotone" dataKey={cat}
+                          stroke={CORES_CAT[cat]} strokeWidth={2}
+                          dot={{ fill: CORES_CAT[cat], r: 3 }}
+                          name={cat} connectNulls />
+                      ))}
+                    </ComposedChart>
+                  )}
                 </ResponsiveContainer>
               </div>
 
@@ -611,6 +736,7 @@ export default function Dashboard() {
                             {label}<IconeOrdem col={key} ordemCol={ordemCol} ordemDir={ordemDir} />
                           </th>
                         ))}
+                        <th className="font-semibold text-slate-400 uppercase pb-3 text-center whitespace-nowrap">Fontes</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -658,6 +784,12 @@ export default function Dashboard() {
                               ? <span className="text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded font-bold">{item.inflacao.toFixed(1)}%</span>
                               : <span className="text-slate-400 bg-slate-700 px-1.5 py-0.5 rounded">{item.inflacao > 0 ? '+' : ''}{item.inflacao.toFixed(1)}%</span>
                             }
+                          </td>
+                          <td className="py-2.5 text-center">
+                            <button onClick={() => abrirFontes(item.nome)}
+                              className="text-slate-500 hover:text-blue-400 transition-colors text-xs px-2 py-0.5 rounded hover:bg-slate-700">
+                              •••
+                            </button>
                           </td>
                         </tr>
                       ))}
