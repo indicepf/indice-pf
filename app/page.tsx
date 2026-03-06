@@ -519,16 +519,16 @@ export default function Dashboard() {
 A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A banda sombreada mostra ±1 desvio padrão propagado (real no último snapshot, estimado ±8% nos demais).`
 
   const colunas = [
-    { key: 'nome',      label: 'Produto'      },
-    { key: 'categoria', label: 'Categoria'    },
-    { key: 'label',     label: 'Unidade'      },
-    { key: 'mediana',   label: 'Mediana'      },
-    { key: 'media',     label: 'Média'        },
-    { key: 'minimo',    label: 'Mín'          },
-    { key: 'maximo',    label: 'Máx'          },
-    { key: 'dp',        label: '±DP'          },
-    { key: 'custo',     label: 'Custo/porção' },
-    { key: 'inflacao',  label: 'Inflação'     },
+    { key: 'nome',      label: 'Produto',      tip: null },
+    { key: 'categoria', label: 'Categoria',    tip: null },
+    { key: 'label',     label: 'Unidade',      tip: null },
+    { key: 'mediana',   label: 'Mediana',      tip: 'Valor central dos preços coletados no Google Shopping, após remoção de outliers pelo método IQR.' },
+    { key: 'media',     label: 'Média',        tip: 'Média aritmética dos preços válidos coletados neste snapshot.' },
+    { key: 'minimo',    label: 'Mín',          tip: 'Menor preço válido encontrado após remoção de outliers.' },
+    { key: 'maximo',    label: 'Máx',          tip: 'Maior preço válido encontrado após remoção de outliers.' },
+    { key: 'dp',        label: '±DP',          tip: 'Desvio padrão dos preços coletados. Indica dispersão: quanto maior, maior a variação de preços entre lojas.' },
+    { key: 'custo',     label: 'Custo/porção', tip: 'Custo estimado deste ingrediente em uma porção de PF, com base na quantidade padrão (ex: 80g de arroz cru, 200g de proteína). Para proteínas, usa média ponderada entre as proteínas ativas.' },
+    { key: 'inflacao',  label: 'Inflação',     tip: 'Variação percentual do preço mediano entre o início e o fim do período selecionado nos filtros.' },
   ]
 
   if (loading) return (
@@ -803,10 +803,19 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-slate-700">
-                        {colunas.map(({ key, label }) => (
+                        {colunas.map(({ key, label, tip }) => (
                           <th key={key} onClick={() => clicarColuna(key)}
                             className={`font-semibold text-slate-400 uppercase pb-3 pr-2 whitespace-nowrap cursor-pointer hover:text-slate-200 select-none transition-colors ${key === 'nome' ? 'text-left' : 'text-right'}`}>
-                            {label}<IconeOrdem col={key} ordemCol={ordemCol} ordemDir={ordemDir} />
+                            <span className="relative group inline-flex items-center gap-1">
+                              {label}
+                              {tip && <span className="text-slate-600 text-xs cursor-help">ⓘ
+                                <span className="absolute z-50 bottom-full right-0 mb-2 w-64 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 font-normal normal-case shadow-2xl leading-relaxed hidden group-hover:block whitespace-normal text-left">
+                                  {tip}
+                                </span>
+                              </span>}
+                              <IconeOrdem col={key} ordemCol={ordemCol} ordemDir={ordemDir} />
+                            </span>
+                          </th>
                           </th>
                         ))}
                         <th className="font-semibold text-slate-400 uppercase pb-3 text-center whitespace-nowrap">Fontes</th>
