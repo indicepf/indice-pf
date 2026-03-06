@@ -112,8 +112,7 @@ def main():
             brutos_por_ingrediente[nome] = []
         brutos_por_ingrediente[nome].append(r["preco_normalizado"])
 
-    print(f"
-  DEBUG: {len(resultados)} resultados brutos, {len(brutos_por_ingrediente)} ingredientes agrupados")
+    print(f"  DEBUG: {len(resultados)} resultados, {len(brutos_por_ingrediente)} ingredientes agrupados")
     for r in resumo:
         nome    = r["ingrediente"]
         label   = r["label"]
