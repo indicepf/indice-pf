@@ -776,7 +776,9 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis dataKey="data" tick={{ fill: '#64748b', fontSize: 11 }} />
                       <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v}%`} width={40} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} />
-                      <Tooltip content={<TooltipCategorias tipo="barras" />} /> dataKey={cat} stackId="a" fill={CORES_CAT[cat]} name={cat} />
+                      <Tooltip content={<TooltipCategorias tipo="barras" />} />
+                      {CATEGORIAS_ORDEM.map(cat => (
+                        <Bar key={cat} dataKey={cat} stackId="a" fill={CORES_CAT[cat]} name={cat} />
                       ))}
                     </BarChart>
                   ) : (
