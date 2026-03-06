@@ -97,9 +97,8 @@ const TooltipPF = ({ active, payload, label }: any) => {
 }
 
 // ─── Tooltip gráfico de barras/linhas por categoria ───────────────────────
-const TooltipCategorias = ({ active, payload, label }: any) => {
+const TooltipCategorias = ({ active, payload, label, tipo }: any) => {
   if (!active || !payload?.length) return null
-  const isPercent = payload[0]?.value != null && payload[0].value <= 100 && payload[0].value >= 0
   return (
     <div className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs shadow-xl min-w-48">
       <p className="text-slate-400 mb-2 font-semibold">{label}</p>
@@ -110,7 +109,7 @@ const TooltipCategorias = ({ active, payload, label }: any) => {
             <span className="text-slate-300">{p.name}</span>
           </div>
           <span className="font-bold text-white">
-            {isPercent ? `${Number(p.value).toFixed(1)}%` : `R$${Number(p.value).toFixed(2)}`}
+            {tipo === 'barras' ? `${Number(p.value).toFixed(1)}%` : `R$${Number(p.value).toFixed(2)}`}
           </span>
         </div>
       ))}
@@ -291,6 +290,7 @@ export default function Dashboard() {
   const [ordemDir, setOrdemDir]         = useState<OrdemDir>('asc')
   const [grafico2Tipo, setGrafico2Tipo] = useState<GraficoTipo>('barras')
   const [loading, setLoading]           = useState(true)
+  const [dataTabela, setDataTabela]     = useState('')
   const [modalFontes, setModalFontes]   = useState<{ ingrediente: string; fontes: FonteItem[]; data: string } | null>(null)
   const [fontesCache, setFontesCache]   = useState<Record<string, FonteItem[]>>({})
 
@@ -302,6 +302,7 @@ export default function Dashboard() {
         setHistorico(data)
         const datas = [...new Set(data.map((d: HistoricoPreco) => d.data))].sort()
         setUltimaData(datas[datas.length - 1])
+        setDataTabela(datas[datas.length - 1])
         setDataInicio(datas[0])
         setDataFim(datas[datas.length - 1])
         const vis: Record<string, boolean> = {}
@@ -461,26 +462,27 @@ export default function Dashboard() {
   // ── Tabela ────────────────────────────────────────────────────────────────
   const tabelaBase = useMemo(() => {
     return ingredientes.filter(n => visiveis[n]).map(nome => {
-      const serie    = hFiltrado.filter(d => d.nome_ingrediente === nome)
-      const ultimo   = serie.filter(d => d.data <= dataFim).pop()
-      const primeiro = serie.find(d => d.data >= dataInicio)
+      const serie    = historico.filter(d => d.nome_ingrediente === nome)
+      const snapshot = serie.find(d => d.data === dataTabela)
+      const primeiro = hFiltrado.filter(d => d.nome_ingrediente === nome).find(d => d.data >= dataInicio)
+      const ultimo   = hFiltrado.filter(d => d.nome_ingrediente === nome).filter(d => d.data <= dataFim).pop()
       const inflacao = (primeiro?.preco && ultimo?.preco)
         ? ((Number(ultimo.preco) - Number(primeiro.preco)) / Number(primeiro.preco) * 100) : null
       return {
         nome,
         categoria: CATEGORIA[nome] || 'Temperos',
-        label:    ultimo?.label   || '',
-        mediana:  Number(ultimo?.preco)         || null,
-        media:    Number(ultimo?.media)         || null,
-        minimo:   Number(ultimo?.minimo)        || null,
-        maximo:   Number(ultimo?.maximo)        || null,
-        dp:       Number(ultimo?.desvio_padrao) || null,
-        custo:    Number(ultimo?.custo_porcao)  || null,
+        label:    snapshot?.label   || '',
+        mediana:  Number(snapshot?.preco)         || null,
+        media:    Number(snapshot?.media)         || null,
+        minimo:   Number(snapshot?.minimo)        || null,
+        maximo:   Number(snapshot?.maximo)        || null,
+        dp:       Number(snapshot?.desvio_padrao) || null,
+        custo:    Number(snapshot?.custo_porcao)  || null,
         inflacao,
         cor: coresMap[nome],
       }
     })
-  }, [ingredientes, visiveis, hFiltrado, dataInicio, dataFim, coresMap])
+  }, [ingredientes, visiveis, historico, hFiltrado, dataTabela, dataInicio, dataFim, coresMap])
 
   const tabelaOrdenada = useMemo(() => {
     return [...tabelaBase].sort((a, b) => {
@@ -774,9 +776,7 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis dataKey="data" tick={{ fill: '#64748b', fontSize: 11 }} />
                       <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v}%`} width={40} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} />
-                      <Tooltip content={<TooltipCategorias />} />
-                      {CATEGORIAS_ORDEM.map(cat => (
-                        <Bar key={cat} dataKey={cat} stackId="a" fill={CORES_CAT[cat]} name={cat} />
+                      <Tooltip content={<TooltipCategorias tipo="barras" />} /> dataKey={cat} stackId="a" fill={CORES_CAT[cat]} name={cat} />
                       ))}
                     </BarChart>
                   ) : (
@@ -784,7 +784,7 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis dataKey="data" tick={{ fill: '#64748b', fontSize: 11 }} />
                       <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `R$${v}`} width={62} domain={['auto','auto']} />
-                      <Tooltip content={<TooltipCategorias />} />
+                      <Tooltip content={<TooltipCategorias tipo="linhas" />} />
                       {CATEGORIAS_ORDEM.map(cat => (
                         <Line key={cat} type="monotone" dataKey={cat}
                           stroke={CORES_CAT[cat]} strokeWidth={2}
@@ -798,7 +798,20 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
 
               {/* Tabela */}
               <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-                <h3 className="font-semibold mb-4">📉 Detalhamento Financeiro — {ultimaData}</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold">📉 Detalhamento Financeiro</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Snapshot:</span>
+                    <select
+                      value={dataTabela}
+                      onChange={e => { setDataTabela(e.target.value); setFontesCache({}) }}
+                      className="bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
+                      {[...new Set(historico.map(d => d.data))].sort().reverse().map(d => (
+                        <option key={d} value={d}>{d}{d === ultimaData ? ' (último)' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
@@ -868,7 +881,7 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
                             }
                           </td>
                           <td className="py-2.5 text-center">
-                            <button onClick={() => abrirFontes(item.nome)}
+                            <button onClick={() => abrirFontes(item.nome, dataTabela)}
                               className="text-slate-500 hover:text-blue-400 transition-colors text-xs px-2 py-0.5 rounded hover:bg-slate-700">
                               •••
                             </button>
