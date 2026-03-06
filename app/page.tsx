@@ -829,7 +829,6 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
                               <IconeOrdem col={key} ordemCol={ordemCol} ordemDir={ordemDir} />
                             </span>
                           </th>
-                          </th>
                         ))}
                         <th className="font-semibold text-slate-400 uppercase pb-3 text-center whitespace-nowrap">Fontes</th>
                       </tr>
