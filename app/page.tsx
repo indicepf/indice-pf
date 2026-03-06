@@ -1,65 +1,740 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { supabase, HistoricoPreco } from '@/lib/supabase'
+import {
+  ComposedChart, BarChart, Bar, Line, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer
+} from 'recharts'
+
+const PALETTE = [
+  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316',
+  '#84cc16','#ec4899','#14b8a6','#a78bfa','#fb923c','#4ade80','#60a5fa',
+  '#fbbf24','#f472b6','#34d399','#818cf8','#fb7185','#a3e635','#2dd4bf',
+  '#c084fc','#fdba74','#86efac','#93c5fd','#fde68a','#d946ef',
+]
+
+const CATEGORIA: Record<string, string> = {
+  'Frango (coxa/sobrecoxa)': 'Proteína', 'Carne Bovina': 'Proteína',
+  'Bisteca Suína': 'Proteína', 'Ovo': 'Proteína',
+  'Arroz Branco': 'Base', 'Feijão Carioca': 'Base',
+  'Macarrão Espaguete': 'Base', 'Farinha de Mandioca': 'Base',
+  'Batata Inglesa': 'Guarnição', 'Mandioca': 'Guarnição',
+  'Alface': 'Salada', 'Tomate': 'Salada', 'Pepino': 'Salada',
+  'Cenoura': 'Salada', 'Beterraba': 'Salada', 'Cheiro-verde': 'Salada',
+  'Alho': 'Temperos', 'Cebola': 'Temperos', 'Sal': 'Temperos',
+  'Colorau': 'Temperos', 'Pimenta do Reino': 'Temperos',
+  'Extrato de Tomate': 'Temperos', 'Caldo de Galinha': 'Temperos',
+  'Óleo de Soja': 'Temperos', 'Azeite de Oliva': 'Temperos',
+  'Vinagre': 'Temperos', 'Limão': 'Temperos',
+}
+
+const CATEGORIAS_ORDEM = ['Proteína', 'Base', 'Guarnição', 'Salada', 'Temperos']
+const CORES_CAT: Record<string, string> = {
+  'Proteína': '#ef4444', 'Base': '#f59e0b',
+  'Guarnição': '#8b5cf6', 'Salada': '#10b981', 'Temperos': '#06b6d4',
+}
+const COR_MEDIANA = '#f59e0b'
+const CORES_LINHA = ['#f59e0b','#3b82f6','#10b981','#ef4444']
+
+const LABEL_EXPLICACAO: Record<string, string> = {
+  'kg*': 'Estimativa em R$/kg a partir de peso fixo por unidade (ex: cabeça de alface ≈ 300g). Será substituído por preço por unidade na próxima coleta.',
+  'bdj30': 'Preço por bandeja com 30 unidades.',
+  'maço': 'Preço por maço. Peso estimado ≈ 50g.',
+}
+
+type Metrica = 'mediana' | 'media' | 'minimo' | 'maximo'
+type Aba = 'dashboard' | 'admin'
+type OrdemDir = 'asc' | 'desc'
+
+function fmtData(d: string) {
+  const [, m, dia] = d.split('-')
+  return `${dia}/${m}`
+}
+function fmtR(v: number | null | undefined) {
+  if (v == null || isNaN(Number(v))) return 'N/A'
+  return `R$ ${Number(v).toFixed(2)}`
+}
+
+// ─── Tooltip gráfico de linhas ─────────────────────────────────────────────
+const TooltipPF = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  const items = payload.filter((p: any) => !['dp_superior','dp_inferior'].includes(p.dataKey))
+  if (!items.length) return null
+  const sup = payload.find((p: any) => p.dataKey === 'dp_superior')?.value
+  const inf = payload.find((p: any) => p.dataKey === 'dp_inferior')?.value
+  const estimado = payload.find((p: any) => p.dataKey === 'dp_superior')?.payload?.dp_estimado
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs shadow-xl min-w-44">
+      <p className="text-slate-400 mb-2 font-semibold">{label}</p>
+      {items.map((p: any) => (
+        <div key={p.dataKey} className="flex items-center gap-2 mb-1">
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.stroke || p.color }} />
+          <span className="text-slate-300">{p.name}:</span>
+          <span className="font-bold text-white">R$ {Number(p.value).toFixed(2)}</span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      ))}
+      {sup != null && inf != null && (
+        <div className="border-t border-slate-700 mt-2 pt-2 text-slate-500">
+          <p>banda ±DP: R${Number(inf).toFixed(2)} – R${Number(sup).toFixed(2)}</p>
+          {estimado && <p className="text-slate-600 mt-0.5 italic">* DP estimado (±8%)</p>}
         </div>
-      </main>
+      )}
     </div>
-  );
+  )
+}
+
+// ─── Tooltip gráfico de barras ─────────────────────────────────────────────
+const TooltipBarras = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs shadow-xl min-w-48">
+      <p className="text-slate-400 mb-2 font-semibold">{label}</p>
+      <p className="text-slate-600 mb-2 leading-relaxed">% do custo total da porção (quantidades fixas por prato).</p>
+      {[...payload].reverse().map((p: any) => (
+        <div key={p.dataKey} className="flex items-center justify-between gap-3 mb-1">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: p.fill }} />
+            <span className="text-slate-300">{p.name}</span>
+          </div>
+          <span className="font-bold text-white">{Number(p.value).toFixed(1)}%</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Card com hover ────────────────────────────────────────────────────────
+function CardInfo({ label, value, sub, color, info }: {
+  label: string; value: string; sub: string; color: string; info?: string
+}) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 relative cursor-default"
+      onMouseEnter={() => info && setShow(true)}
+      onMouseLeave={() => setShow(false)}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <p className="text-xs text-slate-400 uppercase tracking-wide">{label}</p>
+        {info && <span className="text-slate-500 text-xs cursor-help">ⓘ</span>}
+      </div>
+      <p className={`text-3xl font-bold ${color}`}>{value}</p>
+      <p className="text-xs text-slate-500 mt-1">{sub}</p>
+      {show && info && (
+        <div className="absolute z-50 top-full left-0 mt-2 w-80 bg-slate-900 border border-slate-500 rounded-lg p-4 text-xs text-slate-300 shadow-2xl leading-relaxed">
+          {info}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Célula unidade com hover (usa ref para posição real) ─────────────────
+function CelulaUnidade({ label }: { label: string }) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const ref = useRef<HTMLSpanElement>(null)
+  const explicacao = LABEL_EXPLICACAO[label]
+
+  const handleEnter = () => {
+    if (!explicacao || !ref.current) return
+    const r = ref.current.getBoundingClientRect()
+    setPos({ top: r.top - 8, left: r.left + r.width / 2 })
+  }
+
+  return (
+    <span ref={ref} className="inline-flex items-center gap-1 cursor-default"
+      onMouseEnter={handleEnter}
+      onMouseLeave={() => setPos(null)}>
+      <span className="text-slate-500">{label}</span>
+      {explicacao && <span className="text-slate-600 text-xs cursor-help">ⓘ</span>}
+      {pos && explicacao && (
+        <span
+          className="fixed z-[200] w-60 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 shadow-2xl leading-relaxed whitespace-normal pointer-events-none"
+          style={{ top: pos.top, left: pos.left, transform: 'translate(-50%, -100%)' }}>
+          {explicacao}
+        </span>
+      )}
+    </span>
+  )
+}
+
+// ─── Gradiente DP ──────────────────────────────────────────────────────────
+const GradienteDP = () => (
+  <defs>
+    <linearGradient id="gradDP" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stopColor={COR_MEDIANA} stopOpacity={0.20} />
+      <stop offset="100%" stopColor={COR_MEDIANA} stopOpacity={0.05} />
+    </linearGradient>
+  </defs>
+)
+
+function IconeOrdem({ col, ordemCol, ordemDir }: { col: string; ordemCol: string; ordemDir: OrdemDir }) {
+  if (col !== ordemCol) return <span className="text-slate-700 ml-1">↕</span>
+  return <span className="text-blue-400 ml-1">{ordemDir === 'asc' ? '↑' : '↓'}</span>
+}
+
+export default function Dashboard() {
+  const [historico, setHistorico]     = useState<HistoricoPreco[]>([])
+  const [ultimaData, setUltimaData]   = useState('')
+  const [aba, setAba]                 = useState<Aba>('dashboard')
+  const [dataInicio, setDataInicio]   = useState('')
+  const [dataFim, setDataFim]         = useState('')
+  const [visiveis, setVisiveis]       = useState<Record<string, boolean>>({})
+  const [metricas, setMetricas]       = useState<Metrica[]>(['mediana'])
+  const [mostrarDP, setMostrarDP]     = useState(true)
+  const [qtdPratos, setQtdPratos]     = useState(50)
+  const [descAtacado, setDescAtacado] = useState(15)
+  const [ordemCol, setOrdemCol]       = useState('nome')
+  const [ordemDir, setOrdemDir]       = useState<OrdemDir>('asc')
+  const [loading, setLoading]         = useState(true)
+
+  useEffect(() => {
+    async function carregar() {
+      const { data } = await supabase
+        .from('historico_precos').select('*').order('data', { ascending: true })
+      if (data?.length) {
+        setHistorico(data)
+        const datas  = [...new Set(data.map((d: HistoricoPreco) => d.data))].sort()
+        setUltimaData(datas[datas.length - 1])
+        setDataInicio(datas[0])
+        setDataFim(datas[datas.length - 1])
+        const vis: Record<string, boolean> = {}
+        ;[...new Set(data.map((d: HistoricoPreco) => d.nome_ingrediente))].forEach(i => vis[i] = true)
+        setVisiveis(vis)
+      }
+      setLoading(false)
+    }
+    carregar()
+  }, [])
+
+  const ingredientes = useMemo(() =>
+    [...new Set(historico.map(d => d.nome_ingrediente))].sort(), [historico])
+
+  const coresMap = useMemo(() => {
+    const m: Record<string, string> = {}
+    ingredientes.forEach((n, i) => { m[n] = PALETTE[i % PALETTE.length] })
+    return m
+  }, [ingredientes])
+
+  const hFiltrado = useMemo(() =>
+    historico.filter(d => d.data >= dataInicio && d.data <= dataFim)
+  , [historico, dataInicio, dataFim])
+
+  const custoPFMetrica = useMemo(() => {
+    const metrica = metricas[0]
+    return historico
+      .filter(d => d.data === ultimaData && visiveis[d.nome_ingrediente])
+      .reduce((acc, d) => {
+        if (!d.custo_porcao || !d.preco) return acc
+        let val = Number(d.preco)
+        if (metrica === 'media'  && d.media)  val = Number(d.media)
+        if (metrica === 'minimo' && d.minimo) val = Number(d.minimo)
+        if (metrica === 'maximo' && d.maximo) val = Number(d.maximo)
+        return acc + Number(d.custo_porcao) * (val / Number(d.preco))
+      }, 0)
+  }, [historico, ultimaData, visiveis, metricas])
+
+  // ── Dados gráfico de linhas ───────────────────────────────────────────────
+  const dadosLinha = useMemo(() => {
+    const datas = [...new Set(hFiltrado.map(d => d.data))].sort()
+
+    return datas.map(data => {
+      const precosDaData = hFiltrado.filter(d => d.data === data && visiveis[d.nome_ingrediente])
+      const ponto: Record<string, any> = { data: fmtData(data) }
+
+      // Mediana: usa custo_total_pf do banco diretamente
+      if (metricas.includes('mediana')) {
+        const custoTotal = precosDaData[0]?.custo_total_pf
+        if (custoTotal) ponto['Mediana'] = Number(Number(custoTotal).toFixed(2))
+      }
+
+      // Outras métricas (só onde existem dados reais)
+      ;(['media','minimo','maximo'] as Metrica[]).forEach(m => {
+        if (!metricas.includes(m)) return
+        const label = m === 'media' ? 'Média' : m === 'minimo' ? 'Mínimo' : 'Máximo'
+        const custo = precosDaData.reduce((acc, d) => {
+          if (!d.custo_porcao || !d.preco) return acc
+          const val = m === 'media' ? Number(d.media) : m === 'minimo' ? Number(d.minimo) : Number(d.maximo)
+          if (!val) return acc
+          return acc + Number(d.custo_porcao) * (val / Number(d.preco))
+        }, 0)
+        if (custo > 0) ponto[label] = Number(custo.toFixed(2))
+      })
+
+      // Banda DP: usa propagação real onde disponível, senão estima ±8%
+      if (mostrarDP && metricas.includes('mediana') && ponto['Mediana']) {
+        const med = ponto['Mediana']
+
+        // Tenta DP real (propagação de incerteza)
+        const dpReal = precosDaData.reduce((acc, d) => {
+          if (!d.desvio_padrao || !d.preco || !d.custo_porcao) return acc
+          return acc + (Number(d.desvio_padrao) / Number(d.preco)) * Number(d.custo_porcao)
+        }, 0)
+
+        if (dpReal > 0) {
+          // DP real calculado a partir dos resultados brutos
+          ponto['dp_superior'] = Number((med + dpReal).toFixed(2))
+          ponto['dp_inferior'] = Number((med - dpReal).toFixed(2))
+          ponto['dp_estimado'] = false
+        } else {
+          // DP estimado: ±8% do custo (proxy para variação histórica de mercado)
+          const dpEstimado = med * 0.08
+          ponto['dp_superior'] = Number((med + dpEstimado).toFixed(2))
+          ponto['dp_inferior'] = Number((med - dpEstimado).toFixed(2))
+          ponto['dp_estimado'] = true
+        }
+      }
+
+      return ponto
+    })
+  }, [hFiltrado, visiveis, metricas, mostrarDP])
+
+  const linhasKeys = useMemo(() => {
+    if (!dadosLinha.length) return []
+    return Object.keys(dadosLinha[0]).filter(k =>
+      k !== 'data' && !['dp_superior','dp_inferior','dp_estimado'].includes(k)
+    )
+  }, [dadosLinha])
+
+  // ── Dados gráfico barras — FIX: filtra pontos sem custo ──────────────────
+  const dadosBarras = useMemo(() => {
+    const datas = [...new Set(hFiltrado.map(d => d.data))].sort()
+    return datas
+      .map(data => {
+        const precosDaData = hFiltrado.filter(d => d.data === data && visiveis[d.nome_ingrediente])
+        const custoCat: Record<string, number> = {}
+        CATEGORIAS_ORDEM.forEach(c => custoCat[c] = 0)
+        precosDaData.forEach(d => {
+          const cat = CATEGORIA[d.nome_ingrediente] || 'Temperos'
+          if (d.custo_porcao) custoCat[cat] += Number(d.custo_porcao)
+        })
+        const total = Object.values(custoCat).reduce((a, b) => a + b, 0)
+        if (total < 1) return null // FIX: ignora pontos sem dados reais
+        const ponto: Record<string, any> = { data: fmtData(data) }
+        CATEGORIAS_ORDEM.forEach(c => {
+          ponto[c] = Number(((custoCat[c] / total) * 100).toFixed(1))
+        })
+        return ponto
+      })
+      .filter(Boolean)
+  }, [hFiltrado, visiveis])
+
+  // ── Tabela ────────────────────────────────────────────────────────────────
+  const tabelaBase = useMemo(() => {
+    return ingredientes.filter(n => visiveis[n]).map(nome => {
+      const serie    = hFiltrado.filter(d => d.nome_ingrediente === nome)
+      const ultimo   = serie.filter(d => d.data <= dataFim).pop()
+      const primeiro = serie.find(d => d.data >= dataInicio)
+      const inflacao = (primeiro?.preco && ultimo?.preco)
+        ? ((Number(ultimo.preco) - Number(primeiro.preco)) / Number(primeiro.preco) * 100) : null
+      return {
+        nome,
+        categoria: CATEGORIA[nome] || 'Temperos',
+        label:    ultimo?.label   || '',
+        mediana:  Number(ultimo?.preco)         || null,
+        media:    Number(ultimo?.media)         || null,
+        minimo:   Number(ultimo?.minimo)        || null,
+        maximo:   Number(ultimo?.maximo)        || null,
+        dp:       Number(ultimo?.desvio_padrao) || null,
+        custo:    Number(ultimo?.custo_porcao)  || null,
+        inflacao,
+        cor: coresMap[nome],
+      }
+    })
+  }, [ingredientes, visiveis, hFiltrado, dataInicio, dataFim, coresMap])
+
+  const tabelaOrdenada = useMemo(() => {
+    return [...tabelaBase].sort((a, b) => {
+      let va: any = (a as any)[ordemCol]
+      let vb: any = (b as any)[ordemCol]
+      if (va == null) va = ordemDir === 'asc' ? Infinity : -Infinity
+      if (vb == null) vb = ordemDir === 'asc' ? Infinity : -Infinity
+      if (typeof va === 'string') return ordemDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+      return ordemDir === 'asc' ? va - vb : vb - va
+    })
+  }, [tabelaBase, ordemCol, ordemDir])
+
+  const clicarColuna = (col: string) => {
+    if (ordemCol === col) setOrdemDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setOrdemCol(col); setOrdemDir('asc') }
+  }
+
+  const toggleMetrica = (m: Metrica) =>
+    setMetricas(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
+
+  const toggleTodos = (val: boolean) => {
+    const novo: Record<string, boolean> = {}
+    ingredientes.forEach(i => novo[i] = val)
+    setVisiveis(novo)
+  }
+
+  const EXPLICACAO_INDICE = `O Índice PF soma o custo de cada ingrediente na quantidade exata de uma porção. Exemplo: 150g de frango + 80g de feijão + 100g de arroz etc. Não é média por categoria — proteína representa mais porque carne e frango são caros por kg. A mediana é usada por ingrediente para reduzir o impacto de outliers. A banda sombreada mostra ±1 desvio padrão propagado (real no último snapshot, estimado em ±8% nos demais).`
+
+  const colunas = [
+    { key: 'nome',      label: 'Produto'      },
+    { key: 'categoria', label: 'Categoria'    },
+    { key: 'label',     label: 'Unidade'      },
+    { key: 'mediana',   label: 'Mediana'      },
+    { key: 'media',     label: 'Média'        },
+    { key: 'minimo',    label: 'Mín'          },
+    { key: 'maximo',    label: 'Máx'          },
+    { key: 'dp',        label: '±DP'          },
+    { key: 'custo',     label: 'Custo/porção' },
+    { key: 'inflacao',  label: 'Inflação'     },
+  ]
+
+  if (loading) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-5xl mb-4">🍽️</div>
+        <p className="text-slate-400 text-sm">Carregando dados...</p>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-200 flex flex-col"
+      style={{ fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+
+      <nav className="bg-slate-950 px-6 py-4 flex justify-between items-center border-b border-slate-800">
+        <h1 className="text-lg font-semibold flex items-center gap-3">
+          🛒 Índice PF
+          <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">BETA</span>
+        </h1>
+        <div className="flex gap-2">
+          {(['dashboard','admin'] as Aba[]).map(a => (
+            <button key={a} onClick={() => setAba(a)}
+              className={`px-4 py-2 rounded-md text-sm transition-colors ${aba === a ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+              {a === 'dashboard' ? '📊 Visão do Cliente' : '⚙️ Backoffice'}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <div className="flex-1 p-6 max-w-screen-2xl mx-auto w-full">
+        {aba === 'dashboard' && (
+          <div className="grid gap-6" style={{ gridTemplateColumns: '300px 1fr' }}>
+
+            {/* SIDEBAR */}
+            <aside className="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-5 h-fit">
+              <h3 className="font-semibold border-b border-slate-700 pb-3">Filtros de Análise</h3>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Métrica do Preço</label>
+                <div className="space-y-1">
+                  {([['mediana','Mediana'],['media','Média'],['minimo','Mínimo'],['maximo','Máximo']] as [Metrica,string][]).map(([m, lbl]) => (
+                    <label key={m} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-700 cursor-pointer">
+                      <input type="checkbox" checked={metricas.includes(m)} onChange={() => toggleMetrica(m)} />
+                      <span className="text-slate-300 text-sm">{lbl}</span>
+                      {m === 'mediana' && <span className="text-xs text-slate-600 ml-auto">padrão</span>}
+                    </label>
+                  ))}
+                  {metricas.includes('mediana') && (
+                    <label className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-700 cursor-pointer border-t border-slate-700 pt-2 mt-1">
+                      <input type="checkbox" checked={mostrarDP} onChange={() => setMostrarDP(v => !v)} />
+                      <span className="text-slate-400 text-xs">Mostrar banda ±DP</span>
+                    </label>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 mt-2 px-2">Média/Mín/Máx: último snapshot. Banda ±DP: estimada (±8%) para semanas históricas.</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-2">Período</label>
+                <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm mb-2 focus:outline-none" />
+                <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none" />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Ingredientes</label>
+                  <div className="flex gap-2">
+                    <button onClick={() => toggleTodos(true)} className="text-xs text-blue-400 hover:text-blue-300">Todos</button>
+                    <button onClick={() => toggleTodos(false)} className="text-xs text-slate-500 hover:text-slate-300">Nenhum</button>
+                  </div>
+                </div>
+                <div className="max-h-52 overflow-y-auto border border-slate-700 rounded-md bg-slate-900 p-2">
+                  {CATEGORIAS_ORDEM.map(cat => (
+                    <div key={cat} className="mb-2">
+                      <p className="text-xs uppercase px-2 pt-1 pb-0.5 font-semibold" style={{ color: CORES_CAT[cat] }}>{cat}</p>
+                      {ingredientes.filter(n => CATEGORIA[n] === cat).map(nome => (
+                        <label key={nome} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-800 cursor-pointer">
+                          <input type="checkbox" checked={!!visiveis[nome]}
+                            onChange={() => setVisiveis(v => ({ ...v, [nome]: !v[nome] }))} />
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: coresMap[nome] }} />
+                          <span className="text-slate-300 text-xs">{nome}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-900 rounded-lg p-4 border border-slate-700 space-y-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Calculadora de Custo</p>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1.5">Pratos por dia</p>
+                  <div className="flex gap-1.5 mb-2 flex-wrap">
+                    {[30,50,100,200].map(n => (
+                      <button key={n} onClick={() => setQtdPratos(n)}
+                        className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${qtdPratos === n ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>{n}</button>
+                    ))}
+                  </div>
+                  <input type="number" value={qtdPratos} onChange={e => setQtdPratos(Number(e.target.value))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none" />
+                </div>
+                <div className="border-t border-slate-700 pt-3 space-y-1">
+                  <div className="flex justify-between items-baseline">
+                    <p className="text-xs text-slate-400">Varejo</p>
+                    <p className="text-amber-400 font-bold text-lg">{fmtR(custoPFMetrica * qtdPratos)}</p>
+                  </div>
+                  <p className="text-xs text-slate-600">{qtdPratos} × {fmtR(custoPFMetrica)}</p>
+                </div>
+                <div className="bg-slate-800 rounded-lg p-3 border border-slate-600 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs font-semibold text-emerald-400">🏭 Simulação Atacado</p>
+                    <span className="text-xs text-slate-300 bg-slate-700 px-2 py-0.5 rounded font-bold">-{descAtacado}%</span>
+                  </div>
+                  <input type="range" min={5} max={30} step={1} value={descAtacado}
+                    onChange={e => setDescAtacado(Number(e.target.value))}
+                    className="w-full accent-emerald-500" />
+                  <div className="flex justify-between text-xs text-slate-600"><span>-5%</span><span>-30%</span></div>
+                  <div className="flex justify-between items-baseline">
+                    <p className="text-xs text-slate-400">Atacado</p>
+                    <p className="text-emerald-400 font-bold text-lg">{fmtR(custoPFMetrica * qtdPratos * (1 - descAtacado / 100))}</p>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    economia: <span className="text-emerald-500 font-semibold">{fmtR(custoPFMetrica * qtdPratos * descAtacado / 100)}</span>/dia
+                  </p>
+                </div>
+              </div>
+            </aside>
+
+            {/* MAIN */}
+            <main className="space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                <CardInfo label="Custo PF / Porção" value={fmtR(custoPFMetrica)}
+                  sub={`27 ingredientes · ${ultimaData}`} color="text-amber-400" info={EXPLICACAO_INDICE} />
+                {(() => {
+                  const serie = historico.filter(d => d.nome_ingrediente === 'Feijão Carioca').sort((a,b) => a.data.localeCompare(b.data))
+                  const ini = serie.find(d => d.data >= dataInicio)
+                  const fim = serie.filter(d => d.data <= dataFim).pop()
+                  const v   = (ini && fim) ? ((Number(fim.custo_total_pf) - Number(ini.custo_total_pf)) / Number(ini.custo_total_pf) * 100) : null
+                  return (
+                    <CardInfo label="Variação no Período"
+                      value={v != null ? `${v > 0 ? '+' : ''}${v.toFixed(1)}%` : 'N/A'}
+                      sub={`${fmtData(dataInicio)} → ${fmtData(dataFim)}`}
+                      color={v == null ? 'text-slate-400' : v > 0 ? 'text-red-400' : 'text-emerald-400'} />
+                  )
+                })()}
+                <CardInfo label="Ingredientes Ativos"
+                  value={`${Object.values(visiveis).filter(Boolean).length} / 27`}
+                  sub="selecione na sidebar" color="text-blue-400" />
+              </div>
+
+              {/* Gráfico linhas */}
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-5" style={{ height: 320 }}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-wide">Evolução do Custo Total do PF (R$/porção)</p>
+                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                    {mostrarDP && metricas.includes('mediana') && (
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded-sm opacity-30 inline-block" style={{ backgroundColor: COR_MEDIANA }} />
+                        banda ±DP
+                      </span>
+                    )}
+                    {linhasKeys.map((k, i) => (
+                      <span key={k} className="flex items-center gap-1">
+                        <span className="w-4 h-0.5 inline-block rounded" style={{ backgroundColor: CORES_LINHA[i % 4] }} />
+                        {k}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height="88%">
+                  <ComposedChart data={dadosLinha}>
+                    <GradienteDP />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="data" tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `R$${v}`} width={62} domain={['auto','auto']} />
+                    <Tooltip content={<TooltipPF />} />
+                    {mostrarDP && metricas.includes('mediana') && <>
+                      <Area type="monotone" dataKey="dp_superior" stroke="none"
+                        fill="url(#gradDP)" fillOpacity={1} legendType="none"
+                        name="dp_superior" connectNulls isAnimationActive={false} />
+                      <Area type="monotone" dataKey="dp_inferior" stroke="none"
+                        fill="#1e293b" fillOpacity={1} legendType="none"
+                        name="dp_inferior" connectNulls isAnimationActive={false} />
+                    </>}
+                    {linhasKeys.map((key, i) => (
+                      <Line key={key} type="monotone" dataKey={key}
+                        stroke={CORES_LINHA[i % 4]}
+                        strokeWidth={key === 'Mediana' ? 2.5 : 1.5}
+                        dot={key === 'Mediana' ? { fill: CORES_LINHA[0], r: 3 } : false}
+                        strokeDasharray={key === 'Mínimo' || key === 'Máximo' ? '4 2' : undefined}
+                        connectNulls legendType="none" name={key} />
+                    ))}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Gráfico barras */}
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-5" style={{ height: 300 }}>
+                <p className="text-xs text-slate-400 uppercase tracking-wide mb-3">
+                  Composição do Custo por Categoria (% do total · mediana)
+                </p>
+                <ResponsiveContainer width="100%" height="88%">
+                  <BarChart data={dadosBarras}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="data" tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v}%`} width={40} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} />
+                    <Tooltip content={<TooltipBarras />} />
+                    {CATEGORIAS_ORDEM.map(cat => (
+                      <Bar key={cat} dataKey={cat} stackId="a" fill={CORES_CAT[cat]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Tabela */}
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+                <h3 className="font-semibold mb-4">📉 Detalhamento Financeiro — {ultimaData}</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        {colunas.map(({ key, label }) => (
+                          <th key={key} onClick={() => clicarColuna(key)}
+                            className={`font-semibold text-slate-400 uppercase pb-3 pr-2 whitespace-nowrap cursor-pointer hover:text-slate-200 select-none transition-colors ${key === 'nome' ? 'text-left' : 'text-right'}`}>
+                            {label}<IconeOrdem col={key} ordemCol={ordemCol} ordemDir={ordemDir} />
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tabelaOrdenada.map(item => (
+                        <tr key={item.nome} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
+                          <td className="py-2.5 pr-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.cor }} />
+                              <span className="text-slate-300 whitespace-nowrap">{item.nome}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 pr-2 text-right">
+                            <span className="px-1.5 py-0.5 rounded text-xs whitespace-nowrap"
+                              style={{ backgroundColor: CORES_CAT[item.categoria] + '22', color: CORES_CAT[item.categoria] }}>
+                              {item.categoria}
+                            </span>
+                          </td>
+                          <td className="py-2.5 pr-2 text-right whitespace-nowrap">
+                            <CelulaUnidade label={item.label} />
+                          </td>
+                          <td className="py-2.5 pr-2 text-right font-semibold text-amber-400 whitespace-nowrap">
+                            {item.mediana ? `R$${item.mediana.toFixed(2)}` : '—'}
+                          </td>
+                          <td className="py-2.5 pr-2 text-right text-slate-300 whitespace-nowrap">
+                            {item.media ? `R$${item.media.toFixed(2)}` : '—'}
+                          </td>
+                          <td className="py-2.5 pr-2 text-right text-emerald-400 whitespace-nowrap">
+                            {item.minimo ? `R$${item.minimo.toFixed(2)}` : '—'}
+                          </td>
+                          <td className="py-2.5 pr-2 text-right text-red-400 whitespace-nowrap">
+                            {item.maximo ? `R$${item.maximo.toFixed(2)}` : '—'}
+                          </td>
+                          <td className="py-2.5 pr-2 text-right text-slate-500 whitespace-nowrap">
+                            {item.dp ? `±${item.dp.toFixed(2)}` : '—'}
+                          </td>
+                          <td className="py-2.5 pr-2 text-right text-slate-400 whitespace-nowrap">
+                            {item.custo ? `R$${item.custo.toFixed(3)}` : '—'}
+                          </td>
+                          <td className="py-2.5 text-right whitespace-nowrap">
+                            {item.inflacao == null
+                              ? <span className="text-slate-500">—</span>
+                              : item.inflacao > 2
+                              ? <span className="text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded font-bold">+{item.inflacao.toFixed(1)}%</span>
+                              : item.inflacao < -2
+                              ? <span className="text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded font-bold">{item.inflacao.toFixed(1)}%</span>
+                              : <span className="text-slate-400 bg-slate-700 px-1.5 py-0.5 rounded">{item.inflacao > 0 ? '+' : ''}{item.inflacao.toFixed(1)}%</span>
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </main>
+          </div>
+        )}
+
+        {/* BACKOFFICE */}
+        {aba === 'admin' && (
+          <div className="grid grid-cols-2 gap-6 max-w-5xl">
+            <div className="space-y-6">
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+                <h2 className="font-semibold text-lg mb-2">Robô de Scraping</h2>
+                <p className="text-sm text-slate-400 mb-4">Execute o scraper Python manualmente ou configure automação semanal.</p>
+                <div className="bg-slate-900 rounded-lg p-4 border border-slate-700 font-mono text-xs text-emerald-400 space-y-1">
+                  <p>$ python scraper_pf.py</p>
+                  <p>$ python salvar_supabase.py</p>
+                </div>
+                <div className="mt-4 text-xs text-slate-500 space-y-1">
+                  <p>✅ Última execução: {ultimaData}</p>
+                  <p>✅ 27 ingredientes monitorados</p>
+                  <p>✅ Cache local ativo</p>
+                </div>
+              </div>
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+                <h2 className="font-semibold text-lg mb-4">Status do Banco</h2>
+                <div className="text-sm">
+                  {[
+                    ['Snapshots', `${[...new Set(historico.map(d => d.data))].length} semanas`],
+                    ['Registros de preço', historico.length],
+                    ['Ingredientes', 27],
+                    ['Fonte', 'Google Shopping / SerpAPI'],
+                  ].map(([k, v]) => (
+                    <div key={String(k)} className="flex justify-between py-2.5 border-b border-slate-700">
+                      <span className="text-slate-400">{k}</span>
+                      <span className="text-slate-200 font-semibold">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+              <h2 className="font-semibold text-lg mb-4">Ingredientes Cadastrados</h2>
+              <div className="max-h-[580px] overflow-y-auto">
+                {CATEGORIAS_ORDEM.map(cat => (
+                  <div key={cat} className="mb-4">
+                    <p className="text-xs font-semibold uppercase mb-1 px-1" style={{ color: CORES_CAT[cat] }}>{cat}</p>
+                    {ingredientes.filter(n => CATEGORIA[n] === cat).map(nome => {
+                      const p = historico.find(d => d.nome_ingrediente === nome && d.data === ultimaData)
+                      return (
+                        <div key={nome} className="flex items-center justify-between py-2 px-2 border-b border-slate-700/40 hover:bg-slate-700/30 rounded">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: coresMap[nome] }} />
+                            <span className="text-slate-300 text-sm">{nome}</span>
+                          </div>
+                          <span className="text-xs text-slate-500">
+                            {p ? `R$${Number(p.preco).toFixed(2)}/${p.label}` : 'N/A'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <footer className="border-t border-slate-800 px-6 py-3 text-xs text-slate-600 flex justify-between">
+        <span>Índice PF · dados coletados via Google Shopping</span>
+        <span>atualização semanal · {ultimaData}</span>
+      </footer>
+    </div>
+  )
 }
