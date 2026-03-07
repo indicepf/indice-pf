@@ -31,14 +31,6 @@ def supabase_post(tabela, dados):
         return None
     return resp.json()
 
-def supabase_patch(tabela, filtro, dados):
-    url  = f"{SUPABASE_URL}/rest/v1/{tabela}?{filtro}"
-    resp = requests.patch(url, headers=HEADERS, json=dados)
-    if resp.status_code not in (200, 204):
-        print(f"  ❌ Erro ao atualizar '{tabela}': {resp.status_code} - {resp.text[:200]}")
-        return None
-    return True
-
 def supabase_get(tabela, filtro=""):
     url  = f"{SUPABASE_URL}/rest/v1/{tabela}?{filtro}"
     resp = requests.get(url, headers=HEADERS)
@@ -84,7 +76,7 @@ def main():
     existente = supabase_get("snapshots", f"data=eq.{data}")
     if existente:
         snapshot_id = existente[0]["id"]
-        print(f"\n⚠️  Snapshot de {data} já existe (id={snapshot_id}). Atualizando preços...")
+        print(f"\n⚠️  Snapshot de {data} já existe (id={snapshot_id}). Reescrevendo preços...")
     else:
         snap_resp = supabase_post("snapshots", {
             "data":           data,
@@ -96,25 +88,7 @@ def main():
         snapshot_id = snap_resp[0]["id"]
         print(f"\n✅ Snapshot criado (id={snapshot_id})")
 
-    # ── 2. Agrupa preços normalizados por ingrediente (vem do snapshot_pf.json)
-    #
-    # CORREÇÃO DO BUG DE STATS NULL:
-    # O código anterior fazia:
-    #   brutos_por_ingrediente.setdefault(r["ingrediente"], []).append(r["preco_normalizado"])
-    # mas lia de `resultados` — que no GitHub Actions é gerado pelo scraper na mesma execução
-    # e contém os dados corretos.
-    #
-    # O problema real estava em `usar_update`: quando o snapshot já existia (re-run no mesmo dia),
-    # o código definia usar_update=True para TODOS os ingredientes com base em
-    # `len(precos_existentes) > 0`. Mas o PATCH usa um filtro por nome_ingrediente,
-    # e se o nome tem caracteres especiais (ex: "Óleo de Soja", "Feijão Carioca")
-    # o `requests.utils.quote` pode não codificar corretamente para a API PostgREST,
-    # fazendo o PATCH não bater em nenhuma linha — silenciosamente sem erro — e as
-    # stats continuam NULL porque o INSERT nunca foi feito.
-    #
-    # SOLUÇÃO: verificar ingrediente por ingrediente se já existe, e fazer POST
-    # quando não existe (mesmo que outros ingredientes já estejam salvos).
-    # ─────────────────────────────────────────────────────────────────────────
+    # ── 2. Agrupa preços normalizados por ingrediente ─────────────────────────
     brutos_por_ingrediente = {}
     for r in resultados:
         nome = r["ingrediente"]
@@ -122,15 +96,14 @@ def main():
         if pn is not None:
             brutos_por_ingrediente.setdefault(nome, []).append(pn)
 
-    # Busca quais ingredientes já têm registro para este snapshot
-    precos_existentes = supabase_get(
-        "precos",
-        f"snapshot_id=eq.{snapshot_id}&select=nome_ingrediente"
+    # ── 3. DELETE + INSERT (substitui PATCH que falhava com nomes acentuados) ─
+    print(f"\n🗑️  Limpando preços anteriores do snapshot {snapshot_id}...")
+    requests.delete(
+        f"{SUPABASE_URL}/rest/v1/precos?snapshot_id=eq.{snapshot_id}",
+        headers=HEADERS
     )
-    nomes_existentes = {p["nome_ingrediente"] for p in precos_existentes}
 
-    print(f"\n💾 Salvando preços ({len(nomes_existentes)} existentes, {len(resumo) - len(nomes_existentes)} novos)...")
-
+    print(f"💾 Salvando preços (INSERT)...")
     for r in resumo:
         nome    = r["ingrediente"]
         label   = r["label"]
@@ -150,49 +123,38 @@ def main():
             "qtd_resultados":   r["qtd_resultados"],
         }
 
-        if nome in nomes_existentes:
-            # PATCH: usa %20 em vez de + para espaços (PostgREST exige RFC 3986)
-            nome_enc = requests.utils.quote(nome, safe="")
-            resp = supabase_patch(
-                "precos",
-                f"snapshot_id=eq.{snapshot_id}&nome_ingrediente=eq.{nome_enc}",
-                dados
-            )
-        else:
-            resp = supabase_post("precos", dados)
-
+        resp   = supabase_post("precos", dados)
         status = "✅" if (resp is not None) else "❌"
-        med = dados["media_exibicao"]
-        mn  = dados["minimo_exibicao"]
-        mx  = dados["maximo_exibicao"]
-        dp  = dados["desvio_padrao"]
+        med    = dados["media_exibicao"]
+        mn     = dados["minimo_exibicao"]
+        mx     = dados["maximo_exibicao"]
+        dp     = dados["desvio_padrao"]
         print(f"  {status} {nome:<28} med={med} min={mn} max={mx} dp=±{dp}")
 
-    # ── 3. Salva resultados brutos (só se não existirem) ──────────────────────
-    brutos_existentes = supabase_get(
-        "resultados_brutos",
-        f"snapshot_id=eq.{snapshot_id}&select=id&limit=1"
+    # ── 4. Salva resultados brutos (DELETE + INSERT para ter links atualizados) 
+    print(f"\n🗑️  Limpando resultados brutos anteriores...")
+    requests.delete(
+        f"{SUPABASE_URL}/rest/v1/resultados_brutos?snapshot_id=eq.{snapshot_id}",
+        headers=HEADERS
     )
-    if brutos_existentes:
-        print(f"\n⚠️  Resultados brutos já existem, pulando.")
-    else:
-        print(f"\n💾 Salvando {len(resultados)} resultados brutos...")
-        payload = [{
-            "snapshot_id":       snapshot_id,
-            "nome_ingrediente":  r["ingrediente"],
-            "titulo":            r["titulo"],
-            "preco_bruto":       r["preco_bruto"],
-            "preco_normalizado": r["preco_normalizado"],
-            "exibicao":          r["exibicao"],
-            "loja":              r["loja"],
-            "link":              r.get("link", ""),
-        } for r in resultados]
 
-        LOTE = 50
-        for i in range(0, len(payload), LOTE):
-            lote = payload[i:i+LOTE]
-            resp = supabase_post("resultados_brutos", lote)
-            print(f"  {'✅' if resp else '❌'} Lote {i//LOTE + 1}: {len(lote)} registros")
+    print(f"💾 Salvando {len(resultados)} resultados brutos...")
+    payload = [{
+        "snapshot_id":       snapshot_id,
+        "nome_ingrediente":  r["ingrediente"],
+        "titulo":            r["titulo"],
+        "preco_bruto":       r["preco_bruto"],
+        "preco_normalizado": r["preco_normalizado"],
+        "exibicao":          r["exibicao"],
+        "loja":              r["loja"],
+        "link":              r.get("link", ""),
+    } for r in resultados]
+
+    LOTE = 50
+    for i in range(0, len(payload), LOTE):
+        lote = payload[i:i+LOTE]
+        resp = supabase_post("resultados_brutos", lote)
+        print(f"  {'✅' if resp else '❌'} Lote {i//LOTE + 1}: {len(lote)} registros")
 
     print(f"\n{'='*50}")
     print(f"✅ Snapshot de {data} salvo com sucesso!")
