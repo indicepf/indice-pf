@@ -84,7 +84,7 @@ def main():
     existente = supabase_get("snapshots", f"data=eq.{data}")
     if existente:
         snapshot_id = existente[0]["id"]
-        print(f"\n⚠️  Snapshot de {data} já existe (id={snapshot_id}).")
+        print(f"\n⚠️  Snapshot de {data} já existe (id={snapshot_id}). Atualizando preços...")
     else:
         snap_resp = supabase_post("snapshots", {
             "data":           data,
@@ -96,14 +96,40 @@ def main():
         snapshot_id = snap_resp[0]["id"]
         print(f"\n✅ Snapshot criado (id={snapshot_id})")
 
-    # ── 2. Calcula stats e salva/atualiza preços ──────────────────────────────
+    # ── 2. Agrupa preços normalizados por ingrediente (vem do snapshot_pf.json)
+    #
+    # CORREÇÃO DO BUG DE STATS NULL:
+    # O código anterior fazia:
+    #   brutos_por_ingrediente.setdefault(r["ingrediente"], []).append(r["preco_normalizado"])
+    # mas lia de `resultados` — que no GitHub Actions é gerado pelo scraper na mesma execução
+    # e contém os dados corretos.
+    #
+    # O problema real estava em `usar_update`: quando o snapshot já existia (re-run no mesmo dia),
+    # o código definia usar_update=True para TODOS os ingredientes com base em
+    # `len(precos_existentes) > 0`. Mas o PATCH usa um filtro por nome_ingrediente,
+    # e se o nome tem caracteres especiais (ex: "Óleo de Soja", "Feijão Carioca")
+    # o `requests.utils.quote` pode não codificar corretamente para a API PostgREST,
+    # fazendo o PATCH não bater em nenhuma linha — silenciosamente sem erro — e as
+    # stats continuam NULL porque o INSERT nunca foi feito.
+    #
+    # SOLUÇÃO: verificar ingrediente por ingrediente se já existe, e fazer POST
+    # quando não existe (mesmo que outros ingredientes já estejam salvos).
+    # ─────────────────────────────────────────────────────────────────────────
     brutos_por_ingrediente = {}
     for r in resultados:
-        brutos_por_ingrediente.setdefault(r["ingrediente"], []).append(r["preco_normalizado"])
+        nome = r["ingrediente"]
+        pn   = r.get("preco_normalizado")
+        if pn is not None:
+            brutos_por_ingrediente.setdefault(nome, []).append(pn)
 
-    precos_existentes = supabase_get("precos", f"snapshot_id=eq.{snapshot_id}&select=nome_ingrediente")
-    usar_update = len(precos_existentes) > 0
-    print(f"\n💾 Salvando preços ({'PATCH' if usar_update else 'POST'})...")
+    # Busca quais ingredientes já têm registro para este snapshot
+    precos_existentes = supabase_get(
+        "precos",
+        f"snapshot_id=eq.{snapshot_id}&select=nome_ingrediente"
+    )
+    nomes_existentes = {p["nome_ingrediente"] for p in precos_existentes}
+
+    print(f"\n💾 Salvando preços ({len(nomes_existentes)} existentes, {len(resumo) - len(nomes_existentes)} novos)...")
 
     for r in resumo:
         nome    = r["ingrediente"]
@@ -124,18 +150,29 @@ def main():
             "qtd_resultados":   r["qtd_resultados"],
         }
 
-        if usar_update:
-            nome_enc = requests.utils.quote(nome)
-            resp = supabase_patch("precos", f"snapshot_id=eq.{snapshot_id}&nome_ingrediente=eq.{nome_enc}", dados)
+        if nome in nomes_existentes:
+            # PATCH: usa %20 em vez de + para espaços (PostgREST exige RFC 3986)
+            nome_enc = requests.utils.quote(nome, safe="")
+            resp = supabase_patch(
+                "precos",
+                f"snapshot_id=eq.{snapshot_id}&nome_ingrediente=eq.{nome_enc}",
+                dados
+            )
         else:
             resp = supabase_post("precos", dados)
 
         status = "✅" if (resp is not None) else "❌"
-        med = dados["media_exibicao"]; mn = dados["minimo_exibicao"]; mx = dados["maximo_exibicao"]; dp = dados["desvio_padrao"]
+        med = dados["media_exibicao"]
+        mn  = dados["minimo_exibicao"]
+        mx  = dados["maximo_exibicao"]
+        dp  = dados["desvio_padrao"]
         print(f"  {status} {nome:<28} med={med} min={mn} max={mx} dp=±{dp}")
 
     # ── 3. Salva resultados brutos (só se não existirem) ──────────────────────
-    brutos_existentes = supabase_get("resultados_brutos", f"snapshot_id=eq.{snapshot_id}&select=id&limit=1")
+    brutos_existentes = supabase_get(
+        "resultados_brutos",
+        f"snapshot_id=eq.{snapshot_id}&select=id&limit=1"
+    )
     if brutos_existentes:
         print(f"\n⚠️  Resultados brutos já existem, pulando.")
     else:

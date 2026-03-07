@@ -1,6 +1,17 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+
+// Substitui o caractere ⓘ (U+24D8) que pode aparecer como ? em alguns ambientes
+function IcoInfo({ className = "text-slate-600" }: { className?: string }) {
+  return (
+    <span aria-hidden className={`inline-flex items-center justify-center rounded-full border border-current font-bold cursor-help select-none ${className}`}
+      style={{ width: '1em', height: '1em', fontSize: '0.72em', lineHeight: 1 }}>
+      i
+    </span>
+  )
+}
 import { supabase, HistoricoPreco } from '@/lib/supabase'
 import {
   ComposedChart, BarChart, Bar, Line, Area,
@@ -128,7 +139,7 @@ function CardInfo({ label, value, sub, color, info }: {
       onMouseLeave={() => setShow(false)}>
       <div className="flex items-center gap-1.5 mb-1">
         <p className="text-xs text-slate-400 uppercase tracking-wide">{label}</p>
-        {info && <span className="text-slate-500 text-xs cursor-help">ⓘ</span>}
+        {info && <IcoInfo className="text-slate-500" />}
       </div>
       <p className={`text-3xl font-bold ${color}`}>{value}</p>
       <p className="text-xs text-slate-500 mt-1">{sub}</p>
@@ -155,7 +166,7 @@ function CelulaUnidade({ label }: { label: string }) {
     <span ref={ref} className="inline-flex items-center gap-1 cursor-default"
       onMouseEnter={handleEnter} onMouseLeave={() => setPos(null)}>
       <span className="text-slate-500">{label}</span>
-      {explicacao && <span className="text-slate-600 text-xs cursor-help">ⓘ</span>}
+      {explicacao && <IcoInfo className="text-slate-600" />}
       {pos && explicacao && (
         <span className="fixed z-[200] w-60 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 shadow-2xl leading-relaxed whitespace-normal pointer-events-none"
           style={{ top: pos.top, left: pos.left, transform: 'translate(-50%, -100%)' }}>
@@ -170,6 +181,15 @@ function CelulaUnidade({ label }: { label: string }) {
 function ModalFontes({ ingrediente, fontes, data, onClose }: {
   ingrediente: string; fontes: FonteItem[]; data: string; onClose: () => void
 }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [onClose])
+
+  const isFallback = (link: string) => link.includes('google.com/search?')
+  const todosFallback = fontes.every(f => isFallback(f.link))
+
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60"
       onClick={onClose}>
@@ -182,7 +202,12 @@ function ModalFontes({ ingrediente, fontes, data, onClose }: {
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-200 text-xl leading-none">×</button>
         </div>
-        <p className="text-xs text-slate-500 mb-4">{fontes.length} resultado{fontes.length !== 1 ? 's' : ''} únicos coletados do Google Shopping</p>
+        <p className="text-xs text-slate-500 mb-3">{fontes.length} resultado{fontes.length !== 1 ? 's' : ''} únicos coletados do Google Shopping</p>
+        {todosFallback && (
+          <p className="text-xs text-amber-500/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mb-3">
+            ⚠️ A API não retornou links diretos. Os botões abaixo abrem a busca no Google Shopping para este produto.
+          </p>
+        )}
         <div className="space-y-2">
           {fontes.map((f, i) => (
             <a key={i} href={f.link || undefined} target="_blank" rel="noopener noreferrer"
@@ -198,7 +223,11 @@ function ModalFontes({ ingrediente, fontes, data, onClose }: {
                   <p className="text-slate-500 text-xs">{f.exibicao}</p>
                 </div>
               </div>
-              {f.link && <p className="mt-2 text-xs text-blue-400">🔗 ver produto</p>}
+              {f.link && (
+                <p className={`mt-2 text-xs ${isFallback(f.link) ? 'text-amber-400/70' : 'text-blue-400'}`}>
+                  {isFallback(f.link) ? '🔍 buscar no Google Shopping' : '🔗 ver produto'}
+                </p>
+              )}
             </a>
           ))}
         </div>
@@ -279,26 +308,63 @@ function ColunaHeader({ col, label, tip, ordemCol, ordemDir, onClick }: {
   col: string; label: string; tip?: string | null
   ordemCol: string; ordemDir: OrdemDir; onClick: () => void
 }) {
-  const [show, setShow] = useState(false)
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+  const iconRef = useRef<HTMLSpanElement>(null)
+
+  // Renderiza tooltip via portal no document.body para escapar do
+  // overflow:hidden implícito da tabela — que impedia o z-index de funcionar.
+  const mostrar = useCallback(() => {
+    if (!iconRef.current) return
+    const r = iconRef.current.getBoundingClientRect()
+    setPos({ x: r.left + r.width / 2, y: r.top - 6 })
+  }, [])
+  const esconder = useCallback(() => setPos(null), [])
+
+  useEffect(() => {
+    if (!pos) return
+    const hide = () => setPos(null)
+    window.addEventListener('scroll', hide, true)
+    window.addEventListener('resize', hide)
+    return () => { window.removeEventListener('scroll', hide, true); window.removeEventListener('resize', hide) }
+  }, [pos])
+
   return (
     <th onClick={onClick}
       className={`font-semibold text-slate-400 uppercase pb-3 pr-2 whitespace-nowrap cursor-pointer hover:text-slate-200 select-none transition-colors ${col === 'nome' ? 'text-left' : 'text-right'}`}>
-      <span className="relative inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1">
         {label}
         {tip && (
-          <span className="text-slate-600 text-xs cursor-help relative"
-            onMouseEnter={e => { e.stopPropagation(); setShow(true) }}
-            onMouseLeave={() => setShow(false)}>
-            ⓘ
-            {show && (
-              <span className="absolute z-50 bottom-full right-0 mb-2 w-64 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 font-normal normal-case shadow-2xl leading-relaxed whitespace-normal text-left pointer-events-none">
-                {tip}
-              </span>
-            )}
+          <span ref={iconRef}
+            className="cursor-help transition-colors text-slate-600 hover:text-blue-400"
+            onMouseEnter={e => { e.stopPropagation(); mostrar() }}
+            onMouseLeave={esconder}>
+            <IcoInfo />
           </span>
         )}
         <IconeOrdem col={col} ordemCol={ordemCol} ordemDir={ordemDir} />
       </span>
+      {pos && tip && typeof document !== 'undefined' && createPortal(
+        <span
+          role="tooltip"
+          style={{
+            position: 'fixed',
+            left: pos.x,
+            top: pos.y,
+            transform: 'translate(-50%, -100%)',
+            zIndex: 9999,
+            pointerEvents: 'none',
+          }}
+          className="w-64 bg-slate-900 border border-slate-500 rounded-lg px-3 py-2.5 text-xs text-slate-300 font-normal normal-case shadow-2xl leading-relaxed whitespace-normal text-left">
+          {tip}
+          <span style={{
+            position: 'absolute', bottom: -5, left: '50%',
+            transform: 'translateX(-50%)',
+            borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
+            borderTop: '5px solid #334155',
+          }} />
+        </span>,
+        document.body
+      )}
     </th>
   )
 }
@@ -638,7 +704,7 @@ A mediana é usada por ingrediente para reduzir o impacto de preços outliers. A
                 <div className="flex justify-between items-center mb-2">
                   <div className="relative group">
                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide cursor-help">
-                      Ingredientes <span className="text-slate-600">ⓘ</span>
+                      Ingredientes <IcoInfo className="text-slate-600" />
                     </label>
                     <div className="absolute z-50 bottom-full left-0 mb-2 w-64 bg-slate-900 border border-slate-500 rounded-lg p-3 text-xs text-slate-300 shadow-2xl leading-relaxed hidden group-hover:block">
                       Selecione os ingredientes que você usa no seu restaurante para personalizar o cálculo do custo do PF. Desmarque proteínas ou itens que não fazem parte do seu cardápio.

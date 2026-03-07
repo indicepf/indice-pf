@@ -384,7 +384,19 @@ def buscar_ingrediente(ingrediente, cache):
         titulo    = item.get("title", "")
         preco_txt = item.get("price", "")
         loja      = item.get("source", "N/A")
-        link      = item.get("link", "")
+        # SerpAPI Google Shopping raramente retorna link direto do produto.
+        # Tenta campos alternativos; se nenhum funcionar, usa link de busca
+        # no Google Shopping como fallback (ao menos é clicável no modal).
+        link = (
+            item.get("product_link")
+            or item.get("link")
+            or item.get("url")
+            or ""
+        )
+        if not link:
+            import urllib.parse
+            qs = urllib.parse.urlencode({"q": ingrediente["busca"], "tbm": "shop"})
+            link = f"https://www.google.com/search?{qs}"
 
         # Valida se é o produto certo
         valido, motivo = produto_valido(titulo, ingrediente)
