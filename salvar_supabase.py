@@ -12,7 +12,7 @@ except ImportError:
     pass
 
 # ─── Credenciais Supabase ─────────────────────────────────────────────────────
-SUPABASE_URL  = os.getenv("SUPABASE_URL", "https://zaeycrsfdrbdqiycmhuf.supabase.co")
+SUPABASE_URL  = os.getenv("SUPABASE_URL", "https://yhgdlmmtiyvdgeoxavzn.supabase.co")
 SUPABASE_KEY  = os.getenv("SUPABASE_KEY", "")
 SNAPSHOT_FILE = "snapshot_pf.json"
 
@@ -88,15 +88,15 @@ def main():
         snapshot_id = snap_resp[0]["id"]
         print(f"\n✅ Snapshot criado (id={snapshot_id})")
 
-    # ── 2. Agrupa preços normalizados por ingrediente ─────────────────────────
-    brutos_por_ingrediente = {}
+    # ── 2. Agrupa preços normalizados (R$/g) por ingrediente_id ───────────────
+    brutos = {}
     for r in resultados:
-        nome = r["ingrediente"]
-        pn   = r.get("preco_normalizado")
-        if pn is not None:
-            brutos_por_ingrediente.setdefault(nome, []).append(pn)
+        iid = r.get("ingrediente_id")
+        pn  = r.get("preco_normalizado")
+        if iid is not None and pn is not None:
+            brutos.setdefault(iid, []).append(pn)
 
-    # ── 3. DELETE + INSERT (substitui PATCH que falhava com nomes acentuados) ─
+    # ── 3. DELETE + INSERT (idempotente; evita PATCH com nomes acentuados) ────
     print(f"\n🗑️  Limpando preços anteriores do snapshot {snapshot_id}...")
     requests.delete(
         f"{SUPABASE_URL}/rest/v1/precos?snapshot_id=eq.{snapshot_id}",
@@ -105,31 +105,29 @@ def main():
 
     print(f"💾 Salvando preços (INSERT)...")
     for r in resumo:
-        nome    = r["ingrediente"]
+        iid     = r["ingrediente_id"]
         label   = r["label"]
-        precos  = brutos_por_ingrediente.get(nome, [])
+        precos  = brutos.get(iid, [])
         media_n, minimo_n, maximo_n, dp_n = calcular_stats(precos)
 
         dados = {
-            "snapshot_id":      snapshot_id,
-            "nome_ingrediente": nome,
-            "mediana_exibicao": r["mediana_por_1000"],
-            "media_exibicao":   normalizado_para_exibicao(media_n, label),
-            "minimo_exibicao":  normalizado_para_exibicao(minimo_n, label),
-            "maximo_exibicao":  normalizado_para_exibicao(maximo_n, label),
-            "desvio_padrao":    normalizado_para_exibicao(dp_n, label),
-            "label":            label,
-            "custo_porcao":     r["custo_porcao_r"],
-            "qtd_resultados":   r["qtd_resultados"],
+            "snapshot_id":         snapshot_id,
+            "ingrediente_id":      iid,
+            "nome_ingrediente":    r["ingrediente"],
+            "mediana_normalizada": r["mediana_normalizada"],   # R$/g (base do custo por prato)
+            "mediana_exibicao":    r["mediana_exibicao"],       # R$/kg ou R$/L
+            "media_exibicao":      normalizado_para_exibicao(media_n, label),
+            "minimo_exibicao":     normalizado_para_exibicao(minimo_n, label),
+            "maximo_exibicao":     normalizado_para_exibicao(maximo_n, label),
+            "desvio_padrao":       normalizado_para_exibicao(dp_n, label),
+            "label":               label,
+            "qtd_resultados":      r["qtd_resultados"],
         }
 
         resp   = supabase_post("precos", dados)
         status = "✅" if (resp is not None) else "❌"
-        med    = dados["media_exibicao"]
-        mn     = dados["minimo_exibicao"]
-        mx     = dados["maximo_exibicao"]
-        dp     = dados["desvio_padrao"]
-        print(f"  {status} {nome:<28} med={med} min={mn} max={mx} dp=±{dp}")
+        print(f"  {status} {r['ingrediente']:<30} mediana={dados['mediana_exibicao']}/{label} "
+              f"n={r['qtd_resultados']}")
 
     # ── 4. Salva resultados brutos (DELETE + INSERT para ter links atualizados) 
     print(f"\n🗑️  Limpando resultados brutos anteriores...")
@@ -141,6 +139,7 @@ def main():
     print(f"💾 Salvando {len(resultados)} resultados brutos...")
     payload = [{
         "snapshot_id":       snapshot_id,
+        "ingrediente_id":    r.get("ingrediente_id"),
         "nome_ingrediente":  r["ingrediente"],
         "titulo":            r["titulo"],
         "preco_bruto":       r["preco_bruto"],

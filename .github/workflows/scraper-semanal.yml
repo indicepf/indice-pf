@@ -2,8 +2,9 @@ name: Scraper Semanal — Índice PF
 
 on:
   schedule:
-    # Toda quarta-feira às 8h (horário de Brasília = 11h UTC)
-    - cron: '0 11 * * 3'
+    # Dias 1 e 15 às 8h (Brasília = 11h UTC) = 2 coletas/mês.
+    # 99 ingredientes × 2 = 198 chamadas/mês, dentro do plano gratuito da SerpAPI (250).
+    - cron: '0 11 1,15 * *'
   workflow_dispatch:  # permite rodar manualmente pelo GitHub
 
 jobs:
@@ -22,9 +23,9 @@ jobs:
 
       - name: Instalar dependências
         run: |
-          pip install supabase python-dotenv requests beautifulsoup4
+          pip install requests python-dotenv
 
-      - name: Executar scraper
+      - name: Coletar, salvar e calcular custos
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -32,13 +33,7 @@ jobs:
         run: |
           python scraper_pf.py
           python salvar_supabase.py
-
-      - name: Limpar snapshot simulado mais antigo
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: |
-          python limpar_simulados.py
+          python calcular_custos_pratos.py
 
       - name: Notificar sucesso
         if: success()

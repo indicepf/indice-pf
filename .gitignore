@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+__pycache__/
+*.pyc
+
+# artefatos de runtime (regeneráveis)
+cache_serpapi.json
+snapshot_pf.json
+tabela_canonica_ingredientes.xlsx

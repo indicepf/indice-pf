@@ -1,26 +1,34 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --cream:   #faf7f2;  /* fundo */
+  --panel:   #ffffff;  /* cartões */
+  --ink:     #1a1a1a;  /* texto */
+  --muted:   #6b6b6b;  /* texto secundário */
+  --line:    #e7e0d6;  /* bordas */
+  --paprika: #c0492b;  /* acento quente */
+  --olive:   #4a5d23;  /* acento secundário */
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-cream:   var(--cream);
+  --color-panel:   var(--panel);
+  --color-ink:     var(--ink);
+  --color-muted:   var(--muted);
+  --color-line:    var(--line);
+  --color-paprika: var(--paprika);
+  --color-olive:   var(--olive);
+  --font-sans:  var(--font-sans);
+  --font-serif: var(--font-serif);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/* números em variante tabular para alinhamento em tabelas */
+.tnum { font-variant-numeric: tabular-nums; }
+
+::selection { background: #c0492b22; }

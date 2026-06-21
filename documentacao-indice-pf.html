@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Índice PF — Documentação Técnica</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #1a1a1a;
+    margin: 0;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.6rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 36px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 {
+    font-size: 1.15rem; font-weight: bold; margin-top: 48px;
+    padding-bottom: 4px; border-bottom: 1px solid #ccc;
+  }
+  h3 { font-size: 1rem; font-weight: bold; margin-top: 28px; }
+  p { margin: 12px 0; }
+  code {
+    font-family: "Courier New", monospace;
+    background: #f2f2f2; border: 1px solid #ddd;
+    padding: 1px 5px; font-size: 0.9em;
+  }
+  pre {
+    background: #f7f7f7; border: 1px solid #ddd;
+    padding: 14px; overflow-x: auto; font-size: 0.85rem;
+    font-family: "Courier New", monospace;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  ol.steps { padding-left: 22px; }
+  ol.steps li { margin: 10px 0; }
+  .note {
+    border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0;
+  }
+  .note p:first-child { margin-top: 0; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .toc li { margin: 3px 0; }
+  footer { margin-top: 56px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Índice PF — Documentação Técnica</h1>
+  <p class="subtitle">Como o sistema funciona, do scraping de preços ao dashboard. Gerado a partir da leitura direta do código-fonte do repositório.</p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#visao">Visão geral</a></li>
+      <li><a href="#arquitetura">Arquitetura e stack</a></li>
+      <li><a href="#scraping">Coleta de dados (scraping) — detalhado</a></li>
+      <li><a href="#persistencia">Persistência no Supabase</a></li>
+      <li><a href="#historico">Geração de histórico simulado</a></li>
+      <li><a href="#limpeza">Limpeza dos snapshots simulados</a></li>
+      <li><a href="#automacao">Automação semanal (GitHub Actions)</a></li>
+      <li><a href="#frontend">Dashboard (frontend)</a></li>
+      <li><a href="#canonica">Tabela canônica de ingredientes (em curadoria)</a></li>
+      <li><a href="#seguranca">Observações de segurança</a></li>
+    </ol>
+  </div>
+
+  <h2 id="visao">1. Visão geral</h2>
+  <p>
+    O <strong>Índice PF</strong> é um painel que mede, semana a semana, quanto custa produzir uma porção de
+    "prato feito" brasileiro (arroz, feijão, proteína, guarnição, salada e temperos). O preço de cada um dos
+    <strong>27 ingredientes</strong> é coletado automaticamente no Google Shopping, normalizado para uma unidade
+    comum (R$/kg, R$/L, R$/bandeja etc.), e usado para calcular o custo de uma porção padrão. Os resultados são
+    salvos no Supabase e exibidos em um dashboard Next.js.
+  </p>
+
+  <h2 id="arquitetura">2. Arquitetura e stack</h2>
+  <table>
+    <tr><th>Camada</th><th>Tecnologia</th><th>Arquivo</th></tr>
+    <tr><td>Frontend</td><td>Next.js 15 + Tailwind + Recharts</td><td><code>app/page.tsx</code></td></tr>
+    <tr><td>Banco de dados</td><td>Supabase (PostgreSQL via REST)</td><td><code>lib/supabase.ts</code></td></tr>
+    <tr><td>Coleta de preços</td><td>Python + SerpAPI (engine <code>google_shopping</code>)</td><td><code>scraper_pf.py</code></td></tr>
+    <tr><td>Gravação no banco</td><td>Python + REST do Supabase</td><td><code>salvar_supabase.py</code></td></tr>
+    <tr><td>Bootstrap de histórico</td><td>Python (dados sintéticos)</td><td><code>gerar_historico.py</code></td></tr>
+    <tr><td>Saneamento</td><td>Python + supabase-py</td><td><code>limpar_simulados.py</code></td></tr>
+    <tr><td>Automação</td><td>GitHub Actions (cron semanal)</td><td><code>.github/workflows/scraper-semanal.yml</code></td></tr>
+    <tr><td>Deploy</td><td>Vercel</td><td>—</td></tr>
+  </table>
+
+  <h2 id="scraping">3. Coleta de dados (scraping) — detalhado</h2>
+  <p>
+    Todo o processo de coleta vive em <code>scraper_pf.py</code>. Ele não faz scraping de HTML diretamente — usa a
+    <strong>SerpAPI</strong> como intermediária, que já estrutura os resultados do Google Shopping em JSON. A chave
+    da API está hardcoded no topo do arquivo (ver seção de segurança).
+  </p>
+
+  <h3>3.1 Catálogo de 27 ingredientes</h3>
+  <p>
+    Cada ingrediente é um dicionário Python com regras próprias de busca, validação e normalização, organizado em
+    cinco categorias: Base, Proteínas, Guarnições, Salada e Temperos/Complementos.
+  </p>
+  <pre><code>{
+    "nome": "Frango (coxa/sobrecoxa)",
+    "busca": "coxa sobrecoxa frango kg",      # termo enviado ao Google Shopping
+    "unidade_base": "g",                       # unidade de normalização
+    "palavras_ok":  ["frango", "coxa", "sobrecoxa"],   # pelo menos 1 deve aparecer no título
+    "palavras_nao": ["temperado", "empanado", "nuggets", "processado", "defumado"],
+    "qtd_porcao_g": 200,                        # gramas usados em 1 porção de PF
+}</code></pre>
+  <table>
+    <tr><th>Campo</th><th>Função</th></tr>
+    <tr><td><code>busca</code></td><td>String literal enviada como query <code>q</code> para a SerpAPI</td></tr>
+    <tr><td><code>unidade_base</code></td><td><code>g</code>, <code>ml</code>, <code>unidade</code> ou <code>unid_peso_fixo</code> — define como o preço é normalizado</td></tr>
+    <tr><td><code>palavras_ok</code></td><td>Lista de termos — pelo menos um precisa estar no título do produto para ele ser aceito</td></tr>
+    <tr><td><code>palavras_nao</code></td><td>Lista de termos — se qualquer um aparecer no título, o produto é rejeitado (filtra variações erradas, ex: "feijão preto" quando se busca "feijão carioca")</td></tr>
+    <tr><td><code>qtd_porcao_g</code></td><td>Quantidade (em gramas/ml) usada para calcular o custo de 1 porção de PF</td></tr>
+  </table>
+
+  <h3>3.2 Fluxo de busca por ingrediente</h3>
+  <ol class="steps">
+    <li><strong>Cache diário</strong> — antes de chamar a API, verifica se já existe uma resposta salva em <code>cache_serpapi.json</code> para aquele ingrediente na data de hoje. Se sim, reutiliza (evita gastar cota da SerpAPI em reexecuções no mesmo dia).</li>
+    <li><strong>Chamada à SerpAPI</strong> — requisição GET para <code>https://serpapi.com/search</code> com <code>engine=google_shopping</code>, <code>gl=br</code>, <code>hl=pt</code>, <code>location=Brazil</code> e o termo de busca do ingrediente. Retorna a lista de <code>shopping_results</code>.</li>
+    <li><strong>Limita aos 15 primeiros resultados</strong> de cada busca.</li>
+    <li><strong>Validação do produto</strong> (<code>produto_valido</code>) — aplica as regras <code>palavras_ok</code> / <code>palavras_nao</code> sobre o título em minúsculo. Produtos fora do escopo são descartados e contados como "rejeitados".</li>
+    <li><strong>Limpeza do preço</strong> (<code>limpar_preco</code>) — remove tudo que não é dígito, vírgula ou ponto do campo <code>price</code> da SerpAPI; trata formatos BR (<code>1.234,56</code>) e US (<code>1234.56</code>) antes de converter para <code>float</code>.</li>
+    <li><strong>Extração de link</strong> — tenta <code>product_link</code>, depois <code>link</code>, depois <code>url</code>; a SerpAPI raramente devolve link direto do produto no Google Shopping, então, se nenhum campo existir, monta um link de fallback para a busca no Google Shopping (clicável no modal de fontes do dashboard).</li>
+    <li><strong>Normalização por unidade</strong> — ver tabela abaixo. O objetivo é deixar todos os preços comparáveis (R$/g ou R$/ml), independente da embalagem anunciada.</li>
+    <li><strong>Filtro de outliers (IQR)</strong> (<code>filtrar_outliers</code>) — calcula Q1/Q3 dos preços normalizados e remove os que ficam fora de <code>[Q1 − 1.5·IQR, Q3 + 1.5·IQR]</code>. Só roda se houver 4 ou mais resultados válidos.</li>
+    <li><strong>Mediana</strong> (<code>mediana</code>) — calculada sobre os preços normalizados restantes; é o valor usado oficialmente como "preço do ingrediente" no resumo (a média/mín/máx também são guardados para exibição, mas calculados depois, em <code>salvar_supabase.py</code>).</li>
+    <li><strong>Cache e log</strong> — resultado salvo em <code>cache_serpapi.json</code> e impresso no console (válidos, rejeitados, outliers removidos).</li>
+  </ol>
+
+  <h3>3.3 Casos especiais de normalização por unidade</h3>
+  <table>
+    <tr><th><code>unidade_base</code></th><th>Como normaliza</th><th>Exemplo</th></tr>
+    <tr>
+      <td><code>g</code> / <code>ml</code> (padrão)</td>
+      <td>Extrai peso/volume do título via regex (<code>extrair_quantidade</code>: kg, litros, L, ml, g) e divide o preço por essa quantidade → R$/g ou R$/ml</td>
+      <td>"Arroz 5kg R$ 24,90" → R$ 0,00498/g → exibido como R$ 4,98/kg</td>
+    </tr>
+    <tr>
+      <td><code>unidade</code> (Ovo)</td>
+      <td>Extrai nº de unidades do título (<code>extrair_unidades</code>: "30 unidades", "bandeja com X", "c/X" etc.) e converte para preço por bandeja de 30</td>
+      <td>"Ovos 20un R$ 15,00" → R$ 0,75/ovo → R$ 22,50/bdj30</td>
+    </tr>
+    <tr>
+      <td><code>unid_peso_fixo</code> (Alface)</td>
+      <td>Vendido por unidade no anúncio, mas sem peso declarado — usa um peso fixo estimado (<code>peso_fixo_g</code>, ex: 300g por pé) para converter em R$/g</td>
+      <td>"Alface R$ 4,20/un" com peso fixo 300g → R$ 14,00/kg*</td>
+    </tr>
+    <tr>
+      <td><code>maco</code> (Cheiro-verde, código existe mas nenhum ingrediente do catálogo atual usa)</td>
+      <td>Extrai nº de maços do título (<code>extrair_macos</code>) e multiplica por um peso fixo por maço</td>
+      <td>"Kit 2 maços" → divide preço por 2, depois pelo peso do maço</td>
+    </tr>
+  </table>
+  <p>
+    No dashboard, o label <code>kg*</code> aparece com um ícone de informação explicando que é uma estimativa baseada
+    em peso fixo, e não em peso real anunciado pelo vendedor.
+  </p>
+
+  <h3>3.4 Cálculo do custo por porção e snapshot final</h3>
+  <p>
+    Na função <code>main()</code>, para cada ingrediente: calcula a mediana dos preços normalizados, converte para a
+    unidade de exibição (R$/kg, R$/L, R$/bdj30...) e multiplica pela quantidade usada em 1 porção
+    (<code>qtd_porcao_g</code> ou equivalente) para obter o <code>custo_porcao</code>. A soma de todos os
+    <code>custo_porcao</code> é o <strong>custo estimado da porção completa do PF</strong>.
+  </p>
+  <p>Tudo é então persistido em <code>snapshot_pf.json</code>, com esta estrutura:</p>
+  <pre><code>{
+  "data": "2026-06-17",
+  "fonte": "Google Shopping via SerpAPI",
+  "custo_total_pf": 23.45,
+  "resumo": [ { "ingrediente": "...", "mediana_por_1000": ..., "label": "kg", "custo_porcao_r": ..., "qtd_resultados": ... } ],
+  "resultados": [ { "ingrediente", "titulo", "preco_bruto", "preco_normalizado", "exibicao", "loja", "link" } ]
+}</code></pre>
+  <p>Este arquivo é o elo entre o scraper e o script que grava no banco (<code>salvar_supabase.py</code>).</p>
+
+  <h2 id="persistencia">4. Persistência no Supabase</h2>
+  <p><code>salvar_supabase.py</code> lê o <code>snapshot_pf.json</code> e grava em três tabelas via REST API do Supabase:</p>
+  <table>
+    <tr><th>Tabela</th><th>Conteúdo</th></tr>
+    <tr><td><code>snapshots</code></td><td>1 linha por data de coleta: data, fonte, custo total do PF</td></tr>
+    <tr><td><code>precos</code></td><td>1 linha por ingrediente por snapshot: mediana, média, mínimo, máximo, desvio padrão, label, custo da porção, qtd de resultados coletados</td></tr>
+    <tr><td><code>resultados_brutos</code></td><td>Cada produto individual encontrado (título, loja, preço bruto, preço normalizado, link) — alimenta o modal "Fontes" do dashboard</td></tr>
+  </table>
+  <p>Pontos relevantes do fluxo de gravação:</p>
+  <ul>
+    <li>Se já existir um snapshot para a mesma data, reaproveita o <code>id</code> em vez de criar duplicado.</li>
+    <li>Estatísticas (<code>calcular_stats</code>) — média, mínimo, máximo e desvio padrão populacional — são recalculadas aqui a partir dos <code>preco_normalizado</code> agrupados por ingrediente (não vêm prontas do scraper).</li>
+    <li>Para <code>precos</code> e <code>resultados_brutos</code>, o script faz <strong>DELETE + INSERT</strong> (em vez de UPDATE/PATCH) antes de regravar — comentário no código indica que isso substituiu um PATCH que falhava com nomes de ingredientes acentuados.</li>
+    <li>Inserção dos resultados brutos é feita em lotes de 50 registros por chamada.</li>
+  </ul>
+
+  <h2 id="historico">5. Geração de histórico simulado</h2>
+  <p>
+    <code>gerar_historico.py</code> existe para popular o dashboard com 8 semanas de histórico <em>antes</em> de haver
+    dados reais suficientes. Ele parte de uma tabela fixa de preços-base (<code>PRECOS_BASE</code>) e de uma tendência
+    semanal por ingrediente (<code>TENDENCIAS</code>, ex: alta de commodities, queda por safra) para "voltar no tempo"
+    e gerar preços plausíveis para as 8 semanas anteriores à data de referência, com ruído aleatório de ±2% por semana
+    (seed fixa <code>random.seed(42)</code> para reprodutibilidade). Os snapshots gerados são marcados com
+    <code>fonte: "simulado"</code>.
+  </p>
+
+  <h2 id="limpeza">6. Limpeza dos snapshots simulados</h2>
+  <p>
+    <code>limpar_simulados.py</code> é pensado para rodar uma vez por semana, depois de cada coleta real. Ele busca o
+    snapshot simulado mais antigo (campo <code>simulado = true</code>) e o remove (junto com seus preços e resultados
+    brutos), de forma que, a cada execução semanal real, um snapshot falso é substituído por um real — até que, após
+    8 semanas, todo o histórico seja 100% real.
+  </p>
+
+  <h2 id="automacao">7. Automação (GitHub Actions)</h2>
+  <p>O workflow <code>.github/workflows/scraper-semanal.yml</code> roda:</p>
+  <ul>
+    <li><strong>Agendamento:</strong> dias 1 e 15 às 11h UTC (8h em Brasília) — <code>cron: '0 11 1,15 * *'</code> = 2 coletas/mês (198 chamadas, dentro do plano gratuito SerpAPI de 250).</li>
+    <li><strong>Disparo manual:</strong> via <code>workflow_dispatch</code>, pela aba Actions do GitHub</li>
+    <li><strong>Passos:</strong> checkout → Python 3.11 + <code>requests</code>/<code>python-dotenv</code> → <code>scraper_pf.py</code> → <code>salvar_supabase.py</code> → <code>calcular_custos_pratos.py</code>. (O passo legado <code>limpar_simulados.py</code> foi removido — preservaria os dados antigos.)</li>
+    <li><strong>Segredos usados:</strong> <code>SUPABASE_URL</code>, <code>SUPABASE_KEY</code> (service role), <code>SERPAPI_KEY</code> — todos do projeto novo.</li>
+  </ul>
+
+  <h2 id="frontend">8. Dashboard (frontend)</h2>
+  <p>
+    <code>app/page.tsx</code> é um componente client-side único que lê a tabela/view <code>historico_precos</code> do
+    Supabase (via <code>lib/supabase.ts</code>, usando a anon key pública) e oferece duas abas:
+  </p>
+  <h3>8.1 Aba "Visão do Cliente"</h3>
+  <ul>
+    <li><strong>Filtros:</strong> métrica de preço (mediana/média/mín/máx, com possibilidade de combinar várias), período por data, seleção de quais dos 27 ingredientes entram no cálculo.</li>
+    <li><strong>Cálculo do custo do PF</strong> (<code>calcularCustoPF</code>): soma o custo de porção de cada ingrediente ativo; para proteínas, usa <strong>média ponderada</strong> entre as proteínas selecionadas (pesos diferentes para carne bovina/suína vs. frango/ovo), assumindo que o cliente serve uma proteína por porção, não todas somadas.</li>
+    <li><strong>Gráfico 1:</strong> evolução do custo total do PF por semana, com banda de ±1 desvio padrão (real quando disponível na última coleta, estimada em ±8% para semanas anteriores que não têm desvio padrão calculado).</li>
+    <li><strong>Gráfico 2:</strong> composição do custo por categoria (Proteína, Base, Guarnição, Salada, Temperos), alternável entre barras (% do total) e linhas (R$/porção).</li>
+    <li><strong>Tabela detalhada:</strong> por ingrediente — mediana, média, mín, máx, desvio padrão, custo da porção e inflação no período, ordenável por coluna.</li>
+    <li><strong>Modal de Fontes:</strong> ao clicar em "•••" numa linha, busca em <code>resultados_brutos</code> todos os produtos individuais coletados para aquele ingrediente/snapshot e mostra título, loja, preço e link (ou aviso de fallback quando a SerpAPI não retornou link direto).</li>
+    <li><strong>Calculadora de custo:</strong> custo diário = custo da porção × nº de pratos/dia, com simulação de desconto no atacado configurável de 5% a 30%.</li>
+  </ul>
+  <h3>8.2 Aba "Backoffice" (admin)</h3>
+  <p>
+    Painel informativo (não executa nada): mostra os comandos do scraper, status do banco (nº de snapshots,
+    registros, ingredientes) e a lista dos 27 ingredientes cadastrados com seu último preço conhecido.
+  </p>
+
+  <h2 id="canonica">9. Tabela canônica de ingredientes (em curadoria)</h2>
+  <p>
+    Etapa preparatória para expandir o scraping dos 27 ingredientes de um único PF para os <strong>100 pratos</strong>
+    regionais descritos em <code>Tabela_Indice_PF_Ataulizada.xlsx</code> (5 regiões, 925 linhas de ingrediente/quantidade).
+    (A planilha tinha o prato 4 do Norte — Tacacá — grafado de duas formas, o que o partia em dois; unificado via
+    <code>PRATO_ALIAS</code> em <code>mapa_canonico.py</code>.)
+    O objetivo desta etapa é só consolidar uma base limpa de ingredientes — nada de scraping, banco ou mudança de
+    cálculo ainda. Está <strong>pendente de revisão</strong> do responsável antes de avançar.
+  </p>
+  <h3>9.1 Problema de partida</h3>
+  <p>
+    A planilha <code>Ingredientes_Scrapping.xlsx</code> já havia deduplicado os ingredientes em 404 nomes canônicos,
+    mas só resolveu a parte fácil: 394 dos 404 ainda eram texto de receita (ex: "Posta de Peixe (Cavala/Dourado)",
+    "tiras de cenoura dura") e ~60 eram pratos preparados (Vatapá, Farofa, Pirão, Vinagrete), não produtos de varejo
+    pesquisáveis no Google Shopping.
+  </p>
+  <h3>9.2 O que foi feito</h3>
+  <p>
+    Cada um dos 404 nomes foi classificado manualmente (julgamento caso a caso, não regex) em
+    <code>scripts/mapa_canonico.py</code> como:
+  </p>
+  <ul>
+    <li><strong>Atômico</strong> — fundido a um ingrediente-base de varejo (ex: as 16 variações de "Arroz branco" → um único item).</li>
+    <li><strong>Composto</strong> — <strong>60 preparos</strong> decompostos em ingredientes-base com proporções estimadas (ex: Farofa rica → farinha de mandioca + manteiga + ovo + cebola; Vatapá → pão + leite de coco + camarão seco + dendê + amendoim + cebola). Caldos/pirões tratam o líquido como subproduto sem custo.</li>
+  </ul>
+  <h3>9.3 Consolidação para o orçamento de API</h3>
+  <p>
+    A coleta usa a SerpAPI no plano gratuito: <strong>250 chamadas/mês</strong>, 1 chamada por ingrediente por coleta.
+    Para reduzir o nº de termos de busca distintos, uma camada de consolidação (<code>CONSOLIDA</code> em
+    <code>mapa_canonico.py</code>) funde bases equivalentes seguindo regras definidas pelo responsável — cortes bovinos
+    baratos (acém/músculo/agulha/moída) → um único "Acém bovino"; cortes nobres (alcatra/patinho/coxão/mignon) →
+    "Alcatra bovina"; carne seca = charque = carne de sol; peixe de mar em posta → Pescada; peixe de rio → Pintado;
+    feijão fradinho = feijão de corda; cebola única; entre outras — mais um lote de fusões equivalentes (manteiga de
+    garrafa, queijos prato/mussarela, fubá/flocão, extrato/molho de tomate, pimenta, etc.).
+  </p>
+  <p>
+    Resultado: de 404 nomes brutos para <strong>99 ingredientes-base</strong> (termos de busca distintos), o que
+    permite <strong>2 coletas completas por mês</strong> dentro do plano gratuito. Optou-se por preservar todos os
+    ingredientes regionais (sem descartar itens de nicho), aceitando a cadência mensal menor em troca de dados
+    completos.
+  </p>
+  <p>
+    O gerador <code>scripts/gerar_tabela_canonica.py</code> valida que os 404 estão 100% cobertos, que as proporções
+    de cada composto somam 1 e que nenhuma base já fundida vaza para a lista final, depois produz
+    <code>tabela_canonica_ingredientes.xlsx</code> com 8 abas: <em>Receitas Finais</em> (1021 linhas — prato ×
+    ingrediente canônico × porção em g, consolidado), <em>Pratos (resumo)</em> (100), <em>Scraping (99 termos)</em>
+    (tripé, abaixo), <em>Ingredientes Canônicos</em> (99), <em>Receitas Decompostas</em> (925 reescritas, 1067 após
+    decompor), <em>Decomposições Aplicadas</em>, <em>Fusões Aplicadas</em> e <em>A Revisar</em> (111 pontos de baixa
+    confiança).
+  </p>
+  <h3>9.4 Verificações automáticas</h3>
+  <ul>
+    <li>Cobertura: 404/404 nomes mapeados (gerador falha se algum ficar de fora).</li>
+    <li>Conservação de massa: a soma das quantidades decompostas bate com a quantidade original em todas as 925 linhas.</li>
+    <li>Nenhum preparo composto sobrou na lista de ingredientes-base atômicos.</li>
+    <li>Todos os 100 pratos têm ao menos uma proteína; nenhum peso/contagem de ingredientes atípico (peso/porção entre 60g e 626g).</li>
+  </ul>
+  <h3>9.5 Proposta de tripé de scraping</h3>
+  <p>
+    Para cada um dos 99 ingredientes-base, <code>scripts/tripe_scraping.py</code> propõe o que o scraper precisa:
+    <strong>termo de busca</strong> (query do Google Shopping), <strong>unidade</strong> (define a normalização do
+    preço: 83 em g, 8 em ml, 1 em unidade = Ovo, e 7 em <code>maco</code> — folhas/verduras vendidas por maço/unidade
+    sem peso no título, normalizadas por um <code>peso_ref_g</code> estimado, ex: alface 300g, cheiro-verde 150g) e as
+    listas <strong>palavras_ok</strong> / <strong>palavras_nao</strong>, no mesmo estilo das 27 entradas originais.
+    Ainda é proposta, pendente de revisão (aba <em>Scraping (99 termos)</em>).
+  </p>
+  <p>
+    Mudanças previstas no <code>scraper_pf.py</code> (não implementadas): (1) carregar o catálogo desse módulo em vez
+    da lista hardcoded de 27; (2) deixar de calcular <code>custo_porcao</code> por ingrediente — no novo modelo o
+    snapshot guarda só o preço normalizado por ingrediente-base, e o custo é calculado por prato (preço × quantidade
+    da receita em <em>Receitas Finais</em>) numa etapa posterior. A pipeline de coleta (validação, limpeza de preço,
+    normalização, filtro IQR, mediana) é reaproveitada sem mudança de lógica.
+  </p>
+  <p>
+    Decisões de design tomadas com o responsável: itens compostos são decompostos já nesta etapa; o modelo de custo
+    futuro será <strong>por prato</strong>, não mais um índice único; preserva-se a completude (sem descartar itens
+    regionais), aceitando ~2 coletas/mês no plano gratuito de API.
+  </p>
+  <h3>9.6 Banco: camada aditiva (preserva a estrutura atual)</h3>
+  <p>
+    A estrutura atual do Supabase é mantida — <code>snapshots</code>, <code>precos</code>,
+    <code>resultados_brutos</code> e a view <code>historico_precos</code> seguem com as mesmas colunas; a expansão
+    27→99 é apenas mais linhas em <code>precos</code>/<code>resultados_brutos</code>. A lógica de coleta do scraper
+    não muda. As únicas adições (em <code>supabase_migration.sql</code>, escrita defensiva com <code>IF NOT EXISTS</code>):
+  </p>
+  <ul>
+    <li><code>ingredientes</code> (existia vazia) é <strong>recriada limpa</strong> (DROP + CREATE; 0 linhas, sem perda) com schema definido: <code>nome</code>, <code>categoria</code>, <code>busca</code>, <code>unidade</code>, <code>peso_ref_g</code>, <code>palavras_ok/nao</code>, <code>ativo</code>. Passa a ser o catálogo dos 99, referenciado por <code>ingrediente_id</code> (com FK religada).</li>
+    <li>Tabelas novas <code>pratos</code> (100), <code>receitas</code> (prato × ingrediente × qtd/porção, 1019 linhas) e <code>custos_pratos</code> (custo por prato por snapshot — calculado a cada coleta sem tocar em <code>custo_total_pf</code>/<code>custo_porcao</code>).</li>
+  </ul>
+  <p>
+    Continuidade de histórico: optou-se por <strong>recomeço limpo</strong> com os 99 nomes novos (o histórico antigo
+    era majoritariamente simulado); a série real recomeça na próxima coleta. Pepino e Beterraba (dos 27 antigos) saem,
+    pois nenhum dos 100 pratos os usa. O projeto Supabase foi migrado para uma instância nova; o gerador de histórico
+    simulado (<code>gerar_historico.py</code>) foi removido.
+  </p>
+  <h3>9.7 Scraper reescrito (implementado)</h3>
+  <p>
+    O <code>scraper_pf.py</code> foi reescrito mantendo a lógica de coleta (SerpAPI, validação <code>palavras_ok/nao</code>,
+    limpeza de preço, filtro IQR, mediana) e mudando três coisas:
+  </p>
+  <ul>
+    <li><strong>Catálogo dinâmico:</strong> carrega os 99 ingredientes da tabela <code>ingredientes</code> (não mais lista hardcoded), com <code>id</code> para gravar <code>ingrediente_id</code>.</li>
+    <li><strong>Normalização uniforme em R$/g:</strong> itens em g/ml extraem peso/volume do título; <code>unidade</code> (Ovo) e <code>maco</code> (folhas) usam contagem do título ÷ <code>peso_ref_g</code> — tudo vira R$/g, base do custo por prato (preço × quantidade da receita). Ex: bandeja de 30 ovos a R$22,50 → R$0,75/un ≈ R$15/kg.</li>
+    <li><strong>Sem <code>custo_porcao</code>:</strong> o snapshot guarda só o preço normalizado por ingrediente; o custo é calculado por prato numa etapa separada.</li>
+    <li><strong>Regras anti-inflação:</strong> palavras negativas globais (gourmet, premium, luxo, importado, cesta…) rejeitam produtos atípicos; e um filtro de sanidade descarta preços fora da faixa <code>[mediana/4, mediana×4]</code> do lote — pega erro de vírgula (R$40 → R$40.000) sem matar variação legítima entre lojas. Roda antes do filtro IQR já existente.</li>
+  </ul>
+  <p>
+    O <code>salvar_supabase.py</code> foi adaptado: grava <code>ingrediente_id</code> e <code>mediana_normalizada</code>
+    (R$/g) em <code>precos</code>, sem <code>custo_porcao</code> (que vira cálculo por prato). Estrutura das tabelas
+    inalterada.
+  </p>
+  <p>
+    A chave da SerpAPI deixou de ser hardcoded — passou a ser lida de <code>SERPAPI_KEY</code> (env / <code>.env.local</code> /
+    secret do GitHub).
+  </p>
+  <h3>9.8 Preço fixo para itens não-cotáveis</h3>
+  <p>
+    Ingredientes sem produto de varejo equivalente (ex: sangue de cabidela/sarapatel) recebem <code>unidade='fixo'</code>
+    e um <code>custo_fixo</code> em R$ (coluna adicionada via <code>supabase_migration_2.sql</code>). O scraper os
+    <strong>ignora</strong> (não gasta SerpAPI) e o custo por prato usa o valor fixo. Hoje são 2 itens (Sangue suíno,
+    Sangue de aves) a R$0,50 cada. Mecanismo reutilizável para outros itens não-cotáveis.
+  </p>
+  <p>
+    Além do custo fixo (flat), há o <strong>preço manual</strong> (<code>preco_manual</code> em R$/kg, via
+    <code>supabase_migration_4.sql</code>): para ingredientes que não têm cotação online mas são parte relevante do
+    prato (ex: jambu fresco R$60/kg, carne de bode R$40/kg). O scraper os ignora e o custo usa
+    <code>preco_manual × quantidade</code> (escala com a porção, ao contrário do custo fixo). Total
+    <strong>111 ingredientes</strong> = 107 scrapeáveis + 2 fixos + 2 manuais. (Proteínas que dão nome ao prato —
+    Filé mignon, Chuleta, Contrafilé, Patinho, Coxão mole, Carne moída, e os peixes Tambaqui/Pacu/Tainha/Cavala —
+    foram des-consolidadas: têm cotação própria e nome fiel no prato, em vez de cair em Alcatra/Acém/Pintado/Pescada.)
+  </p>
+  <p>
+    O seed (<code>scripts/seed_supabase.py</code>, idempotente, requer service_role) popula
+    <code>ingredientes</code>/<code>pratos</code>/<code>receitas</code> a partir da tabela canônica.
+  </p>
+  <h3>9.9 Custo por prato (implementado)</h3>
+  <p>
+    <code>calcular_custos_pratos.py</code> calcula, para um snapshot, o custo de cada um dos 100 pratos:
+    <code>custo = Σ (preço R$/g × qtd da receita) + Σ (custo fixo)</code>. Para ingrediente sem cotação na semana,
+    usa a <strong>média dos últimos 3 valores</strong> em snapshots anteriores (fallback); sem histórico, o item não
+    contribui (prato parcial). Grava em <code>custos_pratos</code> a cobertura: <code>ingredientes_cobertos</code>
+    (cotação fresca + fixo), <code>ingredientes_estimados</code> (fallback) e <code>ingredientes_total</code>.
+    Também define <code>snapshots.custo_total_pf</code> = mediana dos custos dos 100 pratos (índice nacional).
+  </p>
+
+  <h2 id="seguranca">10. Observações de segurança</h2>
+  <div class="note">
+    <p><strong>Chaves de API hardcoded no código-fonte.</strong> Durante a leitura do código, encontrei segredos commitados diretamente nos arquivos, e não apenas em variáveis de ambiente:</p>
+    <ul>
+      <li><code>scraper_pf.py:8</code> — chave da SerpAPI hardcoded (<code>SERP_API_KEY = "de201d8a..."</code>). É uma chave paga; qualquer pessoa com acesso ao repositório pode usá-la.</li>
+      <li><code>gerar_historico.py:7-8</code> — URL e chave (JWT) do Supabase hardcoded como fallback, embora o resto do projeto use variáveis de ambiente (<code>.env.local</code> / GitHub Secrets).</li>
+      <li><code>lib/supabase.ts:3-4</code> e o fallback em <code>salvar_supabase.py:15</code> usam a mesma chave anônima (<code>role: anon</code>) do Supabase — exposição esperada para uma anon key pública de frontend, desde que as políticas de RLS no banco restrinjam corretamente leitura/escrita.</li>
+    </ul>
+    <p>Recomendação (não aplicada — apenas relatando): mover a chave da SerpAPI para variável de ambiente/secret e, por segurança, considerar rotacioná-la já que está exposta no histórico do git.</p>
+  </div>
+
+  <footer>Documento gerado a partir da leitura do código-fonte do repositório <code>indice-pf</code>.</footer>
+</div>
+</body>
+</html>
