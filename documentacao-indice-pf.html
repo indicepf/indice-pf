@@ -62,9 +62,10 @@
       <li><a href="#historico">Geração de histórico simulado</a></li>
       <li><a href="#limpeza">Limpeza dos snapshots simulados</a></li>
       <li><a href="#automacao">Automação semanal (GitHub Actions)</a></li>
-      <li><a href="#frontend">Dashboard (frontend)</a></li>
+      <li><a href="#frontend">Frontend (Next.js)</a></li>
       <li><a href="#canonica">Tabela canônica de ingredientes (em curadoria)</a></li>
       <li><a href="#seguranca">Observações de segurança</a></li>
+      <li><a href="#proximos">Estado atual e próximos passos</a></li>
     </ol>
   </div>
 
@@ -222,25 +223,33 @@
     <li><strong>Segredos usados:</strong> <code>SUPABASE_URL</code>, <code>SUPABASE_KEY</code> (service role), <code>SERPAPI_KEY</code> — todos do projeto novo.</li>
   </ul>
 
-  <h2 id="frontend">8. Dashboard (frontend)</h2>
+  <h2 id="frontend">8. Frontend (Next.js)</h2>
   <p>
-    <code>app/page.tsx</code> é um componente client-side único que lê a tabela/view <code>historico_precos</code> do
-    Supabase (via <code>lib/supabase.ts</code>, usando a anon key pública) e oferece duas abas:
+    O app foi reescrito para o modelo por prato. Identidade visual sóbria, "universo alimentício": fundo creme,
+    acento páprica, títulos serifados (Lora) e dados em sans (Inter). Estrutura compartilhada em
+    <code>lib/types.ts</code>, <code>lib/format.ts</code>, <code>lib/queries.ts</code> e o hook
+    <code>app/useAuth.ts</code> (sessão + perfil).
   </p>
-  <h3>8.1 Aba "Visão do Cliente"</h3>
+  <h3>8.1 Dashboard público (<code>app/page.tsx</code>)</h3>
   <ul>
-    <li><strong>Filtros:</strong> métrica de preço (mediana/média/mín/máx, com possibilidade de combinar várias), período por data, seleção de quais dos 27 ingredientes entram no cálculo.</li>
-    <li><strong>Cálculo do custo do PF</strong> (<code>calcularCustoPF</code>): soma o custo de porção de cada ingrediente ativo; para proteínas, usa <strong>média ponderada</strong> entre as proteínas selecionadas (pesos diferentes para carne bovina/suína vs. frango/ovo), assumindo que o cliente serve uma proteína por porção, não todas somadas.</li>
-    <li><strong>Gráfico 1:</strong> evolução do custo total do PF por semana, com banda de ±1 desvio padrão (real quando disponível na última coleta, estimada em ±8% para semanas anteriores que não têm desvio padrão calculado).</li>
-    <li><strong>Gráfico 2:</strong> composição do custo por categoria (Proteína, Base, Guarnição, Salada, Temperos), alternável entre barras (% do total) e linhas (R$/porção).</li>
-    <li><strong>Tabela detalhada:</strong> por ingrediente — mediana, média, mín, máx, desvio padrão, custo da porção e inflação no período, ordenável por coluna.</li>
-    <li><strong>Modal de Fontes:</strong> ao clicar em "•••" numa linha, busca em <code>resultados_brutos</code> todos os produtos individuais coletados para aquele ingrediente/snapshot e mostra título, loja, preço e link (ou aviso de fallback quando a SerpAPI não retornou link direto).</li>
-    <li><strong>Calculadora de custo:</strong> custo diário = custo da porção × nº de pratos/dia, com simulação de desconto no atacado configurável de 5% a 30%.</li>
+    <li><strong>Índice nacional</strong> em destaque (mediana dos 100 custos de prato).</li>
+    <li><strong>Mapa do Brasil por região</strong> (<code>app/MapaBrasil.tsx</code>, react-simple-maps): 27 estados fundidos em 5 regiões, coloridos por rank de custo, rótulos fixos, clique filtra e dá zoom (sincronizado com o seletor da lista).</li>
+    <li><strong>Explorador de pratos:</strong> busca, filtro por região, ordenação; cada linha abre o <strong>detalhe</strong> (<code>app/DetalhePrato.tsx</code>) com o breakdown ingrediente × quantidade × custo e as <strong>fontes</strong> (produtos reais coletados).</li>
+    <li><strong>Três preços</strong> alternáveis: Online (raspado), Mercado (−10%) e Atacarejo (−22%) — estimativas a serem calibradas pelo crowdsourcing.</li>
   </ul>
-  <h3>8.2 Aba "Backoffice" (admin)</h3>
+  <h3>8.2 Autenticação (Frente B)</h3>
   <p>
-    Painel informativo (não executa nada): mostra os comandos do scraper, status do banco (nº de snapshots,
-    registros, ingredientes) e a lista dos 27 ingredientes cadastrados com seu último preço conhecido.
+    Login por <strong>e-mail + senha</strong> (Supabase Auth) em modal no cabeçalho (<code>app/Auth.tsx</code>), com
+    completar perfil (nome, <strong>telefone validado</strong>, região). Tabela <code>profiles</code> com RLS (cada um
+    só lê/edita o próprio). CPF reservado para a etapa de recompensa. Página <code>/perfil</code> com dados e a lista
+    de contribuições.
+  </p>
+  <h3>8.3 Crowdsourcing de preços (Frente C — v1)</h3>
+  <p>
+    Página <code>/contribuir</code>: foto do produto (abre a câmera), seleção do ingrediente, preço, peso, tipo de
+    loja, mercado, cidade, geolocalização e foto da etiqueta. Sobe a imagem para o bucket de Storage
+    <code>contribuicoes</code> e grava os metadados na tabela <code>contribuicoes</code> com status
+    <code>pendente</code>. Um popup de CTA estimula a contribuição.
   </p>
 
   <h2 id="canonica">9. Tabela canônica de ingredientes (em curadoria)</h2>
@@ -399,7 +408,32 @@
     <p>Recomendação (não aplicada — apenas relatando): mover a chave da SerpAPI para variável de ambiente/secret e, por segurança, considerar rotacioná-la já que está exposta no histórico do git.</p>
   </div>
 
-  <footer>Documento gerado a partir da leitura do código-fonte do repositório <code>indice-pf</code>.</footer>
+  <h2 id="proximos">11. Estado atual e próximos passos</h2>
+  <h3>11.1 O que está pronto</h3>
+  <ul>
+    <li><strong>Pipeline de dados:</strong> coleta dos 111 ingredientes, custo por prato dos 100 pratos, índice nacional, automação 2×/mês (GitHub Actions). Projeto Supabase novo (<code>yhgdlmmtiyvdgeoxavzn</code>).</li>
+    <li><strong>Frente A — Dashboard:</strong> índice nacional, mapa por região, explorador de pratos com detalhe/fontes, 3 preços.</li>
+    <li><strong>Frente B — Login:</strong> e-mail + senha (Supabase), perfil com telefone, página <code>/perfil</code>.</li>
+    <li><strong>Frente C v1 — Crowdsourcing:</strong> página <code>/contribuir</code> (foto + metadados + geolocalização → Storage + tabela <code>contribuicoes</code>).</li>
+    <li>Refatoração: <code>lib/</code> (types/format/queries) + <code>useAuth</code>; deploy via GitHub → Vercel (<code>.npmrc</code> com <code>legacy-peer-deps</code>).</li>
+  </ul>
+  <h3>11.2 Ações pendentes do responsável (no Supabase / Vercel)</h3>
+  <ul>
+    <li><strong>Rodar <code>supabase_migration_8.sql</code></strong> — cria a tabela <code>contribuicoes</code> e o bucket de Storage. Sem ela, o "Contribuir" falha.</li>
+    <li><strong>Auth → Providers → Email:</strong> desativar "Confirm email" (cadastro/login por senha sem enviar e-mail → sem rate limit). Apagar os usuários de teste criados por link mágico (não têm senha).</li>
+    <li><strong>Auth → URL Configuration:</strong> Site URL e Redirect URLs com a URL da Vercel (para produção).</li>
+    <li><strong>GitHub → Secrets:</strong> <code>SUPABASE_URL</code>, <code>SUPABASE_KEY</code> (service_role) e <code>SERPAPI_KEY</code> apontando para o projeto/chaves novos.</li>
+    <li><strong>Antes de lançar:</strong> SMTP próprio (Resend) para e-mails; e criptografia de coluna (Vault/pgsodium) antes de operar com CPFs reais.</li>
+  </ul>
+  <h3>11.3 Frente C — fase 2 (a construir)</h3>
+  <ul>
+    <li><strong>Moderação (backoffice):</strong> aprovar/rejeitar contribuições e mapear ao ingrediente canônico (status <code>pendente → aprovada/rejeitada</code>).</li>
+    <li><strong>Calibração:</strong> comparar preço de campo aprovado × preço raspado → ajustar os % de Mercado/Atacarejo por região (fecha o ciclo do produto).</li>
+    <li><strong>Recompensa/PIX:</strong> coletar CPF + chave PIX na hora de receber, com consentimento LGPD.</li>
+    <li><strong>Geocodificação reversa</strong> (cidade automática a partir das coordenadas) e <strong>evolução temporal</strong> do índice (quando houver ~3 coletas).</li>
+  </ul>
+
+  <footer>Documento técnico do projeto <code>indice-pf</code> — atualizado a cada fase.</footer>
 </div>
 </body>
 </html>

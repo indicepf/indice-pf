@@ -157,12 +157,17 @@
     <tr><td><code>parametros</code></td><td>desconto_mercado, desconto_atacarejo (globais ou por região) — para os 3 preços</td><td>A</td></tr>
   </table>
 
-  <h2 id="fases">8. Ordem de execução</h2>
+  <h2 id="fases">8. Ordem de execução — status</h2>
   <ol>
-    <li><strong>Frente A — Dashboard</strong> (em curso): redesenho completo de <code>app/page.tsx</code> para o modelo por prato, com os 3 preços e os princípios de UX/UI acima. Não depende de login.</li>
-    <li><strong>Frente B — Autenticação:</strong> Supabase Auth + <code>profiles</code>, com CPF tratado conforme LGPD (idealmente coletado só ao habilitar recompensa).</li>
-    <li><strong>Frente C — Crowdsourcing:</strong> captura de foto, metadados, storage, moderação, antifraude e calibração dos descontos.</li>
+    <li><strong>Frente A — Dashboard:</strong> <strong>concluída.</strong> Índice nacional, mapa por região, explorador, detalhe/fontes, 3 preços.</li>
+    <li><strong>Frente B — Autenticação:</strong> <strong>concluída.</strong> E-mail + senha (Supabase), <code>profiles</code> com RLS, página <code>/perfil</code>. CPF reservado para a recompensa.</li>
+    <li><strong>Frente C — Crowdsourcing:</strong> <strong>v1 concluída</strong> (captura de foto + metadados + geolocalização → Storage + tabela <code>contribuicoes</code>). <strong>Fase 2 pendente:</strong> moderação, antifraude, calibração dos descontos e recompensa/PIX.</li>
+    <li><strong>Evolução temporal</strong> do índice: pendente (útil após ~3 coletas).</li>
   </ol>
+  <p style="color:#555; font-size:0.9rem">
+    Ações de configuração pendentes (Supabase/Vercel/GitHub) e o detalhamento da fase 2 estão na
+    seção 11 da documentação técnica (<code>documentacao-indice-pf.html</code>).
+  </p>
 
   <footer>Roadmap v1.0 — Índice PF. Documento vivo; atualizado a cada fase concluída.</footer>
 </div>
