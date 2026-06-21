@@ -9,7 +9,6 @@ const REGIOES = ['Sul', 'Sudeste', 'Centro-oeste', 'Nordeste', 'Norte']
 
 type Profile = { id: string; nome: string | null; telefone: string | null; regiao: string | null }
 
-// (XX) XXXXX-XXXX
 function mascararTel(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 11)
   if (d.length <= 2) return d
@@ -25,13 +24,16 @@ export default function AuthControls() {
   const [menu, setMenu] = useState(false)
 
   const [modal, setModal] = useState<'none' | 'login' | 'cta' | 'contribuir' | 'minhas'>('none')
-  const [step, setStep] = useState<'email' | 'enviado' | 'perfil'>('email')
+  const [step, setStep] = useState<'login' | 'perfil'>('login')
+  const [authMode, setAuthMode] = useState<'entrar' | 'criar'>('entrar')
   const [email, setEmail] = useState('')
+  const [senha, setSenha] = useState('')
   const [nome, setNome] = useState('')
   const [tel, setTel] = useState('')
   const [regiao, setRegiao] = useState('')
   const [busy, setBusy] = useState(false)
   const [erro, setErro] = useState('')
+  const [info, setInfo] = useState('')
 
   const carregarPerfil = useCallback(async (uid: string) => {
     const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao').eq('id', uid).single()
@@ -40,18 +42,18 @@ export default function AuthControls() {
   }, [])
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user
+      if (u) { setUser({ id: u.id, email: u.email ?? undefined }); carregarPerfil(u.id) }
+    })
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       const u = session?.user
-      if (!u) { setUser(null); setProfile(null); return }
-      setUser({ id: u.id, email: u.email ?? undefined })
-      const p = await carregarPerfil(u.id)
-      // ao logar de fato (incl. retorno do link mágico), força completar o perfil
-      if (event === 'SIGNED_IN' && !perfilCompleto(p)) { setStep('perfil'); setModal('login') }
+      if (u) { setUser({ id: u.id, email: u.email ?? undefined }); carregarPerfil(u.id) }
+      else { setUser(null); setProfile(null) }
     })
     return () => sub.subscription.unsubscribe()
   }, [carregarPerfil])
 
-  // popup de CTA uma vez por visitante (se deslogado)
   useEffect(() => {
     if (typeof window === 'undefined' || localStorage.getItem('pf_cta_seen')) return
     const t = setTimeout(() => {
@@ -62,25 +64,43 @@ export default function AuthControls() {
     return () => clearTimeout(t)
   }, [])
 
-  function abrirLogin() { setStep('email'); setErro(''); setModal('login') }
-  function fechar() { setModal('none'); setErro('') }
+  function abrirLogin(mode: 'entrar' | 'criar' = 'entrar') {
+    setAuthMode(mode); setStep('login'); setErro(''); setInfo(''); setSenha(''); setModal('login')
+  }
+  function fechar() { setModal('none'); setErro(''); setInfo('') }
 
-  async function enviarLink() {
+  async function aposLogin(uid: string) {
+    const p = await carregarPerfil(uid)
+    if (!perfilCompleto(p)) setStep('perfil')
+    else fechar()
+  }
+
+  async function entrar() {
     setErro('')
     if (!/.+@.+\..+/.test(email)) { setErro('Informe um e-mail válido.'); return }
+    if (!senha) { setErro('Informe a senha.'); return }
     setBusy(true)
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
-    })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha })
+    setBusy(false)
+    if (error) { setErro('E-mail ou senha incorretos.'); return }
+    if (data.user) await aposLogin(data.user.id)
+  }
+
+  async function criarConta() {
+    setErro(''); setInfo('')
+    if (!/.+@.+\..+/.test(email)) { setErro('Informe um e-mail válido.'); return }
+    if (senha.length < 6) { setErro('A senha precisa ter ao menos 6 caracteres.'); return }
+    setBusy(true)
+    const { data, error } = await supabase.auth.signUp({ email, password: senha })
     setBusy(false)
     if (error) {
       setErro(/rate limit/i.test(error.message)
-        ? 'Limite de e-mails do Supabase atingido (e-mail de teste). Aguarde ~1h ou configure SMTP próprio.'
+        ? 'Limite de e-mails atingido. Desative a confirmação de e-mail no Supabase ou configure SMTP.'
         : error.message)
       return
     }
-    setStep('enviado')
+    if (data.session && data.user) { await aposLogin(data.user.id) }
+    else { setInfo('Conta criada. Confirme seu e-mail para entrar (ou desative a confirmação no Supabase).') }
   }
 
   async function salvarPerfil() {
@@ -124,7 +144,7 @@ export default function AuthControls() {
             )}
           </div>
         ) : (
-          <button onClick={abrirLogin} className="text-sm px-3 py-1.5 rounded-md hover:bg-panel transition-colors">
+          <button onClick={() => abrirLogin('entrar')} className="text-sm px-3 py-1.5 rounded-md hover:bg-panel transition-colors">
             Entrar
           </button>
         )}
@@ -132,29 +152,30 @@ export default function AuthControls() {
 
       {modal === 'login' && (
         <Overlay onClose={fechar}>
-          {step === 'email' && (
+          {step === 'login' && (
             <>
-              <h3 className="font-[family-name:var(--font-serif)] text-xl mb-1">Entrar no Índice PF</h3>
-              <p className="text-sm text-muted mb-4">Enviamos um link de acesso para o seu e-mail — sem senha.</p>
+              <h3 className="font-[family-name:var(--font-serif)] text-xl mb-1">
+                {authMode === 'entrar' ? 'Entrar no Índice PF' : 'Criar conta'}
+              </h3>
+              <p className="text-sm text-muted mb-4">
+                {authMode === 'entrar' ? 'Use seu e-mail e senha.' : 'É rápido — só e-mail e senha.'}
+              </p>
               <label className="text-xs text-muted">E-mail</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoFocus
-                onKeyDown={e => e.key === 'Enter' && enviarLink()}
                 placeholder="voce@email.com" className={inputCls} />
+              <label className="text-xs text-muted mt-3 block">Senha</label>
+              <input type="password" value={senha} onChange={e => setSenha(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (authMode === 'entrar' ? entrar() : criarConta())}
+                placeholder={authMode === 'criar' ? 'mínimo 6 caracteres' : ''} className={inputCls} />
               {erro && <p className="text-xs text-red-600 mt-2">{erro}</p>}
-              <button disabled={busy} onClick={enviarLink} className={btnCls}>
-                {busy ? 'Enviando…' : 'Enviar link de acesso'}
+              {info && <p className="text-xs text-olive mt-2">{info}</p>}
+              <button disabled={busy} onClick={authMode === 'entrar' ? entrar : criarConta} className={btnCls}>
+                {busy ? '…' : authMode === 'entrar' ? 'Entrar' : 'Criar conta'}
               </button>
-              <p className="text-[0.7rem] text-muted mt-3">Ao entrar, você concorda com a Política de Privacidade.</p>
-            </>
-          )}
-          {step === 'enviado' && (
-            <>
-              <h3 className="font-[family-name:var(--font-serif)] text-xl mb-1">Confira seu e-mail</h3>
-              <p className="text-sm text-muted leading-relaxed">
-                Enviamos um link de acesso para <strong>{email}</strong>. Abra o e-mail e clique no link para
-                entrar — você volta para cá já conectado.
-              </p>
-              <button onClick={enviarLink} className="text-xs text-paprika hover:underline mt-4">reenviar link</button>
+              <button onClick={() => { setErro(''); setInfo(''); setAuthMode(m => m === 'entrar' ? 'criar' : 'entrar') }}
+                className="text-xs text-paprika hover:underline mt-3 block mx-auto">
+                {authMode === 'entrar' ? 'Não tem conta? Criar conta' : 'Já tem conta? Entrar'}
+              </button>
             </>
           )}
           {step === 'perfil' && (
@@ -191,7 +212,7 @@ export default function AuthControls() {
             tornar o índice mais preciso — contribuições aprovadas rendem <strong>recompensa via PIX</strong>.
           </p>
           <button onClick={() => {
-            if (!user) { abrirLogin(); return }
+            if (!user) { abrirLogin('criar'); return }
             if (!perfilCompleto(profile)) { setStep('perfil'); setModal('login'); return }
             setModal('contribuir')
           }} className={btnCls}>
