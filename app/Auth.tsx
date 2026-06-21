@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import Contribuir from './Contribuir'
 import MinhasContribuicoes from './MinhasContribuicoes'
 
 const REGIOES = ['Sul', 'Sudeste', 'Centro-oeste', 'Nordeste', 'Norte']
@@ -23,7 +23,8 @@ export default function AuthControls() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [menu, setMenu] = useState(false)
 
-  const [modal, setModal] = useState<'none' | 'login' | 'cta' | 'contribuir' | 'minhas'>('none')
+  const router = useRouter()
+  const [modal, setModal] = useState<'none' | 'login' | 'cta' | 'minhas'>('none')
   const [step, setStep] = useState<'login' | 'perfil'>('login')
   const [authMode, setAuthMode] = useState<'entrar' | 'criar'>('entrar')
   const [email, setEmail] = useState('')
@@ -214,7 +215,7 @@ export default function AuthControls() {
           <button onClick={() => {
             if (!user) { abrirLogin('criar'); return }
             if (!perfilCompleto(profile)) { setStep('perfil'); setModal('login'); return }
-            setModal('contribuir')
+            fechar(); router.push('/contribuir')
           }} className={btnCls}>
             Quero contribuir
           </button>
@@ -222,7 +223,6 @@ export default function AuthControls() {
         </Overlay>
       )}
 
-      {modal === 'contribuir' && user && <Contribuir userId={user.id} onClose={fechar} />}
       {modal === 'minhas' && user && <MinhasContribuicoes userId={user.id} onClose={fechar} />}
     </>
   )
