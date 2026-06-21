@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { getIngredientes } from '@/lib/queries'
+import type { Ing } from '@/lib/types'
 
 const TIPOS_LOJA = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência']
-type Ing = { id: number; nome: string; categoria: string | null }
 
 export default function ContribuirPage() {
   const router = useRouter()
@@ -36,10 +37,7 @@ export default function ContribuirPage() {
     })
   }, [router])
 
-  useEffect(() => {
-    supabase.from('ingredientes').select('id,nome,categoria').order('nome')
-      .then(({ data }) => setIngs((data as Ing[]) || []))
-  }, [])
+  useEffect(() => { getIngredientes().then(setIngs) }, [])
 
   function pegarLocal() {
     geoTry.current = true

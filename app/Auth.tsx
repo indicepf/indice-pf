@@ -3,28 +3,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import MinhasContribuicoes from './MinhasContribuicoes'
-
-const REGIOES = ['Sul', 'Sudeste', 'Centro-oeste', 'Nordeste', 'Norte']
-
-type Profile = { id: string; nome: string | null; telefone: string | null; regiao: string | null }
-
-function mascararTel(v: string) {
-  const d = v.replace(/\D/g, '').slice(0, 11)
-  if (d.length <= 2) return d
-  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
-}
-const telValido = (v: string) => v.replace(/\D/g, '').length >= 10
-const perfilCompleto = (p?: Profile | null) => !!(p?.nome && p?.telefone && p?.regiao)
+import { useAuth, perfilCompleto } from './useAuth'
+import { REGIOES, mascararTel, telValido } from '@/lib/format'
 
 export default function AuthControls() {
-  const [user, setUser] = useState<{ id: string; email?: string } | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const router = useRouter()
+  const { user, profile, refresh } = useAuth()
   const [menu, setMenu] = useState(false)
 
-  const router = useRouter()
-  const [modal, setModal] = useState<'none' | 'login' | 'cta' | 'minhas'>('none')
+  const [modal, setModal] = useState<'none' | 'login' | 'cta'>('none')
   const [step, setStep] = useState<'login' | 'perfil'>('login')
   const [authMode, setAuthMode] = useState<'entrar' | 'criar'>('entrar')
   const [email, setEmail] = useState('')
@@ -36,42 +23,13 @@ export default function AuthControls() {
   const [erro, setErro] = useState('')
   const [info, setInfo] = useState('')
 
-  const carregarPerfil = useCallback(async (uid: string) => {
-    const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao').eq('id', uid).single()
-    setProfile(data as Profile)
-    return data as Profile | null
-  }, [])
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user
-      if (u) { setUser({ id: u.id, email: u.email ?? undefined }); carregarPerfil(u.id) }
-    })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      const u = session?.user
-      if (u) { setUser({ id: u.id, email: u.email ?? undefined }); carregarPerfil(u.id) }
-      else { setUser(null); setProfile(null) }
-    })
-    return () => sub.subscription.unsubscribe()
-  }, [carregarPerfil])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || localStorage.getItem('pf_cta_seen')) return
-    const t = setTimeout(() => {
-      supabase.auth.getSession().then(({ data }) => {
-        if (!data.session) { setModal('cta'); localStorage.setItem('pf_cta_seen', '1') }
-      })
-    }, 3500)
-    return () => clearTimeout(t)
-  }, [])
-
   function abrirLogin(mode: 'entrar' | 'criar' = 'entrar') {
     setAuthMode(mode); setStep('login'); setErro(''); setInfo(''); setSenha(''); setModal('login')
   }
   function fechar() { setModal('none'); setErro(''); setInfo('') }
 
   async function aposLogin(uid: string) {
-    const p = await carregarPerfil(uid)
+    const p = await refresh(uid)
     if (!perfilCompleto(p)) setStep('perfil')
     else fechar()
   }
@@ -100,8 +58,8 @@ export default function AuthControls() {
         : error.message)
       return
     }
-    if (data.session && data.user) { await aposLogin(data.user.id) }
-    else { setInfo('Conta criada. Confirme seu e-mail para entrar (ou desative a confirmação no Supabase).') }
+    if (data.session && data.user) await aposLogin(data.user.id)
+    else setInfo('Conta criada. Confirme seu e-mail para entrar (ou desative a confirmação no Supabase).')
   }
 
   async function salvarPerfil() {
@@ -114,7 +72,7 @@ export default function AuthControls() {
       .update({ nome: nome.trim(), telefone: tel, regiao }).eq('id', user!.id)
     setBusy(false)
     if (error) { setErro(error.message); return }
-    await carregarPerfil(user!.id)
+    await refresh(user!.id)
     fechar()
   }
 
@@ -133,12 +91,8 @@ export default function AuthControls() {
             </button>
             {menu && (
               <div className="absolute right-0 mt-1 w-44 bg-panel border border-line rounded-md shadow-lg text-sm py-1 z-50">
-                {!perfilCompleto(profile) && (
-                  <button onClick={() => { setMenu(false); setStep('perfil'); setModal('login') }}
-                    className="block w-full text-left px-3 py-2 text-paprika hover:bg-cream">Completar perfil</button>
-                )}
-                <button onClick={() => { setMenu(false); setModal('minhas') }}
-                  className="block w-full text-left px-3 py-2 hover:bg-cream">Minhas contribuições</button>
+                <button onClick={() => { setMenu(false); router.push('/perfil') }}
+                  className="block w-full text-left px-3 py-2 hover:bg-cream">Meu perfil</button>
                 <button onClick={async () => { setMenu(false); await supabase.auth.signOut() }}
                   className="block w-full text-left px-3 py-2 hover:bg-cream">Sair</button>
               </div>
@@ -222,8 +176,6 @@ export default function AuthControls() {
           <button onClick={fechar} className="text-xs text-muted hover:text-ink mt-3 block mx-auto">fechar</button>
         </Overlay>
       )}
-
-      {modal === 'minhas' && user && <MinhasContribuicoes userId={user.id} onClose={fechar} />}
     </>
   )
 }
