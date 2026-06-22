@@ -44,6 +44,7 @@
       <li><a href="#c">Frente C — Crowdsourcing de preços</a></li>
       <li><a href="#dados">Modelo de dados a criar</a></li>
       <li><a href="#fases">Ordem de execução</a></li>
+      <li><a href="#proximos">Próximos passos (continuar amanhã)</a></li>
     </ol>
   </div>
 
@@ -161,13 +162,38 @@
   <ol>
     <li><strong>Frente A — Dashboard:</strong> <strong>concluída.</strong> Índice nacional, mapa por região, explorador, detalhe/fontes, 3 preços.</li>
     <li><strong>Frente B — Autenticação:</strong> <strong>concluída.</strong> E-mail + senha (Supabase), <code>profiles</code> com RLS, página <code>/perfil</code>. CPF reservado para a recompensa.</li>
-    <li><strong>Frente C — Crowdsourcing:</strong> <strong>v1 concluída</strong> (captura de foto + metadados + geolocalização → Storage + tabela <code>contribuicoes</code>). <strong>Fase 2 pendente:</strong> moderação, antifraude, calibração dos descontos e recompensa/PIX.</li>
-    <li><strong>Evolução temporal</strong> do índice: pendente (útil após ~3 coletas).</li>
+    <li><strong>Frente C — Crowdsourcing:</strong> <strong>v1 + fase 2 (parcial) concluídas.</strong>
+      Captura de foto + metadados + <strong>geolocalização obrigatória</strong> → Storage + <code>contribuicoes</code>;
+      <strong>moderação</strong> (<code>/admin</code>), dedup por hash da foto, edição/exclusão do próprio envio;
+      <strong>recompensa/saque via PIX</strong> (R$0,01/foto aprovada, mínimo R$10, fila de pagamento manual no <code>/admin</code>);
+      reset de senha (<code>/redefinir-senha</code>); 2ª chave SerpAPI com rotação de cota.</li>
+    <li><strong>Evolução temporal</strong> do índice: pendente (útil após ~3 coletas) — os dados já acumulam por <code>snapshot</code>.</li>
   </ol>
-  <p style="color:#555; font-size:0.9rem">
-    Ações de configuração pendentes (Supabase/Vercel/GitHub) e o detalhamento da fase 2 estão na
-    seção 11 da documentação técnica (<code>documentacao-indice-pf.html</code>).
-  </p>
+
+  <h2 id="proximos">9. Próximos passos (continuar amanhã)</h2>
+  <p style="color:#555; font-size:0.9rem">Em ordem de prioridade. Detalhes técnicos na seção 11 da documentação.</p>
+  <ol>
+    <li><strong>Fechar o loop do crowdsourcing (a tese do produto).</strong> Usar os preços de campo aprovados
+      (<code>contribuicoes</code>, com lat/lng/cidade/UF) para calibrar os descontos −10%/−22% — hoje fixos — com
+      <strong>variação real por região</strong>. Isso é a base dos <strong>relatórios pagos</strong> (não fica no plano free).</li>
+    <li><strong>Backup off-site automático (grátis, fazer já).</strong> Passo no GitHub Action que, a cada coleta,
+      exporta <code>snapshots/precos/resultados_brutos/custos_pratos</code> em CSV/JSON e versiona num repositório
+      privado/Storage. Protege o ativo mais valioso sem depender do upgrade pago.</li>
+    <li><strong>Antifraude no envio.</strong> Limite de X fotos/dia por usuário, checagem de preço plausível;
+      geolocalização e data já são exigidas.</li>
+    <li><strong>Gráfico de evolução temporal</strong> no dashboard (após acumular coletas).</li>
+    <li><strong>Quando escalar:</strong> SMTP de produção (Resend) para login/recuperação; Supabase Pro
+      (remove auto-pause, habilita PITR/backup); criptografia de CPF.</li>
+    <li><strong>Blog (futuro):</strong> página por prato + <code>og:image</code>/SEO; gamificação (ranking de contribuidores).</li>
+  </ol>
+
+  <h3>9.1 Configuração pendente do usuário</h3>
+  <ul>
+    <li>Rodar no Supabase: <code>supabase_migration_10.sql</code> (endereço/bairro), <code>11</code> (pagamentos), <code>12</code> (admin lê perfis).</li>
+    <li>GitHub → Secrets: adicionar <code>SERPAPI_KEY_2</code> (2ª conta SerpAPI → 500 chamadas/mês).</li>
+    <li>Próxima coleta automática: <strong>01/07</strong> (cron dias 1 e 15). Sem disparo manual.</li>
+    <li>Decisões já tomadas: CPF em texto puro por ora (ok); SMTP de produção só ao escalar.</li>
+  </ul>
 
   <footer>Roadmap v1.0 — Índice PF. Documento vivo; atualizado a cada fase concluída.</footer>
 </div>

@@ -414,24 +414,36 @@
     <li><strong>Pipeline de dados:</strong> coleta dos 111 ingredientes, custo por prato dos 100 pratos, índice nacional, automação 2×/mês (GitHub Actions). Projeto Supabase novo (<code>yhgdlmmtiyvdgeoxavzn</code>).</li>
     <li><strong>Frente A — Dashboard:</strong> índice nacional, mapa por região, explorador de pratos com detalhe/fontes, 3 preços.</li>
     <li><strong>Frente B — Login:</strong> e-mail + senha (Supabase), perfil com telefone, página <code>/perfil</code>.</li>
-    <li><strong>Frente C v1 — Crowdsourcing:</strong> página <code>/contribuir</code> (foto + metadados + geolocalização → Storage + tabela <code>contribuicoes</code>).</li>
+    <li><strong>Frente C — Crowdsourcing (v1 + fase 2 parcial):</strong>
+      <code>/contribuir</code> (foto + metadados + <strong>geolocalização obrigatória</strong> + geocodificação reversa → Storage + <code>contribuicoes</code>);
+      <strong>moderação</strong> em <code>/admin</code> com dedup por hash de foto; edição/exclusão do próprio envio em <code>/perfil</code> (com mapa Leaflet das contribuições);
+      <strong>recompensa/saque PIX</strong> (R$0,01/foto aprovada, mínimo R$10, fila de pagamento manual no <code>/admin</code> mostrando nome/PIX/CPF);
+      <strong>reset de senha</strong> (<code>/redefinir-senha</code>); rotação entre 2 contas SerpAPI.</li>
     <li>Refatoração: <code>lib/</code> (types/format/queries) + <code>useAuth</code>; deploy via GitHub → Vercel (<code>.npmrc</code> com <code>legacy-peer-deps</code>).</li>
   </ul>
-  <h3>11.2 Ações pendentes do responsável (no Supabase / Vercel)</h3>
+  <h3>11.2 Ações pendentes do responsável (no Supabase / Vercel / GitHub)</h3>
   <ul>
-    <li><strong>Rodar <code>supabase_migration_8.sql</code></strong> — cria a tabela <code>contribuicoes</code> e o bucket de Storage. Sem ela, o "Contribuir" falha.</li>
-    <li><strong>Auth → Providers → Email:</strong> desativar "Confirm email" (cadastro/login por senha sem enviar e-mail → sem rate limit). Apagar os usuários de teste criados por link mágico (não têm senha).</li>
-    <li><strong>Auth → URL Configuration:</strong> Site URL e Redirect URLs com a URL da Vercel (para produção).</li>
-    <li><strong>GitHub → Secrets:</strong> <code>SUPABASE_URL</code>, <code>SUPABASE_KEY</code> (service_role) e <code>SERPAPI_KEY</code> apontando para o projeto/chaves novos.</li>
-    <li><strong>Antes de lançar:</strong> SMTP próprio (Resend) para e-mails; e criptografia de coluna (Vault/pgsodium) antes de operar com CPFs reais.</li>
+    <li><strong>Rodar as migrações no SQL Editor:</strong> <code>10</code> (endereço/bairro), <code>11</code> (tabela <code>pagamentos</code> + RLS), <code>12</code> (função <code>eh_admin()</code> + policy admin lê perfis). Sem a 11/12 o saque e a fila no <code>/admin</code> não funcionam.</li>
+    <li><strong>GitHub → Secrets:</strong> adicionar <code>SERPAPI_KEY_2</code> (2ª conta SerpAPI → 500 chamadas/mês). Os secrets <code>SUPABASE_URL/KEY</code> e <code>SERPAPI_KEY</code> já apontam para o projeto novo.</li>
+    <li><strong>Próxima coleta automática:</strong> 01/07 (cron dias 1 e 15) — sem disparo manual.</li>
+    <li><strong>Decisões tomadas:</strong> CPF em texto puro por ora; SMTP de produção (Resend) e Supabase Pro só ao escalar.</li>
   </ul>
-  <h3>11.3 Frente C — fase 2 (a construir)</h3>
-  <ul>
-    <li><strong>Moderação (backoffice):</strong> aprovar/rejeitar contribuições e mapear ao ingrediente canônico (status <code>pendente → aprovada/rejeitada</code>).</li>
-    <li><strong>Calibração:</strong> comparar preço de campo aprovado × preço raspado → ajustar os % de Mercado/Atacarejo por região (fecha o ciclo do produto).</li>
-    <li><strong>Recompensa/PIX:</strong> coletar CPF + chave PIX na hora de receber, com consentimento LGPD.</li>
-    <li><strong>Geocodificação reversa</strong> (cidade automática a partir das coordenadas) e <strong>evolução temporal</strong> do índice (quando houver ~3 coletas).</li>
-  </ul>
+  <h3>11.3 Próximos passos (backlog priorizado)</h3>
+  <ol>
+    <li><strong>Fechar o loop (calibração):</strong> comparar preço de campo aprovado (<code>contribuicoes</code>, com lat/lng/UF) × preço raspado → ajustar os % de Mercado/Atacarejo <strong>por região</strong> (hoje fixos em −10%/−22%). Base dos relatórios pagos — não fica no plano free.</li>
+    <li><strong>Backup off-site automático (grátis):</strong> passo no GitHub Action exportando <code>snapshots/precos/resultados_brutos/custos_pratos</code> em CSV/JSON versionado. Protege o ativo de dados sem depender do Supabase Pro.</li>
+    <li><strong>Antifraude:</strong> limite de fotos/dia por usuário e checagem de preço plausível (geo + data já exigidos).</li>
+    <li><strong>Evolução temporal</strong> do índice (gráfico) — os dados já acumulam por <code>snapshot</code>; útil após ~3 coletas.</li>
+    <li><strong>Escala:</strong> SMTP Resend (login/recuperação), Supabase Pro (PITR + sem auto-pause), criptografia de CPF.</li>
+    <li><strong>Blog (futuro):</strong> página por prato + <code>og:image</code>/SEO; gamificação.</li>
+  </ol>
+  <h3>11.4 Nota sobre relatórios e granularidade regional</h3>
+  <p>
+    A estrutura suporta relatórios <strong>temporais</strong> (por <code>snapshot</code>), <strong>por fonte/loja</strong> (<code>resultados_brutos</code>)
+    e <strong>regionais no nível do prato</strong> (<code>custos_pratos</code> → <code>pratos.regiao</code>). A variação regional do
+    <em>mesmo ingrediente</em> não existe nos dados online (scraping é nacional, <code>location=Brazil</code>) — ela vem das
+    contribuições de campo. <strong>Tratar <code>snapshots</code> e <code>resultados_brutos</code> como append-only (nunca deletar).</strong>
+  </p>
 
   <footer>Documento técnico do projeto <code>indice-pf</code> — atualizado a cada fase.</footer>
 </div>
