@@ -15,17 +15,8 @@ export async function getDishCosts(snapshotId: number): Promise<DishCost[]> {
   return (data as unknown as DishCost[]) || []
 }
 
-export async function getDishDetail(pratoId: number, snapshotId: number): Promise<ItemDetalhe[]> {
-  const [{ data: rec }, { data: precos }] = await Promise.all([
-    supabase.from('receitas')
-      .select('qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual)')
-      .eq('prato_id', pratoId),
-    supabase.from('precos').select('ingrediente_id,mediana_normalizada').eq('snapshot_id', snapshotId),
-  ])
-  const precoMap: Record<number, number> = {}
-  ;(precos || []).forEach((p: any) => { if (p.mediana_normalizada != null) precoMap[p.ingrediente_id] = Number(p.mediana_normalizada) })
-
-  return ((rec || []) as any[]).map((r): ItemDetalhe => {
+function montarItens(rec: any[], precoMap: Record<number, number>): ItemDetalhe[] {
+  return rec.map((r): ItemDetalhe => {
     const ing = r.ingredientes
     const qtd = Number(r.qtd_g)
     let preco_g: number | null = null, origem: ItemDetalhe['origem'] = 'sem', custo = 0
@@ -36,12 +27,30 @@ export async function getDishDetail(pratoId: number, snapshotId: number): Promis
   }).sort((a, b) => b.custo - a.custo)
 }
 
-export async function getFontes(ingredienteId: number, snapshotId: number): Promise<Fonte[]> {
+// Carrega a composição de TODOS os pratos de uma vez (gaveta abre instantânea, sem rede no clique).
+export async function getAllDetalhes(snapshotId: number): Promise<Record<number, ItemDetalhe[]>> {
+  const [{ data: rec }, { data: precos }] = await Promise.all([
+    supabase.from('receitas').select('prato_id,qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual)'),
+    supabase.from('precos').select('ingrediente_id,mediana_normalizada').eq('snapshot_id', snapshotId),
+  ])
+  const precoMap: Record<number, number> = {}
+  ;(precos || []).forEach((p: any) => { if (p.mediana_normalizada != null) precoMap[p.ingrediente_id] = Number(p.mediana_normalizada) })
+
+  const porPrato: Record<number, any[]> = {}
+  ;((rec || []) as any[]).forEach(r => { (porPrato[r.prato_id] ||= []).push(r) })
+  const out: Record<number, ItemDetalhe[]> = {}
+  for (const pid of Object.keys(porPrato)) out[+pid] = montarItens(porPrato[+pid], precoMap)
+  return out
+}
+
+// Fontes (resultados brutos) de todos os ingredientes do snapshot, agrupadas por ingrediente.
+export async function getAllFontes(snapshotId: number): Promise<Record<number, Fonte[]>> {
   const { data } = await supabase.from('resultados_brutos')
-    .select('titulo,loja,preco_bruto,exibicao,link')
-    .eq('ingrediente_id', ingredienteId).eq('snapshot_id', snapshotId)
-    .order('preco_bruto', { ascending: true })
-  return (data as Fonte[]) || []
+    .select('ingrediente_id,titulo,loja,preco_bruto,exibicao,link')
+    .eq('snapshot_id', snapshotId).order('preco_bruto', { ascending: true })
+  const out: Record<number, Fonte[]> = {}
+  ;((data || []) as any[]).forEach(f => { (out[f.ingrediente_id] ||= []).push(f) })
+  return out
 }
 
 export async function getIngredientes(): Promise<Ing[]> {

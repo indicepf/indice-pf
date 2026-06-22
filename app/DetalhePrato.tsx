@@ -1,17 +1,17 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { getDishDetail, getFontes } from '@/lib/queries'
 import { brl, limparNome } from '@/lib/format'
 import type { DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
-export default function DetalhePrato({ dish, snapshotId, fator, onClose }: {
-  dish: DishCost; snapshotId: number; fator: number; onClose: () => void
+export default function DetalhePrato({ dish, itens, fontesPorIngrediente, fator, onClose }: {
+  dish: DishCost
+  itens: ItemDetalhe[] | null
+  fontesPorIngrediente: Record<number, Fonte[]>
+  fator: number
+  onClose: () => void
 }) {
-  const [itens, setItens] = useState<ItemDetalhe[] | null>(null)
   const [fonteAberta, setFonteAberta] = useState<{ nome: string; id: number } | null>(null)
-
-  useEffect(() => { getDishDetail(dish.pratos.id, snapshotId).then(setItens) }, [dish, snapshotId])
 
   const total = (itens || []).reduce((s, i) => s + i.custo, 0) * fator
 
@@ -72,7 +72,7 @@ export default function DetalhePrato({ dish, snapshotId, fator, onClose }: {
       </aside>
 
       {fonteAberta && (
-        <ModalFontes nome={fonteAberta.nome} ingredienteId={fonteAberta.id} snapshotId={snapshotId}
+        <ModalFontes nome={fonteAberta.nome} fontes={fontesPorIngrediente[fonteAberta.id] || []}
           onClose={() => setFonteAberta(null)} />
       )}
     </div>
@@ -83,11 +83,9 @@ function Etiqueta({ texto }: { texto: string }) {
   return <span className="ml-1.5 text-[0.6rem] uppercase tracking-wide text-muted border border-line rounded px-1 py-px align-middle">{texto}</span>
 }
 
-function ModalFontes({ nome, ingredienteId, snapshotId, onClose }: {
-  nome: string; ingredienteId: number; snapshotId: number; onClose: () => void
+function ModalFontes({ nome, fontes, onClose }: {
+  nome: string; fontes: Fonte[]; onClose: () => void
 }) {
-  const [fontes, setFontes] = useState<Fonte[] | null>(null)
-  useEffect(() => { getFontes(ingredienteId, snapshotId).then(setFontes) }, [ingredienteId, snapshotId])
   const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
   useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
 
@@ -100,8 +98,7 @@ function ModalFontes({ nome, ingredienteId, snapshotId, onClose }: {
           <button onClick={onClose} className="text-muted hover:text-ink text-xl leading-none">×</button>
         </div>
         <div className="p-4 space-y-2">
-          {!fontes ? <p className="text-sm text-muted">Carregando…</p> :
-            fontes.length ? fontes.map((f, i) => (
+          {fontes.length ? fontes.map((f, i) => (
               <a key={i} href={f.link || undefined} target="_blank" rel="noopener noreferrer"
                 className="block border border-line rounded-md px-3 py-2.5 hover:border-paprika transition-colors">
                 <div className="flex justify-between gap-3">

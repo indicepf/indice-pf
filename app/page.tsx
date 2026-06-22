@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import AuthControls from './Auth'
 import DetalhePrato from './DetalhePrato'
-import { getLatestSnapshot, getDishCosts } from '@/lib/queries'
+import { getLatestSnapshot, getDishCosts, getAllDetalhes, getAllFontes } from '@/lib/queries'
 import { MODOS, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
-import type { ModoKey, OrdemKey, Snapshot, DishCost } from '@/lib/types'
+import type { ModoKey, OrdemKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 // mapa real do Brasil (d3/react-simple-maps) — só no cliente
 const MapaBrasil = dynamic(() => import('./MapaBrasil'), {
@@ -24,6 +24,8 @@ export default function Dashboard() {
   const [busca, setBusca]       = useState('')
   const [ordem, setOrdem]       = useState<OrdemKey>('custo')
   const [selecionado, setSelecionado] = useState<DishCost | null>(null)
+  const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]> | null>(null)
+  const [fontes, setFontes]     = useState<Record<number, Fonte[]>>({})
 
   useEffect(() => {
     (async () => {
@@ -32,6 +34,9 @@ export default function Dashboard() {
       setSnapshot(snap)
       setCustos(await getDishCosts(snap.id))
       setLoading(false)
+      // pré-carrega composição e fontes em segundo plano → gaveta abre instantânea
+      getAllDetalhes(snap.id).then(setDetalhes)
+      getAllFontes(snap.id).then(setFontes)
     })()
   }, [])
 
@@ -166,7 +171,9 @@ export default function Dashboard() {
       </div>
 
       {selecionado && snapshot && (
-        <DetalhePrato dish={selecionado} snapshotId={snapshot.id} fator={fator}
+        <DetalhePrato dish={selecionado}
+          itens={detalhes ? (detalhes[selecionado.pratos.id] ?? []) : null}
+          fontesPorIngrediente={fontes} fator={fator}
           onClose={() => setSelecionado(null)} />
       )}
 
