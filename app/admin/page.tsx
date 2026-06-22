@@ -7,7 +7,7 @@ import { isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, getSaq
 import { brl, mascararCpf, VALOR_POR_FOTO } from '@/lib/format'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
 
-type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string }
+type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; nome: string | null; telefone: string | null }
 
 export default function AdminPage() {
   const router = useRouter()
@@ -127,20 +127,34 @@ export default function AdminPage() {
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-3">
         {!saques.length && <p className="text-sm text-muted text-center py-10">Nenhuma solicitação de saque.</p>}
         {saques.map(s => (
-          <div key={s.id} className="border border-line rounded-lg bg-panel p-4 flex items-center gap-4">
-            <div className="min-w-0 flex-1">
-              <p className="font-[family-name:var(--font-serif)] text-xl tnum">{brl(Number(s.valor))}</p>
-              <p className="text-xs text-muted mt-0.5 truncate">
-                PIX: {s.chave_pix || '—'} · CPF: {s.cpf ? mascararCpf(s.cpf) : '—'}
-              </p>
-              <p className="text-[0.7rem] text-muted mt-0.5">
-                solicitado em {new Date(s.criado_em).toLocaleString('pt-BR')}
-              </p>
+          <div key={s.id} className="border border-line rounded-lg bg-panel p-4">
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+              <p className="font-medium">{s.nome || 'Usuário sem nome'}</p>
+              <p className="font-[family-name:var(--font-serif)] text-2xl tnum text-paprika">{brl(Number(s.valor))}</p>
             </div>
-            <button onClick={() => pagar(s)}
-              className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition shrink-0">
-              Marcar como pago
-            </button>
+            <dl className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-muted">Chave PIX</dt>
+              <dd className="flex items-center gap-2 min-w-0">
+                <span className="font-mono truncate">{s.chave_pix || '—'}</span>
+                {s.chave_pix && (
+                  <button onClick={() => navigator.clipboard?.writeText(s.chave_pix!)}
+                    className="text-xs text-paprika hover:underline shrink-0">copiar</button>
+                )}
+              </dd>
+              <dt className="text-muted">CPF</dt>
+              <dd className="font-mono">{s.cpf ? mascararCpf(s.cpf) : '—'}</dd>
+              <dt className="text-muted">Telefone</dt>
+              <dd>{s.telefone || '—'}</dd>
+              <dt className="text-muted">Solicitado</dt>
+              <dd className="text-muted">{new Date(s.criado_em).toLocaleString('pt-BR')}</dd>
+            </dl>
+            <div className="flex items-center gap-3 mt-3 pt-3 border-t border-line">
+              <p className="text-xs text-muted">Faça o PIX de {brl(Number(s.valor))} para a chave acima, depois:</p>
+              <button onClick={() => pagar(s)}
+                className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition ml-auto shrink-0">
+                Marcar como pago
+              </button>
+            </div>
           </div>
         ))}
       </div>

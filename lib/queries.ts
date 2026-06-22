@@ -109,7 +109,14 @@ export async function getSaques(status: string) {
   const { data } = await supabase.from('pagamentos')
     .select('id,user_id,valor,cpf,chave_pix,status,criado_em')
     .eq('status', status).order('criado_em', { ascending: true })
-  return (data as any[]) || []
+  const saques = (data as any[]) || []
+  const ids = [...new Set(saques.map(s => s.user_id).filter(Boolean))]
+  const nomes: Record<string, { nome: string | null; telefone: string | null }> = {}
+  if (ids.length) {
+    const { data: profs } = await supabase.from('profiles').select('id,nome,telefone').in('id', ids)
+    ;(profs || []).forEach((p: any) => { nomes[p.id] = { nome: p.nome, telefone: p.telefone } })
+  }
+  return saques.map(s => ({ ...s, nome: nomes[s.user_id]?.nome ?? null, telefone: nomes[s.user_id]?.telefone ?? null }))
 }
 
 export async function marcarSaquePago(id: number) {
