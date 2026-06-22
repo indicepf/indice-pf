@@ -12,7 +12,10 @@ except ImportError:
     pass
 
 # ─── Configuração ─────────────────────────────────────────────────────────────
-SERP_API_KEY  = os.getenv("SERPAPI_KEY", "")
+# Aceita até duas contas SerpAPI (250 chamadas grátis cada). Quando a primeira
+# esgota a cota, o scraper passa automaticamente para a segunda.
+SERP_API_KEYS = [k for k in (os.getenv("SERPAPI_KEY", ""), os.getenv("SERPAPI_KEY_2", "")) if k]
+_serp_idx     = 0
 SUPABASE_URL  = os.getenv("SUPABASE_URL", "https://yhgdlmmtiyvdgeoxavzn.supabase.co")
 SUPABASE_KEY  = os.getenv("SUPABASE_KEY", "")
 CACHE_FILE    = "cache_serpapi.json"
@@ -178,6 +181,38 @@ def mediana(valores):
     return v[meio] if len(v) % 2 != 0 else (v[meio - 1] + v[meio]) / 2
 
 # ─── Busca via SerpAPI ────────────────────────────────────────────────────────
+def _buscar_serp(query):
+    """Consulta a SerpAPI, alternando entre as contas quando a cota esgota.
+    Retorna o JSON da resposta ou None em caso de falha em todas as chaves."""
+    global _serp_idx
+    if not SERP_API_KEYS:
+        print("  ❌ Nenhuma SERPAPI_KEY configurada")
+        return None
+    for _ in range(len(SERP_API_KEYS)):
+        key = SERP_API_KEYS[_serp_idx]
+        params = {
+            "engine": "google_shopping", "q": query,
+            "gl": "br", "hl": "pt", "location": "Brazil", "api_key": key,
+        }
+        try:
+            resp = requests.get("https://serpapi.com/search", params=params, timeout=30)
+        except requests.RequestException as e:
+            print(f"  ❌ erro de rede: {e}")
+            return None
+        try:
+            dados = resp.json()
+        except ValueError:
+            dados = {}
+        erro = dados.get("error", "")
+        if resp.status_code == 200 and not erro:
+            return dados
+        # 401/429 ou erro de cota → tenta a próxima conta
+        print(f"  ⚠️  chave #{_serp_idx + 1} falhou ({resp.status_code} {erro}); tentando próxima")
+        _serp_idx = (_serp_idx + 1) % len(SERP_API_KEYS)
+    print("  ❌ Todas as chaves SerpAPI falharam/esgotaram")
+    return None
+
+
 def buscar_ingrediente(ingrediente, cache):
     chave = chave_cache(ingrediente)
     if chave in cache:
@@ -185,19 +220,10 @@ def buscar_ingrediente(ingrediente, cache):
         return cache[chave]
 
     print(f"\n🔍 {ingrediente['nome']} → '{ingrediente['busca']}'")
-    params = {
-        "engine": "google_shopping", "q": ingrediente["busca"],
-        "gl": "br", "hl": "pt", "location": "Brazil", "api_key": SERP_API_KEY,
-    }
-    try:
-        resp = requests.get("https://serpapi.com/search", params=params, timeout=30)
-    except requests.RequestException as e:
-        print(f"  ❌ erro de rede: {e}")
+    dados = _buscar_serp(ingrediente["busca"])
+    if dados is None:
         return []
-    if resp.status_code != 200:
-        print(f"  ❌ Erro: {resp.status_code}")
-        return []
-    itens = resp.json().get("shopping_results", [])
+    itens = dados.get("shopping_results", [])
     if not itens:
         print("  ⚠️  Sem resultados")
         return []

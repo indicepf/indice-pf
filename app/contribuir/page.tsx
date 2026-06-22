@@ -96,6 +96,7 @@ export default function ContribuirPage() {
     if (!ingredienteId) { setErro('Selecione o ingrediente correspondente.'); return }
     if (!preco || isNaN(Number(preco.replace(',', '.')))) { setErro('Informe um preço válido.'); return }
     if (!tipoLoja) { setErro('Selecione o tipo de loja.'); return }
+    if (!coord) { setErro('Registre sua localização — ela é obrigatória para validar onde o preço foi coletado.'); return }
     setBusy(true)
     try {
       const foto_hash = await hashArquivo(fotoProduto)
@@ -201,10 +202,12 @@ export default function ContribuirPage() {
                 {fotoEtiqueta ? '✓ etiqueta anexada' : '+ foto da etiqueta (opcional)'}
                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => escolherFoto(e, 'etiqueta')} />
               </label>
-              <button type="button" onClick={pegarLocal} className="text-paprika hover:underline ml-auto">
-                {coord ? `✓ local registrado` : '+ usar minha localização (opcional)'}
+              <button type="button" onClick={pegarLocal}
+                className={`ml-auto font-medium ${coord ? 'text-olive' : 'text-paprika hover:underline'}`}>
+                {coord ? '✓ local registrado' : '+ registrar localização (obrigatório)'}
               </button>
             </div>
+            {!coord && <p className="text-xs text-muted mt-2">A localização é obrigatória — usamos a coordenada e a data para validar onde o preço foi coletado.</p>}
             {geoMsg && <p className="text-xs text-amber-700 mt-2">{geoMsg}</p>}
             {endereco && <p className="text-xs text-muted mt-2 leading-snug">Local: {endereco}</p>}
 

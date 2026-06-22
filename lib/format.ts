@@ -51,7 +51,7 @@ export const telValido = (v: string) => v.replace(/\D/g, "").length >= 10;
 
 // ─── Recompensa ────────────────────────────────────────────────────────────
 export const VALOR_POR_FOTO = 0.01; // R$ por contribuição aprovada
-export const SAQUE_MINIMO = 0.02; // R$ mínimo para solicitar saque
+export const SAQUE_MINIMO = 10; // R$ mínimo para solicitar saque
 
 export function mascararCpf(v: string) {
 	return v

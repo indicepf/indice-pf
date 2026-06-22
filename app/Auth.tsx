@@ -45,6 +45,22 @@ export default function AuthControls() {
     if (data.user) await aposLogin(data.user.id)
   }
 
+  async function recuperar() {
+    setErro(''); setInfo('')
+    if (!/.+@.+\..+/.test(email)) { setErro('Informe seu e-mail para receber o link.'); return }
+    setBusy(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/redefinir-senha`,
+    })
+    setBusy(false)
+    if (error) {
+      setErro(/rate limit/i.test(error.message)
+        ? 'Limite de e-mails atingido. Tente novamente mais tarde.' : error.message)
+      return
+    }
+    setInfo('Enviamos um link para redefinir sua senha. Confira seu e-mail.')
+  }
+
   async function criarConta() {
     setErro(''); setInfo('')
     if (!/.+@.+\..+/.test(email)) { setErro('Informe um e-mail válido.'); return }
@@ -131,6 +147,12 @@ export default function AuthControls() {
                 className="text-xs text-paprika hover:underline mt-3 block mx-auto">
                 {authMode === 'entrar' ? 'Não tem conta? Criar conta' : 'Já tem conta? Entrar'}
               </button>
+              {authMode === 'entrar' && (
+                <button onClick={recuperar} disabled={busy}
+                  className="text-xs text-muted hover:text-ink mt-2 block mx-auto disabled:opacity-60">
+                  Esqueci minha senha
+                </button>
+              )}
             </>
           )}
           {step === 'perfil' && (
