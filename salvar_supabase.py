@@ -72,7 +72,24 @@ def main():
     print(f"📅 Salvando snapshot de {data} no Supabase...")
     print(f"   {len(resumo)} ingredientes | {len(resultados)} resultados brutos")
 
+    # modo merge: atualiza só os ingredientes raspados no ÚLTIMO snapshot,
+    # sem apagar os demais preços (usado com SCRAPE_ONLY para correções pontuais).
+    MERGE = os.getenv("SCRAPE_MERGE") == "1"
+
     # ── 1. Cria ou recupera snapshot ─────────────────────────────────────────
+    if MERGE:
+        ult = supabase_get("snapshots", "select=id,data&order=id.desc&limit=1")
+        if not ult:
+            print("❌ Nenhum snapshot existente para fazer merge."); return
+        snapshot_id = ult[0]["id"]
+        print(f"\n🔀 Modo merge: atualizando {len(resumo)} ingrediente(s) no snapshot id={snapshot_id} ({ult[0]['data']})")
+        ids_csv = ",".join(str(r["ingrediente_id"]) for r in resumo)
+        requests.delete(f"{SUPABASE_URL}/rest/v1/precos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})", headers=HEADERS)
+        requests.delete(f"{SUPABASE_URL}/rest/v1/resultados_brutos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})", headers=HEADERS)
+        _salvar_precos(snapshot_id, resumo, resultados)
+        print(f"\n✅ Merge concluído. Rode calcular_custos_pratos.py para recalcular os custos.")
+        return
+
     existente = supabase_get("snapshots", f"data=eq.{data}")
     if existente:
         snapshot_id = existente[0]["id"]
@@ -88,20 +105,26 @@ def main():
         snapshot_id = snap_resp[0]["id"]
         print(f"\n✅ Snapshot criado (id={snapshot_id})")
 
-    # ── 2. Agrupa preços normalizados (R$/g) por ingrediente_id ───────────────
+    # ── 2-4. Limpa tudo do snapshot e regrava (run completo) ──────────────────
+    print(f"\n🗑️  Limpando preços e resultados anteriores do snapshot {snapshot_id}...")
+    requests.delete(f"{SUPABASE_URL}/rest/v1/precos?snapshot_id=eq.{snapshot_id}", headers=HEADERS)
+    requests.delete(f"{SUPABASE_URL}/rest/v1/resultados_brutos?snapshot_id=eq.{snapshot_id}", headers=HEADERS)
+    _salvar_precos(snapshot_id, resumo, resultados)
+
+    print(f"\n{'='*50}")
+    print(f"✅ Snapshot de {data} salvo com sucesso!")
+    print(f"{'='*50}")
+
+
+def _salvar_precos(snapshot_id, resumo, resultados):
+    """Insere preços (resumo) e resultados brutos no snapshot. Não apaga nada —
+    a limpeza (total ou por ingrediente) é responsabilidade do chamador."""
     brutos = {}
     for r in resultados:
         iid = r.get("ingrediente_id")
         pn  = r.get("preco_normalizado")
         if iid is not None and pn is not None:
             brutos.setdefault(iid, []).append(pn)
-
-    # ── 3. DELETE + INSERT (idempotente; evita PATCH com nomes acentuados) ────
-    print(f"\n🗑️  Limpando preços anteriores do snapshot {snapshot_id}...")
-    requests.delete(
-        f"{SUPABASE_URL}/rest/v1/precos?snapshot_id=eq.{snapshot_id}",
-        headers=HEADERS
-    )
 
     print(f"💾 Salvando preços (INSERT)...")
     for r in resumo:
@@ -123,18 +146,10 @@ def main():
             "label":               label,
             "qtd_resultados":      r["qtd_resultados"],
         }
-
         resp   = supabase_post("precos", dados)
         status = "✅" if (resp is not None) else "❌"
         print(f"  {status} {r['ingrediente']:<30} mediana={dados['mediana_exibicao']}/{label} "
               f"n={r['qtd_resultados']}")
-
-    # ── 4. Salva resultados brutos (DELETE + INSERT para ter links atualizados) 
-    print(f"\n🗑️  Limpando resultados brutos anteriores...")
-    requests.delete(
-        f"{SUPABASE_URL}/rest/v1/resultados_brutos?snapshot_id=eq.{snapshot_id}",
-        headers=HEADERS
-    )
 
     print(f"💾 Salvando {len(resultados)} resultados brutos...")
     payload = [{
@@ -155,9 +170,6 @@ def main():
         resp = supabase_post("resultados_brutos", lote)
         print(f"  {'✅' if resp else '❌'} Lote {i//LOTE + 1}: {len(lote)} registros")
 
-    print(f"\n{'='*50}")
-    print(f"✅ Snapshot de {data} salvo com sucesso!")
-    print(f"{'='*50}")
 
 if __name__ == "__main__":
     main()

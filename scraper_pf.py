@@ -46,6 +46,13 @@ def carregar_catalogo():
     resp = requests.get(url, headers=SUPA_HEADERS, timeout=30)
     resp.raise_for_status()
     cat = resp.json()
+    # scrape direcionado: SCRAPE_ONLY="Nome 1,Nome 2" raspa só esses (economiza API)
+    apenas = [n.strip() for n in os.getenv("SCRAPE_ONLY", "").split(",") if n.strip()]
+    if apenas:
+        cat = [i for i in cat if i["nome"] in apenas]
+        faltando = set(apenas) - {i["nome"] for i in cat}
+        if faltando:
+            print(f"⚠️  SCRAPE_ONLY não encontrou no catálogo: {sorted(faltando)}")
     for ing in cat:
         ing["palavras_ok"]  = [p for p in (ing.get("palavras_ok") or "").split("|") if p]
         ing["palavras_nao"] = [p for p in (ing.get("palavras_nao") or "").split("|") if p]
