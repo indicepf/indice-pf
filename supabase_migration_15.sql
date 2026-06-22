@@ -4,6 +4,8 @@
 -- ============================================================================
 
 -- 1) campos extras na ingredientes
+-- (preco_manual_link vem da migration 14; recriado aqui por segurança caso a ordem se inverta)
+alter table ingredientes add column if not exists preco_manual_link text;
 alter table ingredientes add column if not exists preco_manual_loja text;
 alter table ingredientes add column if not exists preco_manual_em   timestamptz;  -- última atualização manual
 
