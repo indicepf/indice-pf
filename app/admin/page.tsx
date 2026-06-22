@@ -61,16 +61,18 @@ export default function AdminPage() {
       preco_manual: leitura, custo_fixo: fixo, loja: m.preco_manual_loja || '', link: m.preco_manual_link || '',
     })
     if (error) { setPrecoMsg(error.message); return }
+    await recalcularCustos()
     setLeituras(l => ({ ...l, [m.id]: '' }))
     setManuais(await getIngredientesManuais())
     if (m.id in hist) { const d = await getHistoricoManual(m.id); setHist(h => ({ ...h, [m.id]: d })) }
-    setPrecoMsg(`Leitura registrada para ${m.nome}. Recalcule os custos para aplicar.`)
+    setPrecoMsg(`Leitura registrada para ${m.nome} e custos atualizados.`)
   }
   async function removerManual(m: IngManual) {
     if (!confirm(`Remover o preço manual de ${m.nome}? Ele volta a ser coletado online.`)) return
     await limparPrecoManual(m.id)
+    await recalcularCustos()
     setManuais(prev => prev.filter(x => x.id !== m.id))
-    setPrecoMsg(`${m.nome} voltou ao modo online. Recalcule os custos.`)
+    setPrecoMsg(`${m.nome} voltou ao modo online e custos atualizados.`)
   }
   async function adicionarManual() {
     setPrecoMsg('')
@@ -79,9 +81,10 @@ export default function AdminPage() {
     if (!preco && !fixo) { setPrecoMsg('Informe preço (R$/kg) ou custo fixo (R$/prato).'); return }
     const { error } = await setPrecoManual(Number(addId), { preco_manual: preco, custo_fixo: fixo, loja: addLoja, link: addLink })
     if (error) { setPrecoMsg(error.message); return }
+    await recalcularCustos()
     setManuais(await getIngredientesManuais())
     setAddId(''); setAddPreco(''); setAddFixo(''); setAddLoja(''); setAddLink('')
-    setPrecoMsg('Preço manual definido. Recalcule os custos.')
+    setPrecoMsg('Preço manual definido e custos atualizados.')
   }
   async function verHistorico(id: number) {
     if (id in hist) { setHist(h => { const c = { ...h }; delete c[id]; return c }); return }  // fecha

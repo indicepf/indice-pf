@@ -3,11 +3,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { brl, limparNome } from '@/lib/format'
 import type { DishCost, ItemDetalhe, Fonte } from '@/lib/types'
+import type { FonteManual } from '@/lib/queries'
 
-export default function DetalhePrato({ dish, itens, fontesPorIngrediente, fator, onClose }: {
+export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuaisPorIngrediente, fator, onClose }: {
   dish: DishCost
   itens: ItemDetalhe[] | null
   fontesPorIngrediente: Record<number, Fonte[]>
+  manuaisPorIngrediente: Record<number, FonteManual[]>
   fator: number
   onClose: () => void
 }) {
@@ -59,13 +61,9 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, fator,
                     <td className="py-2 text-right text-muted tnum">{i.qtd_g} g</td>
                     <td className="py-2 text-right tnum">{brl(i.custo * fator)}</td>
                     <td className="py-2 text-right whitespace-nowrap">
-                      {(i.origem === 'online' || i.origem === 'misto') && (
+                      {(i.origem === 'online' || i.origem === 'manual' || i.origem === 'misto') && (
                         <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id })}
                           className="text-xs text-paprika hover:underline">fontes</button>
-                      )}
-                      {(i.origem === 'manual' || i.origem === 'misto') && i.link && (
-                        <a href={i.link} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-paprika hover:underline ml-2">manual</a>
                       )}
                     </td>
                   </tr>
@@ -77,7 +75,9 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, fator,
       </aside>
 
       {fonteAberta && (
-        <ModalFontes nome={fonteAberta.nome} fontes={fontesPorIngrediente[fonteAberta.id] || []}
+        <ModalFontes nome={fonteAberta.nome}
+          fontes={fontesPorIngrediente[fonteAberta.id] || []}
+          manuais={manuaisPorIngrediente[fonteAberta.id] || []}
           onClose={() => setFonteAberta(null)} />
       )}
     </div>
@@ -88,8 +88,8 @@ function Etiqueta({ texto }: { texto: string }) {
   return <span className="ml-1.5 text-[0.6rem] uppercase tracking-wide text-muted border border-line rounded px-1 py-px align-middle">{texto}</span>
 }
 
-function ModalFontes({ nome, fontes, onClose }: {
-  nome: string; fontes: Fonte[]; onClose: () => void
+function ModalFontes({ nome, fontes, manuais, onClose }: {
+  nome: string; fontes: Fonte[]; manuais: FonteManual[]; onClose: () => void
 }) {
   const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
   useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
@@ -102,22 +102,46 @@ function ModalFontes({ nome, fontes, onClose }: {
           <h4 className="font-[family-name:var(--font-serif)] text-lg">Fontes — {nome}</h4>
           <button onClick={onClose} className="text-muted hover:text-ink text-xl leading-none">×</button>
         </div>
-        <div className="p-4 space-y-2">
-          {fontes.length ? fontes.map((f, i) => (
-              <a key={i} href={f.link || undefined} target="_blank" rel="noopener noreferrer"
-                className="block border border-line rounded-md px-3 py-2.5 hover:border-paprika transition-colors">
-                <div className="flex justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm truncate">{f.titulo}</p>
-                    <p className="text-xs text-muted">{f.loja}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-medium tnum text-paprika">{brl(Number(f.preco_bruto))}</p>
-                    <p className="text-xs text-muted">{f.exibicao}</p>
+        <div className="p-4 space-y-4">
+          {manuais.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[0.65rem] uppercase tracking-wide text-muted">Leituras manuais (últimos 5 dias)</p>
+              {manuais.map((m, i) => (
+                <div key={i} className="border border-line rounded-md px-3 py-2.5">
+                  <div className="flex justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm truncate">{m.loja || 'Coleta manual'}</p>
+                      <p className="text-xs text-muted">{new Date(m.criado_em).toLocaleDateString('pt-BR')}
+                        {m.link && <> · <a href={m.link} target="_blank" rel="noopener noreferrer" className="text-paprika hover:underline">link</a></>}
+                      </p>
+                    </div>
+                    <p className="text-sm font-medium tnum text-paprika shrink-0">{m.preco_manual != null ? `${brl(Number(m.preco_manual))}/kg` : '—'}</p>
                   </div>
                 </div>
-              </a>
-            )) : <p className="text-sm text-muted">Sem fontes registradas.</p>}
+              ))}
+            </div>
+          )}
+          {fontes.length > 0 && (
+            <div className="space-y-2">
+              {manuais.length > 0 && <p className="text-[0.65rem] uppercase tracking-wide text-muted">Fontes online</p>}
+              {fontes.map((f, i) => (
+                <a key={i} href={f.link || undefined} target="_blank" rel="noopener noreferrer"
+                  className="block border border-line rounded-md px-3 py-2.5 hover:border-paprika transition-colors">
+                  <div className="flex justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm truncate">{f.titulo}</p>
+                      <p className="text-xs text-muted">{f.loja}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-medium tnum text-paprika">{brl(Number(f.preco_bruto))}</p>
+                      <p className="text-xs text-muted">{f.exibicao}</p>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+          {!manuais.length && !fontes.length && <p className="text-sm text-muted">Sem fontes registradas.</p>}
         </div>
       </div>
     </div>

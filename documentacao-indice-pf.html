@@ -407,7 +407,13 @@
       <code>refresh_precos_manuais()</code> (janela de 5 dias), <code>recalcular_custos_ultimo_snapshot()</code>
       (refaz custos + índice; acionável pelo botão "Recalcular custos" no admin).</li>
     <li>O detalhe do prato marca a origem do preço: <code>online</code>, <code>manual</code>,
-      <code>manual+online</code> (misto), <code>fixo</code> ou <code>sem preço</code>.</li>
+      <code>manual+online</code> (misto), <code>fixo</code> ou <code>sem preço</code>. O botão "fontes" abre
+      um quadro com as <strong>leituras manuais</strong> (loja, data, R$/kg, link) e as <strong>fontes online</strong>
+      juntas, igual ao painel das raspadas.</li>
+    <li>Salvar/remover uma leitura no admin <strong>recalcula os custos automaticamente</strong> (lista e índice
+      ficam consistentes sem clicar em "Recalcular custos").</li>
+    <li>Acesso ao <code>/admin</code>: aparece como item <strong>"Administração"</strong> no menu do usuário no topo,
+      apenas para quem tem <code>profiles.is_admin = true</code>.</li>
   </ul>
 
   <h3>9.9 Custo por prato (implementado)</h3>

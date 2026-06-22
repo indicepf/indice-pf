@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import AuthControls from './Auth'
 import DetalhePrato from './DetalhePrato'
-import { getLatestSnapshot, getDishCosts, getAllDetalhes, getAllFontes } from '@/lib/queries'
+import { getLatestSnapshot, getDishCosts, getAllDetalhes, getAllFontes, getAllFontesManuais, type FonteManual } from '@/lib/queries'
 import { MODOS, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
 import type { ModoKey, OrdemKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [selecionado, setSelecionado] = useState<DishCost | null>(null)
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]> | null>(null)
   const [fontes, setFontes]     = useState<Record<number, Fonte[]>>({})
+  const [fontesManuais, setFontesManuais] = useState<Record<number, FonteManual[]>>({})
 
   useEffect(() => {
     (async () => {
@@ -37,6 +38,7 @@ export default function Dashboard() {
       // pré-carrega composição e fontes em segundo plano → gaveta abre instantânea
       getAllDetalhes(snap.id).then(setDetalhes)
       getAllFontes(snap.id).then(setFontes)
+      getAllFontesManuais().then(setFontesManuais)
     })()
   }, [])
 
@@ -173,7 +175,7 @@ export default function Dashboard() {
       {selecionado && snapshot && (
         <DetalhePrato dish={selecionado}
           itens={detalhes ? (detalhes[selecionado.pratos.id] ?? []) : null}
-          fontesPorIngrediente={fontes} fator={fator}
+          fontesPorIngrediente={fontes} manuaisPorIngrediente={fontesManuais} fator={fator}
           onClose={() => setSelecionado(null)} />
       )}
 

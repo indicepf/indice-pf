@@ -56,13 +56,27 @@ export async function getAllFontes(snapshotId: number): Promise<Record<number, F
   return out
 }
 
+export type FonteManual = { preco_manual: number | null; loja: string | null; link: string | null; criado_em: string }
+
+// Leituras manuais dos últimos 5 dias (as que alimentam a mediana), agrupadas por ingrediente.
+export async function getAllFontesManuais(): Promise<Record<number, FonteManual[]>> {
+  const desde = new Date(Date.now() - 5 * 86400000).toISOString()
+  const { data } = await supabase.from('precos_manuais_hist')
+    .select('ingrediente_id,preco_manual,loja,link,criado_em')
+    .gte('criado_em', desde).not('preco_manual', 'is', null)
+    .order('criado_em', { ascending: false })
+  const out: Record<number, FonteManual[]> = {}
+  ;((data || []) as any[]).forEach(f => { (out[f.ingrediente_id] ||= []).push(f) })
+  return out
+}
+
 export async function getIngredientes(): Promise<Ing[]> {
   const { data } = await supabase.from('ingredientes').select('id,nome,categoria').order('nome')
   return (data as Ing[]) || []
 }
 
 export async function getProfile(uid: string): Promise<Profile | null> {
-  const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao').eq('id', uid).single()
+  const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao,is_admin').eq('id', uid).single()
   return (data as Profile) ?? null
 }
 

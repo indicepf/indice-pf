@@ -24,7 +24,7 @@ export type ItemDetalhe = {
 
 export type Fonte = { titulo: string; loja: string; preco_bruto: number; exibicao: string; link: string }
 
-export type Profile = { id: string; nome: string | null; telefone: string | null; regiao: string | null }
+export type Profile = { id: string; nome: string | null; telefone: string | null; regiao: string | null; is_admin: boolean | null }
 
 export type Ing = { id: number; nome: string; categoria: string | null }
 

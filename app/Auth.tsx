@@ -109,6 +109,10 @@ export default function AuthControls() {
               <div className="absolute right-0 mt-1 w-44 bg-panel border border-line rounded-md shadow-lg text-sm py-1 z-50">
                 <button onClick={() => { setMenu(false); router.push('/perfil') }}
                   className="block w-full text-left px-3 py-2 hover:bg-cream">Meu perfil</button>
+                {profile?.is_admin && (
+                  <button onClick={() => { setMenu(false); router.push('/admin') }}
+                    className="block w-full text-left px-3 py-2 hover:bg-cream text-paprika">Administração</button>
+                )}
                 <button onClick={async () => { setMenu(false); await supabase.auth.signOut() }}
                   className="block w-full text-left px-3 py-2 hover:bg-cream">Sair</button>
               </div>
