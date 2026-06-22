@@ -34,6 +34,10 @@ export type Contribuicao = {
   status: string
   foto_url: string | null
   criado_em: string
+  cidade: string | null
+  endereco: string | null
+  lat: number | null
+  lng: number | null
   ingredientes: { nome: string } | null
 }
 

@@ -27,6 +27,9 @@ export default function ContribuirPage() {
   const [tipoLoja, setTipoLoja] = useState('')
   const [mercado, setMercado] = useState('')
   const [cidade, setCidade] = useState('')
+  const [bairro, setBairro] = useState('')
+  const [uf, setUf] = useState('')
+  const [endereco, setEndereco] = useState('')
   const [coord, setCoord] = useState<{ lat: number; lng: number } | null>(null)
   const [fotoProduto, setFotoProduto] = useState<File | null>(null)
   const [fotoEtiqueta, setFotoEtiqueta] = useState<File | null>(null)
@@ -50,7 +53,20 @@ export default function ContribuirPage() {
     setGeoMsg('')
     if (!navigator.geolocation) { setGeoMsg('Geolocalização não disponível neste navegador.'); return }
     navigator.geolocation.getCurrentPosition(
-      pos => { setCoord({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6) }); setGeoMsg('') },
+      async pos => {
+        const lat = +pos.coords.latitude.toFixed(6), lng = +pos.coords.longitude.toFixed(6)
+        setCoord({ lat, lng }); setGeoMsg('Buscando endereço…')
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=pt-BR`)
+          const j = await r.json()
+          const a = j.address || {}
+          if (a.city || a.town || a.village || a.municipality) setCidade(a.city || a.town || a.village || a.municipality)
+          setBairro(a.suburb || a.neighbourhood || a.city_district || '')
+          setUf(a.state || '')
+          setEndereco(j.display_name || '')
+          setGeoMsg('')
+        } catch { setGeoMsg('') }
+      },
       (e) => setGeoMsg(
         e.code === 1 ? 'Permissão negada — habilite a localização para este site no navegador.'
         : e.code === 2 ? 'Localização indisponível agora. Tente de novo.'
@@ -95,6 +111,7 @@ export default function ContribuirPage() {
         peso_g: pesoG ? Number(pesoG.replace(',', '.')) : null, tipo_loja: tipoLoja,
         mercado: mercado.trim() || null, cidade: cidade.trim() || null,
         lat: coord?.lat ?? null, lng: coord?.lng ?? null,
+        uf: uf || null, bairro: bairro || null, endereco: endereco || null,
         foto_url, foto_etiqueta_url, foto_hash, status: 'pendente',
       })
       if (error) throw error
@@ -189,6 +206,7 @@ export default function ContribuirPage() {
               </button>
             </div>
             {geoMsg && <p className="text-xs text-amber-700 mt-2">{geoMsg}</p>}
+            {endereco && <p className="text-xs text-muted mt-2 leading-snug">Local: {endereco}</p>}
 
             {erro && <p className="text-sm text-red-600 mt-4">{erro}</p>}
             <button disabled={busy} onClick={enviar} className={btnFull}>

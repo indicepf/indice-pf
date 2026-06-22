@@ -55,7 +55,7 @@ export async function getProfile(uid: string): Promise<Profile | null> {
 
 export async function getMinhasContribuicoes(uid: string): Promise<Contribuicao[]> {
   const { data } = await supabase.from('contribuicoes')
-    .select('id,produto,preco,status,foto_url,criado_em,ingredientes(nome)')
+    .select('id,produto,preco,status,foto_url,criado_em,cidade,endereco,lat,lng,ingredientes(nome)')
     .eq('user_id', uid).order('criado_em', { ascending: false })
   return (data as unknown as Contribuicao[]) || []
 }

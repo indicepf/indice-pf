@@ -2,10 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { supabase } from '@/lib/supabase'
 import { getProfile, getMinhasContribuicoes, excluirContribuicao } from '@/lib/queries'
 import { REGIOES, mascararTel, telValido } from '@/lib/format'
 import type { Profile, Contribuicao } from '@/lib/types'
+
+const MapaLocal = dynamic(() => import('../MapaLocal'), {
+  ssr: false,
+  loading: () => <div className="h-[280px] rounded-lg border border-line grid place-items-center text-muted text-sm">carregando mapa…</div>,
+})
 
 const STATUS: Record<string, { txt: string; cls: string }> = {
   pendente:  { txt: 'em análise', cls: 'text-muted border-line' },
@@ -124,6 +130,12 @@ export default function PerfilPage() {
               Contribuir
             </button>
           </div>
+          {(() => {
+            const pontos = (contribs || []).filter(c => c.lat != null && c.lng != null)
+              .map(c => ({ lat: c.lat as number, lng: c.lng as number,
+                label: `${c.ingredientes?.nome || c.produto || 'Produto'} — R$ ${Number(c.preco).toFixed(2)}${c.cidade ? ` · ${c.cidade}` : ''}` }))
+            return pontos.length ? <div className="mb-4"><MapaLocal points={pontos} height="280px" /></div> : null
+          })()}
           {!contribs ? <p className="text-sm text-muted">Carregando…</p>
             : !contribs.length ? <p className="text-sm text-muted">Você ainda não enviou nenhuma contribuição.</p>
             : (
@@ -137,8 +149,8 @@ export default function PerfilPage() {
                         : <div className="w-12 h-12 rounded bg-cream shrink-0" />}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm truncate">{i.ingredientes?.nome || i.produto || 'Produto'}</p>
-                        <p className="text-xs text-muted">
-                          R$ {Number(i.preco).toFixed(2)} · {new Date(i.criado_em).toLocaleDateString('pt-BR')}
+                        <p className="text-xs text-muted truncate">
+                          R$ {Number(i.preco).toFixed(2)} · {new Date(i.criado_em).toLocaleDateString('pt-BR')}{i.cidade ? ` · ${i.cidade}` : ''}
                         </p>
                       </div>
                       <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${s.cls}`}>

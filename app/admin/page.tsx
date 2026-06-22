@@ -73,7 +73,7 @@ export default function AdminPage() {
             <div className="p-4 flex-1">
               <p className="text-[0.7rem] text-muted mb-2">
                 {c.tipo_loja || '—'}{c.mercado ? ` · ${c.mercado}` : ''}{c.cidade ? ` · ${c.cidade}` : ''}
-                {c.lat ? ` · 📍 ${c.lat}, ${c.lng}` : ''} · {new Date(c.criado_em).toLocaleString('pt-BR')}
+                {c.lat ? ` · ${c.lat}, ${c.lng}` : ''} · {new Date(c.criado_em).toLocaleString('pt-BR')}
               </p>
               {c.produto && <p className="text-sm mb-2">“{c.produto}”</p>}
               <div className="grid grid-cols-3 gap-2 text-xs">
