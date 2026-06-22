@@ -19,18 +19,18 @@ function montarItens(rec: any[], precoMap: Record<number, number>): ItemDetalhe[
   return rec.map((r): ItemDetalhe => {
     const ing = r.ingredientes
     const qtd = Number(r.qtd_g)
-    let preco_g: number | null = null, origem: ItemDetalhe['origem'] = 'sem', custo = 0
+    let preco_g: number | null = null, origem: ItemDetalhe['origem'] = 'sem', custo = 0, link: string | null = null
     if (ing.custo_fixo != null)        { origem = 'fixo';   custo = Number(ing.custo_fixo) }
-    else if (ing.preco_manual != null) { origem = 'manual'; preco_g = Number(ing.preco_manual) / 1000; custo = preco_g * qtd }
+    else if (ing.preco_manual != null) { origem = 'manual'; preco_g = Number(ing.preco_manual) / 1000; custo = preco_g * qtd; link = ing.preco_manual_link ?? null }
     else if (precoMap[r.ingrediente_id] != null) { origem = 'online'; preco_g = precoMap[r.ingrediente_id]; custo = preco_g * qtd }
-    return { ingrediente_id: r.ingrediente_id, nome: ing.nome, categoria: ing.categoria, qtd_g: qtd, preco_g, origem, custo }
+    return { ingrediente_id: r.ingrediente_id, nome: ing.nome, categoria: ing.categoria, qtd_g: qtd, preco_g, origem, custo, link }
   }).sort((a, b) => b.custo - a.custo)
 }
 
 // Carrega a composição de TODOS os pratos de uma vez (gaveta abre instantânea, sem rede no clique).
 export async function getAllDetalhes(snapshotId: number): Promise<Record<number, ItemDetalhe[]>> {
   const [{ data: rec }, { data: precos }] = await Promise.all([
-    supabase.from('receitas').select('prato_id,qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual)'),
+    supabase.from('receitas').select('prato_id,qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual,preco_manual_link)'),
     supabase.from('precos').select('ingrediente_id,mediana_normalizada').eq('snapshot_id', snapshotId),
   ])
   const precoMap: Record<number, number> = {}
@@ -130,4 +130,30 @@ export async function getSaques(status: string) {
 
 export async function marcarSaquePago(id: number) {
   return supabase.from('pagamentos').update({ status: 'pago', pago_em: new Date().toISOString() }).eq('id', id)
+}
+
+export type IngManual = {
+  id: number; nome: string; categoria: string | null
+  preco_manual: number | null; preco_manual_link: string | null
+}
+
+export async function getIngredientesManuais(): Promise<IngManual[]> {
+  const { data } = await supabase.from('ingredientes')
+    .select('id,nome,categoria,preco_manual,preco_manual_link')
+    .not('preco_manual', 'is', null).order('nome')
+  return (data as IngManual[]) || []
+}
+
+export async function setPrecoManual(id: number, preco: number, link: string) {
+  return supabase.from('ingredientes')
+    .update({ preco_manual: preco, preco_manual_link: link || null }).eq('id', id)
+}
+
+export async function limparPrecoManual(id: number) {
+  return supabase.from('ingredientes')
+    .update({ preco_manual: null, preco_manual_link: null }).eq('id', id)
+}
+
+export async function recalcularCustos() {
+  return supabase.rpc('recalcular_custos_ultimo_snapshot')
 }

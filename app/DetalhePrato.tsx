@@ -62,6 +62,10 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, fator,
                         <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id })}
                           className="text-xs text-paprika hover:underline">fontes</button>
                       )}
+                      {i.origem === 'manual' && i.link && (
+                        <a href={i.link} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-paprika hover:underline">fonte</a>
+                      )}
                     </td>
                   </tr>
                 ))}

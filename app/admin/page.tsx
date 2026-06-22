@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, getSaques, marcarSaquePago } from '@/lib/queries'
+import {
+  isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, getSaques, marcarSaquePago,
+  getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, type IngManual,
+} from '@/lib/queries'
 import { brl, mascararCpf, VALOR_POR_FOTO } from '@/lib/format'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
 
@@ -12,10 +15,13 @@ type Saque = { id: number; user_id: string; valor: number; cpf: string | null; c
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'saques'>('mod')
+  const [aba, setAba] = useState<'mod' | 'saques' | 'precos'>('mod')
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [ings, setIngs] = useState<Ing[]>([])
   const [saques, setSaques] = useState<Saque[]>([])
+  const [manuais, setManuais] = useState<IngManual[]>([])
+  const [addId, setAddId] = useState(''); const [addPreco, setAddPreco] = useState(''); const [addLink, setAddLink] = useState('')
+  const [precoMsg, setPrecoMsg] = useState(''); const [recalcBusy, setRecalcBusy] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -25,6 +31,7 @@ export default function AdminPage() {
       setIngs(await getIngredientes())
       setItens(await getContribuicoes('pendente'))
       setSaques(await getSaques('solicitado'))
+      setManuais(await getIngredientesManuais())
       setEstado('ok')
     })
   }, [router])
@@ -33,6 +40,40 @@ export default function AdminPage() {
     if (!confirm(`Confirmar pagamento de ${brl(Number(s.valor))} via PIX (${s.chave_pix})?`)) return
     await marcarSaquePago(s.id)
     setSaques(prev => prev.filter(x => x.id !== s.id))
+  }
+
+  function patchManual(id: number, campo: 'preco_manual' | 'preco_manual_link', valor: any) {
+    setManuais(prev => prev.map(m => m.id === id ? { ...m, [campo]: valor } : m))
+  }
+  async function salvarManual(m: IngManual) {
+    setPrecoMsg('')
+    const preco = Number(String(m.preco_manual).replace(',', '.'))
+    if (!preco || preco <= 0) { setPrecoMsg(`Preço inválido para ${m.nome}.`); return }
+    const { error } = await setPrecoManual(m.id, preco, m.preco_manual_link || '')
+    setPrecoMsg(error ? error.message : `${m.nome} salvo. Lembre de recalcular os custos.`)
+  }
+  async function removerManual(m: IngManual) {
+    if (!confirm(`Remover o preço manual de ${m.nome}? Ele volta a ser coletado online.`)) return
+    await limparPrecoManual(m.id)
+    setManuais(prev => prev.filter(x => x.id !== m.id))
+    setPrecoMsg(`${m.nome} voltou ao modo online. Recalcule os custos.`)
+  }
+  async function adicionarManual() {
+    setPrecoMsg('')
+    const preco = Number(addPreco.replace(',', '.'))
+    if (!addId) { setPrecoMsg('Selecione um ingrediente.'); return }
+    if (!preco || preco <= 0) { setPrecoMsg('Informe um preço válido (R$/kg).'); return }
+    const { error } = await setPrecoManual(Number(addId), preco, addLink)
+    if (error) { setPrecoMsg(error.message); return }
+    setManuais(await getIngredientesManuais())
+    setAddId(''); setAddPreco(''); setAddLink('')
+    setPrecoMsg('Preço manual definido. Recalcule os custos.')
+  }
+  async function recalcular() {
+    setRecalcBusy(true); setPrecoMsg('')
+    const { error } = await recalcularCustos()
+    setRecalcBusy(false)
+    setPrecoMsg(error ? `Erro ao recalcular: ${error.message}` : 'Custos do índice recalculados.')
   }
 
   async function moderar(c: ContribuicaoFull, status: 'aprovada' | 'rejeitada') {
@@ -70,7 +111,7 @@ export default function AdminPage() {
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
         <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3">
-          {([['mod', `Moderação (${itens.length})`], ['saques', `Saques (${saques.length})`]] as const).map(([k, label]) => (
+          {([['mod', `Moderação (${itens.length})`], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -80,7 +121,7 @@ export default function AdminPage() {
       </header>
 
       {aba === 'mod' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6" key="mod">
         {!itens.length && <p className="text-sm text-muted text-center py-10">Nenhuma contribuição pendente.</p>}
         {itens.map(c => (
           <div key={c.id} className="border border-line rounded-lg bg-panel overflow-hidden sm:flex">
@@ -123,8 +164,8 @@ export default function AdminPage() {
           </div>
         ))}
       </div>
-      ) : (
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-3">
+      ) : aba === 'saques' ? (
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-3" key="saques">
         {!saques.length && <p className="text-sm text-muted text-center py-10">Nenhuma solicitação de saque.</p>}
         {saques.map(s => (
           <div key={s.id} className="border border-line rounded-lg bg-panel p-4">
@@ -157,6 +198,78 @@ export default function AdminPage() {
             </div>
           </div>
         ))}
+      </div>
+      ) : (
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6" key="precos">
+        <p className="text-sm text-muted">
+          Preços definidos manualmente (R$/kg) para itens sem cotação online confiável. Editar grava direto em
+          <code className="mx-1">ingredientes</code>; depois clique em “Recalcular custos” para refletir no índice.
+        </p>
+
+        <div className="flex items-center gap-3">
+          <button onClick={recalcular} disabled={recalcBusy}
+            className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+            {recalcBusy ? 'Recalculando…' : 'Recalcular custos do índice'}
+          </button>
+          {precoMsg && <span className="text-xs text-muted">{precoMsg}</span>}
+        </div>
+
+        {/* lista dos que têm preço manual */}
+        <div className="space-y-3">
+          {!manuais.length && <p className="text-sm text-muted">Nenhum preço manual definido.</p>}
+          {manuais.map(m => (
+            <div key={m.id} className="border border-line rounded-lg bg-panel p-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-medium">{m.nome}</p>
+                <span className="text-xs text-muted">{m.categoria || '—'}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-3 mt-3 text-xs">
+                <label>Preço (R$/kg)
+                  <input value={m.preco_manual ?? ''} inputMode="decimal"
+                    onChange={e => patchManual(m.id, 'preco_manual', e.target.value)} className={inputCls} />
+                </label>
+                <label>Link da fonte do preço
+                  <input value={m.preco_manual_link ?? ''} placeholder="https://…"
+                    onChange={e => patchManual(m.id, 'preco_manual_link', e.target.value)} className={inputCls} />
+                </label>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => salvarManual(m)}
+                  className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition">Salvar</button>
+                <button onClick={() => removerManual(m)}
+                  className="text-sm border border-line text-muted px-4 py-1.5 rounded-md hover:bg-cream transition">
+                  Remover (voltar ao online)
+                </button>
+                {m.preco_manual_link && (
+                  <a href={m.preco_manual_link} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-paprika hover:underline ml-auto self-center">abrir fonte</a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* definir preço manual para outro ingrediente */}
+        <div className="border border-line rounded-lg bg-panel p-4">
+          <p className="font-medium mb-3">Definir preço manual para outro ingrediente</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <label className="sm:col-span-2">Ingrediente
+              <select value={addId} onChange={e => setAddId(e.target.value)} className={inputCls}>
+                <option value="">Selecione…</option>
+                {ings.filter(i => !manuais.some(m => m.id === i.id))
+                  .map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
+              </select>
+            </label>
+            <label>Preço (R$/kg)
+              <input value={addPreco} onChange={e => setAddPreco(e.target.value)} inputMode="decimal" placeholder="0,00" className={inputCls} />
+            </label>
+            <label>Link da fonte do preço
+              <input value={addLink} onChange={e => setAddLink(e.target.value)} placeholder="https://…" className={inputCls} />
+            </label>
+          </div>
+          <button onClick={adicionarManual}
+            className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition mt-3">Definir</button>
+        </div>
       </div>
       )}
     </main>

@@ -19,6 +19,7 @@ export type ItemDetalhe = {
   preco_g: number | null
   origem: 'online' | 'manual' | 'fixo' | 'sem'
   custo: number
+  link: string | null   // fonte do preço manual (preco_manual_link)
 }
 
 export type Fonte = { titulo: string; loja: string; preco_bruto: number; exibicao: string; link: string }
