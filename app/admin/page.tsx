@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
   isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, getSaques, marcarSaquePago,
-  getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, type IngManual,
+  getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, getHistoricoManual,
+  type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
 import { brl, mascararCpf, VALOR_POR_FOTO } from '@/lib/format'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
@@ -20,8 +21,10 @@ export default function AdminPage() {
   const [ings, setIngs] = useState<Ing[]>([])
   const [saques, setSaques] = useState<Saque[]>([])
   const [manuais, setManuais] = useState<IngManual[]>([])
-  const [addId, setAddId] = useState(''); const [addPreco, setAddPreco] = useState(''); const [addLink, setAddLink] = useState('')
+  const [addId, setAddId] = useState(''); const [addPreco, setAddPreco] = useState('')
+  const [addFixo, setAddFixo] = useState(''); const [addLoja, setAddLoja] = useState(''); const [addLink, setAddLink] = useState('')
   const [precoMsg, setPrecoMsg] = useState(''); const [recalcBusy, setRecalcBusy] = useState(false)
+  const [hist, setHist] = useState<Record<number, PrecoManualHist[]>>({})
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -42,15 +45,22 @@ export default function AdminPage() {
     setSaques(prev => prev.filter(x => x.id !== s.id))
   }
 
-  function patchManual(id: number, campo: 'preco_manual' | 'preco_manual_link', valor: any) {
+  function patchManual(id: number, campo: keyof IngManual, valor: any) {
     setManuais(prev => prev.map(m => m.id === id ? { ...m, [campo]: valor } : m))
   }
+  function parseNum(v: any) { const n = Number(String(v ?? '').replace(',', '.')); return n > 0 ? n : null }
+
   async function salvarManual(m: IngManual) {
     setPrecoMsg('')
-    const preco = Number(String(m.preco_manual).replace(',', '.'))
-    if (!preco || preco <= 0) { setPrecoMsg(`Preço inválido para ${m.nome}.`); return }
-    const { error } = await setPrecoManual(m.id, preco, m.preco_manual_link || '')
-    setPrecoMsg(error ? error.message : `${m.nome} salvo. Lembre de recalcular os custos.`)
+    const preco = parseNum(m.preco_manual), fixo = parseNum(m.custo_fixo)
+    if (!preco && !fixo) { setPrecoMsg(`Informe preço (R$/kg) ou custo fixo para ${m.nome}.`); return }
+    const { error } = await setPrecoManual(m.id, {
+      preco_manual: preco, custo_fixo: fixo, loja: m.preco_manual_loja || '', link: m.preco_manual_link || '',
+    })
+    if (error) { setPrecoMsg(error.message); return }
+    setManuais(await getIngredientesManuais())
+    if (m.id in hist) setHist(h => ({ ...h, [m.id]: [] }))  // recarrega o histórico se estiver aberto
+    setPrecoMsg(`${m.nome} salvo. Lembre de recalcular os custos.`)
   }
   async function removerManual(m: IngManual) {
     if (!confirm(`Remover o preço manual de ${m.nome}? Ele volta a ser coletado online.`)) return
@@ -60,14 +70,20 @@ export default function AdminPage() {
   }
   async function adicionarManual() {
     setPrecoMsg('')
-    const preco = Number(addPreco.replace(',', '.'))
+    const preco = parseNum(addPreco), fixo = parseNum(addFixo)
     if (!addId) { setPrecoMsg('Selecione um ingrediente.'); return }
-    if (!preco || preco <= 0) { setPrecoMsg('Informe um preço válido (R$/kg).'); return }
-    const { error } = await setPrecoManual(Number(addId), preco, addLink)
+    if (!preco && !fixo) { setPrecoMsg('Informe preço (R$/kg) ou custo fixo (R$/prato).'); return }
+    const { error } = await setPrecoManual(Number(addId), { preco_manual: preco, custo_fixo: fixo, loja: addLoja, link: addLink })
     if (error) { setPrecoMsg(error.message); return }
     setManuais(await getIngredientesManuais())
-    setAddId(''); setAddPreco(''); setAddLink('')
+    setAddId(''); setAddPreco(''); setAddFixo(''); setAddLoja(''); setAddLink('')
     setPrecoMsg('Preço manual definido. Recalcule os custos.')
+  }
+  async function verHistorico(id: number) {
+    if (id in hist) { setHist(h => { const c = { ...h }; delete c[id]; return c }); return }  // fecha
+    setHist(h => ({ ...h, [id]: [] }))                  // abre (carregando)
+    const data = await getHistoricoManual(id)
+    setHist(h => ({ ...h, [id]: data }))
   }
   async function recalcular() {
     setRecalcBusy(true); setPrecoMsg('')
@@ -223,28 +239,63 @@ export default function AdminPage() {
                 <p className="font-medium">{m.nome}</p>
                 <span className="text-xs text-muted">{m.categoria || '—'}</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-3 mt-3 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs">
                 <label>Preço (R$/kg)
                   <input value={m.preco_manual ?? ''} inputMode="decimal"
                     onChange={e => patchManual(m.id, 'preco_manual', e.target.value)} className={inputCls} />
                 </label>
-                <label>Link da fonte do preço
+                <label>Custo fixo (R$/prato)
+                  <input value={m.custo_fixo ?? ''} inputMode="decimal" placeholder="simbólico"
+                    onChange={e => patchManual(m.id, 'custo_fixo', e.target.value)} className={inputCls} />
+                </label>
+                <label>Loja/fonte
+                  <input value={m.preco_manual_loja ?? ''} placeholder="ex: feira local"
+                    onChange={e => patchManual(m.id, 'preco_manual_loja', e.target.value)} className={inputCls} />
+                </label>
+                <label>Link
                   <input value={m.preco_manual_link ?? ''} placeholder="https://…"
                     onChange={e => patchManual(m.id, 'preco_manual_link', e.target.value)} className={inputCls} />
                 </label>
               </div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <button onClick={() => salvarManual(m)}
                   className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition">Salvar</button>
                 <button onClick={() => removerManual(m)}
                   className="text-sm border border-line text-muted px-4 py-1.5 rounded-md hover:bg-cream transition">
                   Remover (voltar ao online)
                 </button>
-                {m.preco_manual_link && (
-                  <a href={m.preco_manual_link} target="_blank" rel="noopener noreferrer"
-                    className="text-xs text-paprika hover:underline ml-auto self-center">abrir fonte</a>
-                )}
+                <button onClick={() => verHistorico(m.id)}
+                  className="text-xs text-paprika hover:underline">{m.id in hist ? 'ocultar histórico' : 'histórico'}</button>
+                <span className="text-xs text-muted ml-auto self-center">
+                  {m.preco_manual_em ? `atualizado ${new Date(m.preco_manual_em).toLocaleString('pt-BR')}` : 'sem data'}
+                </span>
               </div>
+              {m.id in hist && (
+                <div className="mt-3 border-t border-line pt-3">
+                  {!hist[m.id].length ? <p className="text-xs text-muted">Sem histórico ainda.</p> : (
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-muted">
+                          <th className="font-medium py-1">Data</th>
+                          <th className="font-medium py-1 text-right">R$/kg</th>
+                          <th className="font-medium py-1 text-right">Fixo</th>
+                          <th className="font-medium py-1">Loja</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hist[m.id].map(h => (
+                          <tr key={h.id} className="border-t border-line/60">
+                            <td className="py-1 text-muted">{new Date(h.criado_em).toLocaleString('pt-BR')}</td>
+                            <td className="py-1 text-right tnum">{h.preco_manual != null ? brl(Number(h.preco_manual)) : '—'}</td>
+                            <td className="py-1 text-right tnum">{h.custo_fixo != null ? brl(Number(h.custo_fixo)) : '—'}</td>
+                            <td className="py-1">{h.loja || (h.link ? <a href={h.link} target="_blank" rel="noopener noreferrer" className="text-paprika hover:underline">fonte</a> : '—')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -252,8 +303,8 @@ export default function AdminPage() {
         {/* definir preço manual para outro ingrediente */}
         <div className="border border-line rounded-lg bg-panel p-4">
           <p className="font-medium mb-3">Definir preço manual para outro ingrediente</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <label className="sm:col-span-2">Ingrediente
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <label className="col-span-2 sm:col-span-4">Ingrediente
               <select value={addId} onChange={e => setAddId(e.target.value)} className={inputCls}>
                 <option value="">Selecione…</option>
                 {ings.filter(i => !manuais.some(m => m.id === i.id))
@@ -263,7 +314,13 @@ export default function AdminPage() {
             <label>Preço (R$/kg)
               <input value={addPreco} onChange={e => setAddPreco(e.target.value)} inputMode="decimal" placeholder="0,00" className={inputCls} />
             </label>
-            <label>Link da fonte do preço
+            <label>Custo fixo (R$/prato)
+              <input value={addFixo} onChange={e => setAddFixo(e.target.value)} inputMode="decimal" placeholder="simbólico" className={inputCls} />
+            </label>
+            <label>Loja/fonte
+              <input value={addLoja} onChange={e => setAddLoja(e.target.value)} placeholder="ex: feira local" className={inputCls} />
+            </label>
+            <label>Link
               <input value={addLink} onChange={e => setAddLink(e.target.value)} placeholder="https://…" className={inputCls} />
             </label>
           </div>

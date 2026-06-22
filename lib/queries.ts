@@ -134,24 +134,44 @@ export async function marcarSaquePago(id: number) {
 
 export type IngManual = {
   id: number; nome: string; categoria: string | null
-  preco_manual: number | null; preco_manual_link: string | null
+  preco_manual: number | null; custo_fixo: number | null
+  preco_manual_loja: string | null; preco_manual_link: string | null
+  preco_manual_em: string | null
+}
+
+export type PrecoManualHist = {
+  id: number; preco_manual: number | null; custo_fixo: number | null
+  loja: string | null; link: string | null; criado_em: string
 }
 
 export async function getIngredientesManuais(): Promise<IngManual[]> {
   const { data } = await supabase.from('ingredientes')
-    .select('id,nome,categoria,preco_manual,preco_manual_link')
-    .not('preco_manual', 'is', null).order('nome')
+    .select('id,nome,categoria,preco_manual,custo_fixo,preco_manual_loja,preco_manual_link,preco_manual_em')
+    .or('preco_manual.not.is.null,custo_fixo.not.is.null').order('nome')
   return (data as IngManual[]) || []
 }
 
-export async function setPrecoManual(id: number, preco: number, link: string) {
-  return supabase.from('ingredientes')
-    .update({ preco_manual: preco, preco_manual_link: link || null }).eq('id', id)
+export async function setPrecoManual(id: number, campos: {
+  preco_manual?: number | null; custo_fixo?: number | null; loja?: string; link?: string
+}) {
+  return supabase.from('ingredientes').update({
+    preco_manual: campos.preco_manual ?? null,
+    custo_fixo: campos.custo_fixo ?? null,
+    preco_manual_loja: campos.loja || null,
+    preco_manual_link: campos.link || null,
+  }).eq('id', id)
 }
 
 export async function limparPrecoManual(id: number) {
   return supabase.from('ingredientes')
-    .update({ preco_manual: null, preco_manual_link: null }).eq('id', id)
+    .update({ preco_manual: null, custo_fixo: null, preco_manual_loja: null, preco_manual_link: null }).eq('id', id)
+}
+
+export async function getHistoricoManual(ingredienteId: number): Promise<PrecoManualHist[]> {
+  const { data } = await supabase.from('precos_manuais_hist')
+    .select('id,preco_manual,custo_fixo,loja,link,criado_em')
+    .eq('ingrediente_id', ingredienteId).order('criado_em', { ascending: false })
+  return (data as PrecoManualHist[]) || []
 }
 
 export async function recalcularCustos() {
