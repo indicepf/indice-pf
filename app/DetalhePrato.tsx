@@ -52,19 +52,20 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, fator,
                     <td className="py-2">
                       {i.nome}
                       {i.origem === 'manual' && <Etiqueta texto="manual" />}
+                      {i.origem === 'misto' && <Etiqueta texto="manual+online" />}
                       {i.origem === 'fixo' && <Etiqueta texto="fixo" />}
                       {i.origem === 'sem' && <Etiqueta texto="sem preço" />}
                     </td>
                     <td className="py-2 text-right text-muted tnum">{i.qtd_g} g</td>
                     <td className="py-2 text-right tnum">{brl(i.custo * fator)}</td>
-                    <td className="py-2 text-right">
-                      {i.origem === 'online' && (
+                    <td className="py-2 text-right whitespace-nowrap">
+                      {(i.origem === 'online' || i.origem === 'misto') && (
                         <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id })}
                           className="text-xs text-paprika hover:underline">fontes</button>
                       )}
-                      {i.origem === 'manual' && i.link && (
+                      {(i.origem === 'manual' || i.origem === 'misto') && i.link && (
                         <a href={i.link} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-paprika hover:underline">fonte</a>
+                          className="text-xs text-paprika hover:underline ml-2">manual</a>
                       )}
                     </td>
                   </tr>

@@ -69,6 +69,12 @@ def main():
     snap_id, snap_data = alvo["id"], alvo["data"]
     print(f"📅 Calculando custos do snapshot {snap_data} (id={snap_id})")
 
+    # atualiza os preços manuais (mediana das leituras dos últimos 5 dias) antes de calcular
+    try:
+        requests.post(f"{SUPABASE_URL}/rest/v1/rpc/refresh_precos_manuais", headers=H, timeout=30)
+    except requests.RequestException:
+        pass
+
     data_por_snap = {s["id"]: s["data"] for s in snaps}
 
     # ── dados ──────────────────────────────────────────────────────────────
@@ -107,12 +113,16 @@ def main():
             ing = ingredientes.get(ing_id, {})
             cfixo = ing.get("custo_fixo")
             pman  = ing.get("preco_manual")
+            m_g = float(pman) / 1000 if pman is not None else None   # R$/g manual
+            o_g = preco_atual.get(ing_id)                            # R$/g online
             if cfixo is not None:
-                custo += float(cfixo); cobertos += 1            # R$ flat por prato
-            elif pman is not None:
-                custo += float(pman) / 1000 * qtd; cobertos += 1  # R$/kg manual × qtd
-            elif ing_id in preco_atual:
-                custo += preco_atual[ing_id] * qtd; cobertos += 1
+                custo += float(cfixo); cobertos += 1                 # R$ flat por prato
+            elif m_g is not None and o_g is not None:
+                custo += (m_g + o_g) / 2 * qtd; cobertos += 1        # média das duas medianas
+            elif m_g is not None:
+                custo += m_g * qtd; cobertos += 1
+            elif o_g is not None:
+                custo += o_g * qtd; cobertos += 1
             else:
                 fb = fallback(ing_id)
                 if fb is not None:

@@ -17,7 +17,7 @@ export type ItemDetalhe = {
   categoria: string | null
   qtd_g: number
   preco_g: number | null
-  origem: 'online' | 'manual' | 'fixo' | 'sem'
+  origem: 'online' | 'manual' | 'misto' | 'fixo' | 'sem'
   custo: number
   link: string | null   // fonte do preço manual (preco_manual_link)
 }

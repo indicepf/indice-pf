@@ -387,10 +387,34 @@
     O seed (<code>scripts/seed_supabase.py</code>, idempotente, requer service_role) popula
     <code>ingredientes</code>/<code>pratos</code>/<code>receitas</code> a partir da tabela canônica.
   </p>
+
+  <h3>9.8.1 Preço manual por leitura + histórico (migrations 14-16)</h3>
+  <p>
+    O preço manual evoluiu de um valor fixo para um modelo de <strong>leituras com histórico</strong>:
+  </p>
+  <ul>
+    <li>Cada gravação no <code>/admin</code> → aba <strong>Preços manuais</strong> é uma <strong>leitura</strong>
+      (R$/kg) registrada em <code>precos_manuais_hist</code> com <code>criado_em</code> (data/hora).</li>
+    <li>O <strong>preço manual efetivo</strong> = <strong>mediana das leituras dos últimos 5 dias</strong>
+      (fallback: última leitura, para não zerar). Materializado em <code>ingredientes.preco_manual</code> pela função
+      <code>refresh_precos_manuais()</code> (rodada ao salvar, ao recalcular e no início do pipeline).</li>
+    <li><strong>Combinação com a raspagem:</strong> quando o ingrediente tem leitura manual recente <em>e</em> preço
+      online, o preço usado é a <strong>média das duas medianas</strong> (manual 5 dias × online), peso 50/50.
+      Se só um existe, usa esse. Precedência geral: <code>custo_fixo</code> (flat) → blend(manual, online) → nada.</li>
+    <li>Campos por item: <code>preco_manual</code>, <code>custo_fixo</code>, <code>preco_manual_loja</code>,
+      <code>preco_manual_link</code> (fonte, exibida no detalhe do prato), <code>preco_manual_em</code> (última atualização).</li>
+    <li>Funções: <code>salvar_leitura_manual()</code> (registra leitura + recalcula efetivo),
+      <code>refresh_precos_manuais()</code> (janela de 5 dias), <code>recalcular_custos_ultimo_snapshot()</code>
+      (refaz custos + índice; acionável pelo botão "Recalcular custos" no admin).</li>
+    <li>O detalhe do prato marca a origem do preço: <code>online</code>, <code>manual</code>,
+      <code>manual+online</code> (misto), <code>fixo</code> ou <code>sem preço</code>.</li>
+  </ul>
+
   <h3>9.9 Custo por prato (implementado)</h3>
   <p>
     <code>calcular_custos_pratos.py</code> calcula, para um snapshot, o custo de cada um dos 100 pratos:
-    <code>custo = Σ (preço R$/g × qtd da receita) + Σ (custo fixo)</code>. Para ingrediente sem cotação na semana,
+    <code>custo = Σ (preço R$/g × qtd da receita) + Σ (custo fixo)</code>, onde o preço R$/g é o blend manual×online
+    descrito em 9.8.1 (média das medianas quando há ambos). Para ingrediente sem cotação na semana,
     usa a <strong>média dos últimos 3 valores</strong> em snapshots anteriores (fallback); sem histórico, o item não
     contribui (prato parcial). Grava em <code>custos_pratos</code> a cobertura: <code>ingredientes_cobertos</code>
     (cotação fresca + fixo), <code>ingredientes_estimados</code> (fallback) e <code>ingredientes_total</code>.
@@ -423,7 +447,11 @@
   </ul>
   <h3>11.2 Ações pendentes do responsável (no Supabase / Vercel / GitHub)</h3>
   <ul>
-    <li><strong>Rodar as migrações no SQL Editor:</strong> <code>10</code> (endereço/bairro), <code>11</code> (tabela <code>pagamentos</code> + RLS), <code>12</code> (função <code>eh_admin()</code> + policy admin lê perfis). Sem a 11/12 o saque e a fila no <code>/admin</code> não funcionam.</li>
+    <li><strong>Rodar as migrações no SQL Editor (em ordem):</strong> <code>10</code> (endereço/bairro),
+      <code>11</code> (<code>pagamentos</code> + RLS), <code>12</code> (<code>eh_admin()</code> + admin lê perfis),
+      <code>13</code> (corrige 6 pratos com ingrediente errado) + <code>correcao_pratos.sql</code> (preços coletados),
+      <code>14</code> (preço manual no admin + RPC), <code>15</code> (histórico de preço manual + trigger),
+      <code>16</code> (preço manual = mediana 5 dias + blend com online). Sem elas as abas do <code>/admin</code> falham.</li>
     <li><strong>GitHub → Secrets:</strong> adicionar <code>SERPAPI_KEY_2</code> (2ª conta SerpAPI → 500 chamadas/mês). Os secrets <code>SUPABASE_URL/KEY</code> e <code>SERPAPI_KEY</code> já apontam para o projeto novo.</li>
     <li><strong>Próxima coleta automática:</strong> 01/07 (cron dias 1 e 15) — sem disparo manual.</li>
     <li><strong>Decisões tomadas:</strong> CPF em texto puro por ora; SMTP de produção (Resend) e Supabase Pro só ao escalar.</li>

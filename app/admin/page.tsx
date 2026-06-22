@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [addFixo, setAddFixo] = useState(''); const [addLoja, setAddLoja] = useState(''); const [addLink, setAddLink] = useState('')
   const [precoMsg, setPrecoMsg] = useState(''); const [recalcBusy, setRecalcBusy] = useState(false)
   const [hist, setHist] = useState<Record<number, PrecoManualHist[]>>({})
+  const [leituras, setLeituras] = useState<Record<number, string>>({})
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -52,15 +53,18 @@ export default function AdminPage() {
 
   async function salvarManual(m: IngManual) {
     setPrecoMsg('')
-    const preco = parseNum(m.preco_manual), fixo = parseNum(m.custo_fixo)
-    if (!preco && !fixo) { setPrecoMsg(`Informe preço (R$/kg) ou custo fixo para ${m.nome}.`); return }
+    const leitura = parseNum(leituras[m.id]), fixo = parseNum(m.custo_fixo)
+    if (!leitura && !fixo && m.preco_manual == null) {
+      setPrecoMsg(`Informe uma leitura (R$/kg) ou custo fixo para ${m.nome}.`); return
+    }
     const { error } = await setPrecoManual(m.id, {
-      preco_manual: preco, custo_fixo: fixo, loja: m.preco_manual_loja || '', link: m.preco_manual_link || '',
+      preco_manual: leitura, custo_fixo: fixo, loja: m.preco_manual_loja || '', link: m.preco_manual_link || '',
     })
     if (error) { setPrecoMsg(error.message); return }
+    setLeituras(l => ({ ...l, [m.id]: '' }))
     setManuais(await getIngredientesManuais())
-    if (m.id in hist) setHist(h => ({ ...h, [m.id]: [] }))  // recarrega o histórico se estiver aberto
-    setPrecoMsg(`${m.nome} salvo. Lembre de recalcular os custos.`)
+    if (m.id in hist) { const d = await getHistoricoManual(m.id); setHist(h => ({ ...h, [m.id]: d })) }
+    setPrecoMsg(`Leitura registrada para ${m.nome}. Recalcule os custos para aplicar.`)
   }
   async function removerManual(m: IngManual) {
     if (!confirm(`Remover o preço manual de ${m.nome}? Ele volta a ser coletado online.`)) return
@@ -239,10 +243,14 @@ export default function AdminPage() {
                 <p className="font-medium">{m.nome}</p>
                 <span className="text-xs text-muted">{m.categoria || '—'}</span>
               </div>
+              <p className="text-xs text-muted mt-1">
+                Preço usado: <span className="text-ink tnum">{m.preco_manual != null ? `${brl(Number(m.preco_manual))}/kg` : (m.custo_fixo != null ? `${brl(Number(m.custo_fixo))} fixo` : '—')}</span>
+                {m.preco_manual != null && <span> · mediana das leituras dos últimos 5 dias (média 50/50 com o online, se houver)</span>}
+              </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs">
-                <label>Preço (R$/kg)
-                  <input value={m.preco_manual ?? ''} inputMode="decimal"
-                    onChange={e => patchManual(m.id, 'preco_manual', e.target.value)} className={inputCls} />
+                <label>Nova leitura (R$/kg)
+                  <input value={leituras[m.id] ?? ''} inputMode="decimal" placeholder="ex: 38,90"
+                    onChange={e => setLeituras(l => ({ ...l, [m.id]: e.target.value }))} className={inputCls} />
                 </label>
                 <label>Custo fixo (R$/prato)
                   <input value={m.custo_fixo ?? ''} inputMode="decimal" placeholder="simbólico"

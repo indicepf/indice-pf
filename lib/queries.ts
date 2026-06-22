@@ -20,9 +20,12 @@ function montarItens(rec: any[], precoMap: Record<number, number>): ItemDetalhe[
     const ing = r.ingredientes
     const qtd = Number(r.qtd_g)
     let preco_g: number | null = null, origem: ItemDetalhe['origem'] = 'sem', custo = 0, link: string | null = null
-    if (ing.custo_fixo != null)        { origem = 'fixo';   custo = Number(ing.custo_fixo) }
-    else if (ing.preco_manual != null) { origem = 'manual'; preco_g = Number(ing.preco_manual) / 1000; custo = preco_g * qtd; link = ing.preco_manual_link ?? null }
-    else if (precoMap[r.ingrediente_id] != null) { origem = 'online'; preco_g = precoMap[r.ingrediente_id]; custo = preco_g * qtd }
+    const m = ing.preco_manual != null ? Number(ing.preco_manual) / 1000 : null  // R$/g manual
+    const o = precoMap[r.ingrediente_id] ?? null                                  // R$/g online
+    if (ing.custo_fixo != null) { origem = 'fixo'; custo = Number(ing.custo_fixo) }
+    else if (m != null && o != null) { origem = 'misto';  preco_g = (m + o) / 2; custo = preco_g * qtd; link = ing.preco_manual_link ?? null }
+    else if (m != null)              { origem = 'manual'; preco_g = m;           custo = preco_g * qtd; link = ing.preco_manual_link ?? null }
+    else if (o != null)              { origem = 'online'; preco_g = o;           custo = preco_g * qtd }
     return { ingrediente_id: r.ingrediente_id, nome: ing.nome, categoria: ing.categoria, qtd_g: qtd, preco_g, origem, custo, link }
   }).sort((a, b) => b.custo - a.custo)
 }
@@ -151,15 +154,17 @@ export async function getIngredientesManuais(): Promise<IngManual[]> {
   return (data as IngManual[]) || []
 }
 
+// registra uma LEITURA manual (R$/kg) e recalcula o preço efetivo (mediana 5 dias).
 export async function setPrecoManual(id: number, campos: {
   preco_manual?: number | null; custo_fixo?: number | null; loja?: string; link?: string
 }) {
-  return supabase.from('ingredientes').update({
-    preco_manual: campos.preco_manual ?? null,
-    custo_fixo: campos.custo_fixo ?? null,
-    preco_manual_loja: campos.loja || null,
-    preco_manual_link: campos.link || null,
-  }).eq('id', id)
+  return supabase.rpc('salvar_leitura_manual', {
+    p_id: id,
+    p_preco: campos.preco_manual ?? null,
+    p_fixo: campos.custo_fixo ?? null,
+    p_loja: campos.loja || null,
+    p_link: campos.link || null,
+  })
 }
 
 export async function limparPrecoManual(id: number) {
