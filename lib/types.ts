@@ -36,3 +36,22 @@ export type Contribuicao = {
   criado_em: string
   ingredientes: { nome: string } | null
 }
+
+export type ContribuicaoFull = {
+  id: number
+  user_id: string
+  ingrediente_id: number | null
+  produto: string | null
+  preco: number
+  peso_g: number | null
+  tipo_loja: string | null
+  mercado: string | null
+  cidade: string | null
+  lat: number | null
+  lng: number | null
+  foto_url: string | null
+  foto_etiqueta_url: string | null
+  status: string
+  criado_em: string
+  ingredientes: { nome: string } | null
+}

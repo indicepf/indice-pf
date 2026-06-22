@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { getProfile, getMinhasContribuicoes } from '@/lib/queries'
+import { getProfile, getMinhasContribuicoes, excluirContribuicao } from '@/lib/queries'
 import { REGIOES, mascararTel, telValido } from '@/lib/format'
 import type { Profile, Contribuicao } from '@/lib/types'
 
@@ -49,6 +49,12 @@ export default function PerfilPage() {
     setSalvando(false)
     if (error) { setErro(error.message); return }
     setMsg('Perfil salvo.')
+  }
+
+  async function deletar(id: number) {
+    if (!confirm('Excluir esta contribuição?')) return
+    await excluirContribuicao(id)
+    setContribs(prev => prev ? prev.filter(c => c.id !== id) : prev)
   }
 
   if (userId === undefined) {
@@ -138,6 +144,10 @@ export default function PerfilPage() {
                       <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${s.cls}`}>
                         {s.txt}
                       </span>
+                      {i.status === 'pendente' && (
+                        <button onClick={() => deletar(i.id)}
+                          className="text-xs text-muted hover:text-red-600 shrink-0">excluir</button>
+                      )}
                     </div>
                   )
                 })}

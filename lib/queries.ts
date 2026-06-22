@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Snapshot, DishCost, ItemDetalhe, Fonte, Ing, Profile, Contribuicao } from './types'
+import type { Snapshot, DishCost, ItemDetalhe, Fonte, Ing, Profile, Contribuicao, ContribuicaoFull } from './types'
 
 export async function getLatestSnapshot(): Promise<Snapshot | null> {
   const { data } = await supabase.from('snapshots')
@@ -58,4 +58,24 @@ export async function getMinhasContribuicoes(uid: string): Promise<Contribuicao[
     .select('id,produto,preco,status,foto_url,criado_em,ingredientes(nome)')
     .eq('user_id', uid).order('criado_em', { ascending: false })
   return (data as unknown as Contribuicao[]) || []
+}
+
+export async function isAdmin(uid: string): Promise<boolean> {
+  const { data } = await supabase.from('profiles').select('is_admin').eq('id', uid).single()
+  return !!(data as any)?.is_admin
+}
+
+export async function getContribuicoes(status: string): Promise<ContribuicaoFull[]> {
+  const { data } = await supabase.from('contribuicoes')
+    .select('id,user_id,ingrediente_id,produto,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)')
+    .eq('status', status).order('criado_em', { ascending: true })
+  return (data as unknown as ContribuicaoFull[]) || []
+}
+
+export async function moderarContribuicao(id: number, campos: Record<string, any>) {
+  return supabase.from('contribuicoes').update(campos).eq('id', id)
+}
+
+export async function excluirContribuicao(id: number) {
+  return supabase.from('contribuicoes').delete().eq('id', id)
 }

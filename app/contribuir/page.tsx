@@ -8,6 +8,13 @@ import type { Ing } from '@/lib/types'
 
 const TIPOS_LOJA = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência']
 
+// hash do conteúdo da imagem — impede reenvio da MESMA foto pelo mesmo usuário
+async function hashArquivo(f: File) {
+  const buf = await f.arrayBuffer()
+  const h = await crypto.subtle.digest('SHA-256', buf)
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 export default function ContribuirPage() {
   const router = useRouter()
   const [userId, setUserId] = useState<string | null | undefined>(undefined) // undefined = carregando
@@ -75,6 +82,11 @@ export default function ContribuirPage() {
     if (!tipoLoja) { setErro('Selecione o tipo de loja.'); return }
     setBusy(true)
     try {
+      const foto_hash = await hashArquivo(fotoProduto)
+      const { data: dup } = await supabase.from('contribuicoes')
+        .select('id').eq('user_id', userId!).eq('foto_hash', foto_hash).limit(1)
+      if (dup && dup.length) { setErro('Você já enviou esta mesma foto.'); setBusy(false); return }
+
       const foto_url = await uploadFoto(fotoProduto, 'produto')
       const foto_etiqueta_url = fotoEtiqueta ? await uploadFoto(fotoEtiqueta, 'etiqueta') : null
       const { error } = await supabase.from('contribuicoes').insert({
@@ -83,12 +95,13 @@ export default function ContribuirPage() {
         peso_g: pesoG ? Number(pesoG.replace(',', '.')) : null, tipo_loja: tipoLoja,
         mercado: mercado.trim() || null, cidade: cidade.trim() || null,
         lat: coord?.lat ?? null, lng: coord?.lng ?? null,
-        foto_url, foto_etiqueta_url, status: 'pendente',
+        foto_url, foto_etiqueta_url, foto_hash, status: 'pendente',
       })
       if (error) throw error
       setOk(true); window.scrollTo(0, 0)
     } catch (e: any) {
-      setErro(e?.message || 'Falha ao enviar. Tente novamente.')
+      const msg = e?.message || ''
+      setErro(/duplicate|unique/i.test(msg) ? 'Você já enviou esta mesma foto.' : (msg || 'Falha ao enviar. Tente novamente.'))
     } finally { setBusy(false) }
   }
 
