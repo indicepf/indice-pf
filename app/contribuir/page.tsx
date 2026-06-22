@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getIngredientes } from '@/lib/queries'
@@ -27,7 +27,7 @@ export default function ContribuirPage() {
   const [busy, setBusy] = useState(false)
   const [erro, setErro] = useState('')
   const [ok, setOk] = useState(false)
-  const geoTry = useRef(false)
+  const [geoMsg, setGeoMsg] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -40,12 +40,16 @@ export default function ContribuirPage() {
   useEffect(() => { getIngredientes().then(setIngs) }, [])
 
   function pegarLocal() {
-    geoTry.current = true
-    if (!navigator.geolocation) { setErro('Geolocalização não disponível.'); return }
+    setGeoMsg('')
+    if (!navigator.geolocation) { setGeoMsg('Geolocalização não disponível neste navegador.'); return }
     navigator.geolocation.getCurrentPosition(
-      pos => setCoord({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6) }),
-      () => setErro('Não foi possível obter sua localização (permissão negada).'),
-      { enableHighAccuracy: true, timeout: 8000 },
+      pos => { setCoord({ lat: +pos.coords.latitude.toFixed(6), lng: +pos.coords.longitude.toFixed(6) }); setGeoMsg('') },
+      (e) => setGeoMsg(
+        e.code === 1 ? 'Permissão negada — habilite a localização para este site no navegador.'
+        : e.code === 2 ? 'Localização indisponível agora. Tente de novo.'
+        : 'Tempo esgotado ao localizar. Toque de novo (a localização é opcional).',
+      ),
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
     )
   }
 
@@ -168,9 +172,10 @@ export default function ContribuirPage() {
                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => escolherFoto(e, 'etiqueta')} />
               </label>
               <button type="button" onClick={pegarLocal} className="text-paprika hover:underline ml-auto">
-                {coord ? `✓ local registrado` : '+ usar minha localização'}
+                {coord ? `✓ local registrado` : '+ usar minha localização (opcional)'}
               </button>
             </div>
+            {geoMsg && <p className="text-xs text-amber-700 mt-2">{geoMsg}</p>}
 
             {erro && <p className="text-sm text-red-600 mt-4">{erro}</p>}
             <button disabled={busy} onClick={enviar} className={btnFull}>
