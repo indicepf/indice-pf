@@ -27,3 +27,22 @@ export function mascararTel(v: string) {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
 }
 export const telValido = (v: string) => v.replace(/\D/g, '').length >= 10
+
+// ─── Recompensa ────────────────────────────────────────────────────────────
+export const VALOR_POR_FOTO = 0.01   // R$ por contribuição aprovada
+export const SAQUE_MINIMO = 10       // R$ mínimo para solicitar saque
+
+export function mascararCpf(v: string) {
+  return v.replace(/\D/g, '').slice(0, 11)
+    .replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+export function cpfValido(v: string) {
+  const c = v.replace(/\D/g, '')
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false
+  let s = 0; for (let i = 0; i < 9; i++) s += +c[i] * (10 - i)
+  let d = (s * 10) % 11; if (d === 10) d = 0; if (d !== +c[9]) return false
+  s = 0; for (let i = 0; i < 10; i++) s += +c[i] * (11 - i)
+  d = (s * 10) % 11; if (d === 10) d = 0
+  return d === +c[10]
+}

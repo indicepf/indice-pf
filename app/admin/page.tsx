@@ -3,15 +3,19 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { isAdmin, getContribuicoes, getIngredientes, moderarContribuicao } from '@/lib/queries'
-import { brl } from '@/lib/format'
+import { isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, getSaques, marcarSaquePago } from '@/lib/queries'
+import { brl, mascararCpf, VALOR_POR_FOTO } from '@/lib/format'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
+
+type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string }
 
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
+  const [aba, setAba] = useState<'mod' | 'saques'>('mod')
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [ings, setIngs] = useState<Ing[]>([])
+  const [saques, setSaques] = useState<Saque[]>([])
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -20,9 +24,16 @@ export default function AdminPage() {
       if (!(await isAdmin(u.id))) { setEstado('negado'); return }
       setIngs(await getIngredientes())
       setItens(await getContribuicoes('pendente'))
+      setSaques(await getSaques('solicitado'))
       setEstado('ok')
     })
   }, [router])
+
+  async function pagar(s: Saque) {
+    if (!confirm(`Confirmar pagamento de ${brl(Number(s.valor))} via PIX (${s.chave_pix})?`)) return
+    await marcarSaquePago(s.id)
+    setSaques(prev => prev.filter(x => x.id !== s.id))
+  }
 
   async function moderar(c: ContribuicaoFull, status: 'aprovada' | 'rejeitada') {
     await moderarContribuicao(c.id, {
@@ -54,13 +65,21 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen">
       <header className="border-b border-line sticky top-0 bg-cream/90 backdrop-blur z-10">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-3">
+        <div className="max-w-3xl mx-auto px-6 pt-4 flex items-center gap-3">
           <button onClick={() => router.push('/')} className="text-sm text-muted hover:text-ink">← voltar</button>
-          <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Moderação</h1>
-          <span className="text-xs text-muted ml-auto">{itens.length} pendente{itens.length !== 1 ? 's' : ''}</span>
+          <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
+        </div>
+        <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3">
+          {([['mod', `Moderação (${itens.length})`], ['saques', `Saques (${saques.length})`]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setAba(k)}
+              className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+              {label}
+            </button>
+          ))}
         </div>
       </header>
 
+      {aba === 'mod' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
         {!itens.length && <p className="text-sm text-muted text-center py-10">Nenhuma contribuição pendente.</p>}
         {itens.map(c => (
@@ -98,12 +117,34 @@ export default function AdminPage() {
                   className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition">Aprovar</button>
                 <button onClick={() => moderar(c, 'rejeitada')}
                   className="text-sm border border-line text-muted px-4 py-1.5 rounded-md hover:bg-cream transition">Rejeitar</button>
-                <span className="text-xs text-muted ml-auto self-center">vale {brl(0.01)}</span>
+                <span className="text-xs text-muted ml-auto self-center">vale {brl(VALOR_POR_FOTO)}</span>
               </div>
             </div>
           </div>
         ))}
       </div>
+      ) : (
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-3">
+        {!saques.length && <p className="text-sm text-muted text-center py-10">Nenhuma solicitação de saque.</p>}
+        {saques.map(s => (
+          <div key={s.id} className="border border-line rounded-lg bg-panel p-4 flex items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="font-[family-name:var(--font-serif)] text-xl tnum">{brl(Number(s.valor))}</p>
+              <p className="text-xs text-muted mt-0.5 truncate">
+                PIX: {s.chave_pix || '—'} · CPF: {s.cpf ? mascararCpf(s.cpf) : '—'}
+              </p>
+              <p className="text-[0.7rem] text-muted mt-0.5">
+                solicitado em {new Date(s.criado_em).toLocaleString('pt-BR')}
+              </p>
+            </div>
+            <button onClick={() => pagar(s)}
+              className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition shrink-0">
+              Marcar como pago
+            </button>
+          </div>
+        ))}
+      </div>
+      )}
     </main>
   )
 }

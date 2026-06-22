@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/lib/supabase'
-import { getProfile, getMinhasContribuicoes, excluirContribuicao } from '@/lib/queries'
-import { REGIOES, mascararTel, telValido } from '@/lib/format'
+import {
+  getProfile, getMinhasContribuicoes, excluirContribuicao,
+  getRecompensa, getDadosRecompensa, salvarDadosRecompensa, solicitarSaque,
+} from '@/lib/queries'
+import { REGIOES, mascararTel, telValido, mascararCpf, cpfValido, brl, SAQUE_MINIMO } from '@/lib/format'
 import type { Profile, Contribuicao } from '@/lib/types'
 
 const MapaLocal = dynamic(() => import('../MapaLocal'), {
@@ -31,6 +34,13 @@ export default function PerfilPage() {
   const [msg, setMsg] = useState('')
   const [erro, setErro] = useState('')
   const [contribs, setContribs] = useState<Contribuicao[] | null>(null)
+  const [rec, setRec] = useState<{ aprovadas: number; ganho: number; disponivel: number } | null>(null)
+  const [cpf, setCpf] = useState('')
+  const [chavePix, setChavePix] = useState('')
+  const [consent, setConsent] = useState(false)
+  const [recMsg, setRecMsg] = useState('')
+  const [recErro, setRecErro] = useState('')
+  const [recBusy, setRecBusy] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -41,8 +51,40 @@ export default function PerfilPage() {
       setProfile(p)
       setNome(p?.nome ?? ''); setTel(p?.telefone ?? ''); setRegiao(p?.regiao ?? '')
       setContribs(await getMinhasContribuicoes(u.id))
+      setRec(await getRecompensa(u.id))
+      const dr = await getDadosRecompensa(u.id)
+      if (dr) {
+        if (dr.cpf) { setCpf(mascararCpf(dr.cpf)); setConsent(true) }
+        setChavePix(dr.chave_pix ?? '')
+      }
     })
   }, [router])
+
+  async function salvarRecDados() {
+    setRecErro(''); setRecMsg('')
+    if (!cpfValido(cpf)) { setRecErro('CPF inválido.'); return }
+    if (!chavePix.trim()) { setRecErro('Informe sua chave PIX.'); return }
+    if (!consent) { setRecErro('É preciso autorizar o uso do CPF para pagamento.'); return }
+    setRecBusy(true)
+    const { error } = await salvarDadosRecompensa(userId!, cpf.replace(/\D/g, ''), chavePix.trim())
+    setRecBusy(false)
+    if (error) { setRecErro(error.message); return }
+    setRecMsg('Dados de pagamento salvos.')
+  }
+
+  async function pedirSaque() {
+    setRecErro(''); setRecMsg('')
+    if (!rec || rec.disponivel < SAQUE_MINIMO) return
+    if (!cpfValido(cpf) || !chavePix.trim() || !consent) {
+      setRecErro('Cadastre e salve CPF e chave PIX antes de solicitar o saque.'); return
+    }
+    setRecBusy(true)
+    const { error } = await solicitarSaque(userId!, rec.disponivel, cpf.replace(/\D/g, ''), chavePix.trim())
+    setRecBusy(false)
+    if (error) { setRecErro(error.message); return }
+    setRecMsg('Saque solicitado. O pagamento será feito no PIX informado em breve.')
+    setRec(await getRecompensa(userId!))
+  }
 
   async function salvar() {
     setErro(''); setMsg('')
@@ -114,11 +156,52 @@ export default function PerfilPage() {
 
         {/* Recompensas (Frente C fase 2) */}
         <section>
-          <h2 className="font-[family-name:var(--font-serif)] text-lg mb-2">Recompensas</h2>
-          <p className="text-sm text-muted leading-relaxed">
-            Contribuições aprovadas geram recompensa via PIX. A configuração de recompensa (CPF e chave PIX)
-            será habilitada em breve, quando você tiver contribuições aprovadas.
-          </p>
+          <h2 className="font-[family-name:var(--font-serif)] text-lg mb-3">Recompensas</h2>
+          {!rec ? <p className="text-sm text-muted">Carregando…</p> : (
+            <>
+              <div className="border border-line rounded-md bg-panel p-4 mb-4">
+                <p className="text-xs text-muted">Saldo disponível</p>
+                <p className="font-[family-name:var(--font-serif)] text-3xl tnum mt-0.5">{brl(rec.disponivel)}</p>
+                <p className="text-xs text-muted mt-1">
+                  {rec.aprovadas} {rec.aprovadas === 1 ? 'contribuição aprovada' : 'contribuições aprovadas'} · {brl(rec.ganho)} acumulados
+                </p>
+                {rec.disponivel < SAQUE_MINIMO && (
+                  <p className="text-xs text-muted mt-2">
+                    Faltam {brl(SAQUE_MINIMO - rec.disponivel)} para atingir o saque mínimo de {brl(SAQUE_MINIMO)}.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-muted">CPF (para pagamento e nota fiscal)</label>
+                  <input value={cpf} onChange={e => setCpf(mascararCpf(e.target.value))}
+                    placeholder="000.000.000-00" inputMode="numeric" className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted">Chave PIX</label>
+                  <input value={chavePix} onChange={e => setChavePix(e.target.value)}
+                    placeholder="CPF, e-mail, telefone ou aleatória" className={inputCls} />
+                </div>
+                <label className="flex items-start gap-2 text-xs text-muted leading-relaxed">
+                  <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
+                    className="mt-0.5 accent-paprika" />
+                  Autorizo o uso do meu CPF e chave PIX exclusivamente para o pagamento das recompensas,
+                  conforme a Lei Geral de Proteção de Dados (LGPD).
+                </label>
+                {recErro && <p className="text-xs text-red-600">{recErro}</p>}
+                {recMsg && <p className="text-xs text-olive">{recMsg}</p>}
+                <div className="flex items-center gap-3">
+                  <button disabled={recBusy} onClick={salvarRecDados} className={btnGhostCls}>
+                    {recBusy ? 'Salvando…' : 'Salvar dados'}
+                  </button>
+                  <button disabled={recBusy || rec.disponivel < SAQUE_MINIMO} onClick={pedirSaque} className={btnCls}>
+                    Solicitar saque
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </section>
 
         {/* Contribuições */}
@@ -173,3 +256,4 @@ export default function PerfilPage() {
 
 const inputCls = 'w-full bg-panel border border-line rounded-md px-3 py-2 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
 const btnCls = 'bg-paprika text-white rounded-md px-4 py-2 text-sm font-medium hover:brightness-95 transition disabled:opacity-60'
+const btnGhostCls = 'border border-line text-ink rounded-md px-4 py-2 text-sm font-medium hover:bg-cream transition disabled:opacity-60'

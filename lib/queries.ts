@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { VALOR_POR_FOTO } from './format'
 import type { Snapshot, DishCost, ItemDetalhe, Fonte, Ing, Profile, Contribuicao, ContribuicaoFull } from './types'
 
 export async function getLatestSnapshot(): Promise<Snapshot | null> {
@@ -78,4 +79,39 @@ export async function moderarContribuicao(id: number, campos: Record<string, any
 
 export async function excluirContribuicao(id: number) {
   return supabase.from('contribuicoes').delete().eq('id', id)
+}
+
+export async function getRecompensa(uid: string) {
+  const { count } = await supabase.from('contribuicoes')
+    .select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('status', 'aprovada')
+  const { data: pags } = await supabase.from('pagamentos').select('valor,status').eq('user_id', uid)
+  const aprovadas = count || 0
+  const ganho = aprovadas * VALOR_POR_FOTO
+  const reservado = (pags || []).filter((p: any) => p.status !== 'rejeitada').reduce((s: number, p: any) => s + Number(p.valor), 0)
+  return { aprovadas, ganho, disponivel: Math.max(0, ganho - reservado) }
+}
+
+export async function getDadosRecompensa(uid: string) {
+  const { data } = await supabase.from('profiles').select('cpf,chave_pix').eq('id', uid).single()
+  return data as { cpf: string | null; chave_pix: string | null } | null
+}
+
+export async function salvarDadosRecompensa(uid: string, cpf: string, chave_pix: string) {
+  return supabase.from('profiles')
+    .update({ cpf, chave_pix, consentimento_cpf_em: new Date().toISOString() }).eq('id', uid)
+}
+
+export async function solicitarSaque(uid: string, valor: number, cpf: string, chave_pix: string) {
+  return supabase.from('pagamentos').insert({ user_id: uid, valor, cpf, chave_pix, status: 'solicitado' })
+}
+
+export async function getSaques(status: string) {
+  const { data } = await supabase.from('pagamentos')
+    .select('id,user_id,valor,cpf,chave_pix,status,criado_em')
+    .eq('status', status).order('criado_em', { ascending: true })
+  return (data as any[]) || []
+}
+
+export async function marcarSaquePago(id: number) {
+  return supabase.from('pagamentos').update({ status: 'pago', pago_em: new Date().toISOString() }).eq('id', id)
 }
