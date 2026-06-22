@@ -45,6 +45,7 @@
       <li><a href="#dados">Modelo de dados a criar</a></li>
       <li><a href="#fases">Ordem de execução</a></li>
       <li><a href="#proximos">Próximos passos (continuar amanhã)</a></li>
+      <li><a href="#institucional">Lançamento institucional e marca (TODO)</a></li>
     </ol>
   </div>
 
@@ -189,10 +190,52 @@
 
   <h3>9.1 Configuração pendente do usuário</h3>
   <ul>
-    <li>Rodar no Supabase: <code>supabase_migration_10.sql</code> (endereço/bairro), <code>11</code> (pagamentos), <code>12</code> (admin lê perfis).</li>
-    <li>GitHub → Secrets: adicionar <code>SERPAPI_KEY_2</code> (2ª conta SerpAPI → 500 chamadas/mês).</li>
-    <li>Próxima coleta automática: <strong>01/07</strong> (cron dias 1 e 15). Sem disparo manual.</li>
-    <li>Decisões já tomadas: CPF em texto puro por ora (ok); SMTP de produção só ao escalar.</li>
+    <li>Rodar no Supabase, em ordem: <code>10</code> (endereço/bairro), <code>11</code> (pagamentos), <code>12</code> (admin lê perfis),
+      <code>13</code> + <code>correcao_pratos.sql</code> (6 pratos corrigidos), <code>14</code> (preço manual no admin),
+      <code>15</code> (histórico de preço manual), <code>16</code> (mediana 5 dias + blend com online).</li>
+    <li>GitHub → Secrets: <code>SERPAPI_KEY_2</code> (2ª conta SerpAPI → 500 chamadas/mês).</li>
+    <li>Coleta automática: cron dias 1 e 15. Sem disparo manual.</li>
+    <li>Decisões já tomadas: CPF em texto puro por ora; SMTP de produção só ao escalar.</li>
+  </ul>
+
+  <h2 id="institucional">10. Lançamento institucional e marca (TODO)</h2>
+  <p style="color:#555; font-size:0.9rem">
+    Backlog para transformar o projeto em um índice público com credibilidade, identidade e proteção legal.
+    Itens de negócio/marketing/jurídico — independentes do produto técnico.
+  </p>
+  <ol>
+    <li><strong>Domínio próprio.</strong> Comprar domínio (ex: <code>indicepf.com.br</code>) e apontar para a Vercel
+      (DNS + domínio no projeto). Hoje roda no subdomínio <code>*.vercel.app</code>.</li>
+    <li><strong>Header e rodapé institucionais.</strong> Cabeçalho/rodapé fixos com nome do índice, tagline, ano,
+      “uma iniciativa de …”, links institucionais (autores, contato, metodologia, blog) e crédito de fonte dos dados.</li>
+    <li><strong>Página de autores.</strong> <code>/autores</code> (ou “Quem somos”) com foto, bio e papel de cada autor;
+      reforça autoridade/credibilidade para imprensa e parceiros.</li>
+    <li><strong>Proteção legal — atenção à terminologia.</strong> No Brasil, metodologia/índice em geral
+      <em>não</em> é patenteável. O que se protege é: <strong>registro de marca</strong> (nome + logo no
+      <strong>INPI</strong>), <strong>direito autoral</strong> sobre textos/relatórios e <strong>proteção da base
+      de dados</strong>. Recomendado: registrar a marca no INPI e exibir “marca registrada®/™”
+      (não “nº de patente”). Confirmar com advogado de PI antes de divulgar qualquer número.</li>
+    <li><strong>Blog com SEO desde o início.</strong> <code>/blog</code> + posts; metadados por página
+      (<code>title</code>, <code>description</code>, Open Graph/Twitter), <code>sitemap.xml</code>, <code>robots.txt</code>,
+      URLs semânticas, dados estruturados (JSON-LD <em>Article</em>/<em>Dataset</em>), imagem de compartilhamento.</li>
+    <li><strong>Páginas legais e de contato.</strong> <code>/contato</code>, <strong>Política de Privacidade (LGPD)</strong>,
+      <strong>Política de Cookies</strong> + banner de consentimento, <strong>Termos de Uso</strong> e
+      <strong>Termos de Uso dos Dados</strong> (importante porque os dados serão licenciados/vendidos).</li>
+    <li><strong>Redes sociais.</strong> Reservar os perfis (Instagram, X, LinkedIn) com o mesmo nome; links no rodapé;
+      cartões de compartilhamento automáticos do índice/posts.</li>
+  </ol>
+
+  <h3>10.1 Sugestões adicionais (item 8)</h3>
+  <ul>
+    <li><strong>Página de Metodologia pública</strong> — como o índice é calculado (raspagem, mediana, blend manual,
+      crowdsourcing). É o que dá credibilidade e gera citação na imprensa.</li>
+    <li><strong>Kit de imprensa</strong> — release, gráfico do índice em alta resolução, logo, contatos. Facilita virar notícia.</li>
+    <li><strong>Analytics + Search Console</strong> — Plausible/GA4 e Google Search Console para medir tráfego e indexação.</li>
+    <li><strong>Newsletter</strong> — captura de e-mail para enviar o índice a cada coleta (recorrência + base para imprensa/B2B).</li>
+    <li><strong>Produto de dados</strong> — área/relatórios pagos e/ou API licenciada (liga com o loop de calibração da Frente C).</li>
+    <li><strong>Backup off-site automático</strong> — exportar snapshots/preços a cada coleta (proteção do ativo de dados).</li>
+    <li><strong>Confiabilidade</strong> — monitoramento de erros (Sentry) e de disponibilidade; acessibilidade (WCAG) básica.</li>
+    <li><strong>Changelog/versão da metodologia</strong> — registrar mudanças de cálculo com data (transparência para quem compra os dados).</li>
   </ul>
 
   <footer>Roadmap v1.0 — Índice PF. Documento vivo; atualizado a cada fase concluída.</footer>
