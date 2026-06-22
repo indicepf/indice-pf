@@ -60,7 +60,8 @@ export default function MapaBrasil({ regionais, sel, onSel }: {
       <ComposableMap projection="geoMercator"
         projectionConfig={{ center: BR_CENTRO, scale: 620 }}
         width={440} height={460} style={{ width: '100%', height: 'auto', background: 'transparent' }}>
-        <ZoomableGroup center={center} zoom={zoom} minZoom={1} maxZoom={4}>
+        <ZoomableGroup center={center} zoom={zoom} minZoom={1} maxZoom={4}
+          filterZoomEvent={() => false}>
           <Geographies geography={REGIOES_FC as object}>
             {({ geographies }: { geographies: any[] }) =>
               geographies.map((geo) => {
