@@ -56,13 +56,13 @@ export async function getAllFontes(snapshotId: number): Promise<Record<number, F
   return out
 }
 
-export type FonteManual = { preco_manual: number | null; loja: string | null; link: string | null; criado_em: string }
+export type FonteManual = { preco_manual: number | null; loja: string | null; link: string | null; criado_em: string; origem: string | null }
 
-// Leituras manuais dos últimos 5 dias (as que alimentam a mediana), agrupadas por ingrediente.
+// Leituras (campo + manuais) dos últimos 5 dias (as que alimentam a mediana), agrupadas por ingrediente.
 export async function getAllFontesManuais(): Promise<Record<number, FonteManual[]>> {
   const desde = new Date(Date.now() - 5 * 86400000).toISOString()
   const { data } = await supabase.from('precos_manuais_hist')
-    .select('ingrediente_id,preco_manual,loja,link,criado_em')
+    .select('ingrediente_id,preco_manual,loja,link,criado_em,origem')
     .gte('criado_em', desde).not('preco_manual', 'is', null)
     .order('criado_em', { ascending: false })
   const out: Record<number, FonteManual[]> = {}
@@ -71,7 +71,7 @@ export async function getAllFontesManuais(): Promise<Record<number, FonteManual[
 }
 
 export async function getIngredientes(): Promise<Ing[]> {
-  const { data } = await supabase.from('ingredientes').select('id,nome,categoria').order('nome')
+  const { data } = await supabase.from('ingredientes').select('id,nome,categoria,unidade,peso_ref_g').order('nome')
   return (data as Ing[]) || []
 }
 
@@ -101,6 +101,16 @@ export async function getContribuicoes(status: string): Promise<ContribuicaoFull
 
 export async function moderarContribuicao(id: number, campos: Record<string, any>) {
   return supabase.from('contribuicoes').update(campos).eq('id', id)
+}
+
+// aprova a contribuição E registra a leitura de campo que calibra o índice
+// (vira uma leitura humana no mesmo balde das leituras manuais — média 50/50 com o online).
+export async function aprovarContribuicao(
+  id: number, ingrediente_id: number | null, preco: number | null, peso_g: number | null,
+) {
+  return supabase.rpc('aprovar_contribuicao', {
+    p_id: id, p_ingrediente: ingrediente_id, p_preco: preco, p_peso: peso_g,
+  })
 }
 
 export async function excluirContribuicao(id: number) {

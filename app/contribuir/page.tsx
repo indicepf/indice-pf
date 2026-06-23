@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getIngredientes } from '@/lib/queries'
+import { rotuloQtd, exemploQtd } from '@/lib/format'
 import type { Ing } from '@/lib/types'
 
 const TIPOS_LOJA = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência']
@@ -13,6 +14,26 @@ async function hashArquivo(f: File) {
   const buf = await f.arrayBuffer()
   const h = await crypto.subtle.digest('SHA-256', buf)
   return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// reduz a foto antes do upload: fotos de celular têm vários MB e deixam o envio lento.
+// Redimensiona para no máx. 1600px no maior lado e recomprime em JPEG ~80%.
+async function comprimirImagem(file: File, maxLado = 1600, q = 0.8): Promise<File> {
+  if (!file.type.startsWith('image/')) return file
+  try {
+    const bmp = await createImageBitmap(file)
+    const escala = Math.min(1, maxLado / Math.max(bmp.width, bmp.height))
+    const w = Math.round(bmp.width * escala), h = Math.round(bmp.height * escala)
+    const canvas = document.createElement('canvas')
+    canvas.width = w; canvas.height = h
+    canvas.getContext('2d')!.drawImage(bmp, 0, 0, w, h)
+    bmp.close()
+    const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', q))
+    if (!blob || blob.size >= file.size) return file  // não enviar algo maior que o original
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' })
+  } catch {
+    return file
+  }
 }
 
 export default function ContribuirPage() {
@@ -32,7 +53,6 @@ export default function ContribuirPage() {
   const [endereco, setEndereco] = useState('')
   const [coord, setCoord] = useState<{ lat: number; lng: number } | null>(null)
   const [fotoProduto, setFotoProduto] = useState<File | null>(null)
-  const [fotoEtiqueta, setFotoEtiqueta] = useState<File | null>(null)
   const [preview, setPreview] = useState('')
   const [busy, setBusy] = useState(false)
   const [erro, setErro] = useState('')
@@ -76,10 +96,10 @@ export default function ContribuirPage() {
     )
   }
 
-  function escolherFoto(e: React.ChangeEvent<HTMLInputElement>, qual: 'produto' | 'etiqueta') {
+  async function escolherFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return
-    if (qual === 'produto') { setFotoProduto(f); setPreview(URL.createObjectURL(f)) }
-    else setFotoEtiqueta(f)
+    const c = await comprimirImagem(f)
+    setFotoProduto(c); setPreview(URL.createObjectURL(c))
   }
 
   async function uploadFoto(file: File, sufixo: string) {
@@ -92,11 +112,9 @@ export default function ContribuirPage() {
 
   async function enviar() {
     setErro('')
-    if (!fotoProduto) { setErro('Adicione a foto do produto com o preço.'); return }
-    if (!ingredienteId) { setErro('Selecione o ingrediente correspondente.'); return }
-    if (!preco || isNaN(Number(preco.replace(',', '.')))) { setErro('Informe um preço válido.'); return }
-    if (!tipoLoja) { setErro('Selecione o tipo de loja.'); return }
+    if (!fotoProduto) { setErro('Adicione a foto do produto.'); return }
     if (!coord) { setErro('Registre sua localização — ela é obrigatória para validar onde o preço foi coletado.'); return }
+    if (preco && isNaN(Number(preco.replace(',', '.')))) { setErro('Preço inválido — corrija ou deixe em branco.'); return }
     setBusy(true)
     try {
       const foto_hash = await hashArquivo(fotoProduto)
@@ -105,15 +123,14 @@ export default function ContribuirPage() {
       if (dup && dup.length) { setErro('Você já enviou esta mesma foto.'); setBusy(false); return }
 
       const foto_url = await uploadFoto(fotoProduto, 'produto')
-      const foto_etiqueta_url = fotoEtiqueta ? await uploadFoto(fotoEtiqueta, 'etiqueta') : null
       const { error } = await supabase.from('contribuicoes').insert({
-        user_id: userId, ingrediente_id: Number(ingredienteId),
-        produto: produto.trim() || null, preco: Number(preco.replace(',', '.')),
-        peso_g: pesoG ? Number(pesoG.replace(',', '.')) : null, tipo_loja: tipoLoja,
+        user_id: userId, ingrediente_id: ingredienteId ? Number(ingredienteId) : null,
+        produto: produto.trim() || null, preco: preco ? Number(preco.replace(',', '.')) : null,
+        peso_g: pesoG ? Number(pesoG.replace(',', '.')) : null, tipo_loja: tipoLoja || null,
         mercado: mercado.trim() || null, cidade: cidade.trim() || null,
         lat: coord?.lat ?? null, lng: coord?.lng ?? null,
         uf: uf || null, bairro: bairro || null, endereco: endereco || null,
-        foto_url, foto_etiqueta_url, foto_hash, status: 'pendente',
+        foto_url, foto_hash, status: 'pendente',
       })
       if (error) throw error
       setOk(true); window.scrollTo(0, 0)
@@ -127,6 +144,8 @@ export default function ContribuirPage() {
     return <main className="min-h-screen grid place-items-center text-muted text-sm">Carregando…</main>
   }
   if (!userId) return null
+
+  const unidadeSel = ings.find(i => String(i.id) === ingredienteId)?.unidade ?? null
 
   return (
     <main className="min-h-screen">
@@ -155,7 +174,7 @@ export default function ContribuirPage() {
           </div>
         ) : (
           <>
-            <p className="text-sm text-muted mb-4">Fotografe o produto com a etiqueta de preço visível.</p>
+            <p className="text-sm text-muted mb-4">Fotografe o produto com a etiqueta de preço visível. Só a foto e a localização são obrigatórias — os demais campos ajudam, mas são opcionais.</p>
 
             <label className="block">
               <div className="aspect-[4/3] rounded-lg border-2 border-dashed border-line bg-panel grid place-items-center overflow-hidden cursor-pointer hover:border-paprika transition-colors">
@@ -167,27 +186,27 @@ export default function ContribuirPage() {
                     </div>}
               </div>
               <input type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={e => escolherFoto(e, 'produto')} />
+                onChange={escolherFoto} />
             </label>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <label className="text-xs text-muted">Ingrediente
+              <label className="text-xs text-muted">Ingrediente (opcional)
                 <select value={ingredienteId} onChange={e => setIngredienteId(e.target.value)} className={inputCls}>
                   <option value="">Selecione…</option>
                   {ings.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
                 </select>
               </label>
-              <label className="text-xs text-muted">Tipo de loja
+              <label className="text-xs text-muted">Tipo de loja (opcional)
                 <select value={tipoLoja} onChange={e => setTipoLoja(e.target.value)} className={inputCls}>
                   <option value="">Selecione…</option>
                   {TIPOS_LOJA.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </label>
-              <label className="text-xs text-muted">Preço (R$)
+              <label className="text-xs text-muted">Preço (R$, opcional)
                 <input value={preco} onChange={e => setPreco(e.target.value)} inputMode="decimal" placeholder="0,00" className={inputCls} />
               </label>
-              <label className="text-xs text-muted">Peso/qtd (g, opcional)
-                <input value={pesoG} onChange={e => setPesoG(e.target.value)} inputMode="decimal" placeholder="ex: 1000" className={inputCls} />
+              <label className="text-xs text-muted">{rotuloQtd(unidadeSel)} (opcional)
+                <input value={pesoG} onChange={e => setPesoG(e.target.value)} inputMode="decimal" placeholder={exemploQtd(unidadeSel)} className={inputCls} />
               </label>
               <label className="text-xs text-muted col-span-2">Mercado / rede (opcional)
                 <input value={mercado} onChange={e => setMercado(e.target.value)} placeholder="ex: Assaí, Carrefour…" className={inputCls} />
@@ -198,12 +217,8 @@ export default function ContribuirPage() {
             </div>
 
             <div className="flex items-center gap-3 mt-4 text-xs">
-              <label className="text-paprika hover:underline cursor-pointer">
-                {fotoEtiqueta ? '✓ etiqueta anexada' : '+ foto da etiqueta (opcional)'}
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => escolherFoto(e, 'etiqueta')} />
-              </label>
               <button type="button" onClick={pegarLocal}
-                className={`ml-auto font-medium ${coord ? 'text-olive' : 'text-paprika hover:underline'}`}>
+                className={`font-medium ${coord ? 'text-olive' : 'text-paprika hover:underline'}`}>
                 {coord ? '✓ local registrado' : '+ registrar localização (obrigatório)'}
               </button>
             </div>

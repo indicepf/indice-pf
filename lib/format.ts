@@ -40,6 +40,34 @@ export function limparNome(nome: string) {
 	return nome.replace(/^\d+\.\s*/, "");
 }
 
+// unidade do ingrediente → rótulo do campo de quantidade na contribuição
+export function rotuloQtd(unidade?: string | null) {
+	switch (unidade) {
+		case "ml": return "Quantidade (ml)";
+		case "unidade": return "Quantidade (unidades)";
+		case "maco": return "Quantidade (maços)";
+		default: return "Peso/qtd (g)";
+	}
+}
+// placeholder de exemplo conforme a unidade
+export function exemploQtd(unidade?: string | null) {
+	switch (unidade) {
+		case "ml": return "ex: 900";
+		case "unidade": return "ex: 12";
+		case "maco": return "ex: 1";
+		default: return "ex: 1000";
+	}
+}
+// unidade curta para legendas compactas (ex.: admin)
+export function unidadeCurta(unidade?: string | null) {
+	switch (unidade) {
+		case "ml": return "ml";
+		case "unidade": return "un";
+		case "maco": return "maço";
+		default: return "g";
+	}
+}
+
 // (XX) XXXXX-XXXX
 export function mascararTel(v: string) {
 	const d = v.replace(/\D/g, "").slice(0, 11);

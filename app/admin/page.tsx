@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
-  isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, getSaques, marcarSaquePago,
+  isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
   getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, getHistoricoManual,
   type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
-import { brl, mascararCpf, VALOR_POR_FOTO } from '@/lib/format'
+import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
 
 type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; nome: string | null; telefone: string | null }
@@ -100,12 +100,13 @@ export default function AdminPage() {
   }
 
   async function moderar(c: ContribuicaoFull, status: 'aprovada' | 'rejeitada') {
-    await moderarContribuicao(c.id, {
-      status,
-      preco: c.preco,
-      ingrediente_id: c.ingrediente_id,
-      peso_g: c.peso_g,
-    })
+    if (status === 'aprovada') {
+      // aprova + registra a leitura de campo (calibra o índice) + recalcula
+      await aprovarContribuicao(c.id, c.ingrediente_id, c.preco, c.peso_g)
+      await recalcularCustos()
+    } else {
+      await moderarContribuicao(c.id, { status: 'rejeitada' })
+    }
     setItens(prev => prev.filter(i => i.id !== c.id))
   }
 
@@ -171,7 +172,7 @@ export default function AdminPage() {
                   <input value={c.preco ?? ''} onChange={e => patch(c.id, 'preco', Number(e.target.value.replace(',', '.')) || 0)}
                     inputMode="decimal" className={inputCls} />
                 </label>
-                <label>Peso (g)
+                <label>Qtd ({unidadeCurta(ings.find(i => i.id === c.ingrediente_id)?.unidade)})
                   <input value={c.peso_g ?? ''} onChange={e => patch(c.id, 'peso_g', e.target.value ? Number(e.target.value) : null)}
                     inputMode="decimal" className={inputCls} />
                 </label>

@@ -34,6 +34,7 @@ export default function PerfilPage() {
   const [msg, setMsg] = useState('')
   const [erro, setErro] = useState('')
   const [contribs, setContribs] = useState<Contribuicao[] | null>(null)
+  const [visiveis, setVisiveis] = useState(10)
   const [rec, setRec] = useState<{ aprovadas: number; ganho: number; disponivel: number } | null>(null)
   const [cpf, setCpf] = useState('')
   const [chavePix, setChavePix] = useState('')
@@ -47,12 +48,14 @@ export default function PerfilPage() {
       const u = data.session?.user
       if (!u) { router.replace('/'); setUserId(null); return }
       setUserId(u.id); setEmail(u.email ?? '')
-      const p = await getProfile(u.id)
+      // tudo em paralelo — antes eram 4 idas ao banco em série
+      const [p, cs, r, dr] = await Promise.all([
+        getProfile(u.id), getMinhasContribuicoes(u.id), getRecompensa(u.id), getDadosRecompensa(u.id),
+      ])
       setProfile(p)
       setNome(p?.nome ?? ''); setTel(p?.telefone ?? ''); setRegiao(p?.regiao ?? '')
-      setContribs(await getMinhasContribuicoes(u.id))
-      setRec(await getRecompensa(u.id))
-      const dr = await getDadosRecompensa(u.id)
+      setContribs(cs)
+      setRec(r)
       if (dr) {
         if (dr.cpf) { setCpf(mascararCpf(dr.cpf)); setConsent(true) }
         setChavePix(dr.chave_pix ?? '')
@@ -216,14 +219,14 @@ export default function PerfilPage() {
           {(() => {
             const pontos = (contribs || []).filter(c => c.lat != null && c.lng != null)
               .map(c => ({ lat: c.lat as number, lng: c.lng as number,
-                label: `${c.ingredientes?.nome || c.produto || 'Produto'} — R$ ${Number(c.preco).toFixed(2)}${c.cidade ? ` · ${c.cidade}` : ''}` }))
+                label: `${c.ingredientes?.nome || c.produto || 'Produto'}${c.preco != null ? ` — R$ ${Number(c.preco).toFixed(2)}` : ''}${c.cidade ? ` · ${c.cidade}` : ''}` }))
             return pontos.length ? <div className="mb-4"><MapaLocal points={pontos} height="280px" /></div> : null
           })()}
           {!contribs ? <p className="text-sm text-muted">Carregando…</p>
             : !contribs.length ? <p className="text-sm text-muted">Você ainda não enviou nenhuma contribuição.</p>
             : (
               <div className="space-y-2">
-                {contribs.map(i => {
+                {contribs.slice(0, visiveis).map(i => {
                   const s = STATUS[i.status] || STATUS.pendente
                   return (
                     <div key={i.id} className="flex items-center gap-3 border border-line rounded-md p-2 bg-panel">
@@ -233,7 +236,7 @@ export default function PerfilPage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm truncate">{i.ingredientes?.nome || i.produto || 'Produto'}</p>
                         <p className="text-xs text-muted truncate">
-                          R$ {Number(i.preco).toFixed(2)} · {new Date(i.criado_em).toLocaleDateString('pt-BR')}{i.cidade ? ` · ${i.cidade}` : ''}
+                          {i.preco != null ? `R$ ${Number(i.preco).toFixed(2)} · ` : ''}{new Date(i.criado_em).toLocaleDateString('pt-BR')}{i.cidade ? ` · ${i.cidade}` : ''}
                         </p>
                       </div>
                       <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${s.cls}`}>
@@ -246,6 +249,12 @@ export default function PerfilPage() {
                     </div>
                   )
                 })}
+                {contribs.length > visiveis && (
+                  <button onClick={() => setVisiveis(v => v + 10)}
+                    className="w-full text-sm text-paprika border border-line rounded-md py-2 hover:bg-cream transition mt-1">
+                    Ver mais ({contribs.length - visiveis} restantes)
+                  </button>
+                )}
               </div>
             )}
         </section>

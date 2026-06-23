@@ -26,12 +26,12 @@ export type Fonte = { titulo: string; loja: string; preco_bruto: number; exibica
 
 export type Profile = { id: string; nome: string | null; telefone: string | null; regiao: string | null; is_admin: boolean | null }
 
-export type Ing = { id: number; nome: string; categoria: string | null }
+export type Ing = { id: number; nome: string; categoria: string | null; unidade: string | null; peso_ref_g: number | null }
 
 export type Contribuicao = {
   id: number
   produto: string | null
-  preco: number
+  preco: number | null
   status: string
   foto_url: string | null
   criado_em: string
@@ -47,7 +47,7 @@ export type ContribuicaoFull = {
   user_id: string
   ingrediente_id: number | null
   produto: string | null
-  preco: number
+  preco: number | null
   peso_g: number | null
   tipo_loja: string | null
   mercado: string | null
