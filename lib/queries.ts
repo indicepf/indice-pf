@@ -2,6 +2,20 @@ import { supabase } from './supabase'
 import { VALOR_POR_FOTO } from './format'
 import type { Snapshot, DishCost, ItemDetalhe, Fonte, Ing, Profile, Contribuicao, ContribuicaoFull } from './types'
 
+// O Supabase corta cada resposta em 1000 linhas. Para tabelas maiores (receitas,
+// resultados_brutos) buscamos em páginas de 1000 e juntamos tudo.
+const PAGINA = 1000
+async function fetchAll<T = any>(build: () => any): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGINA) {
+    const { data, error } = await build().range(from, from + PAGINA - 1)
+    if (error) throw error
+    const linhas = (data as T[]) || []
+    out.push(...linhas)
+    if (linhas.length < PAGINA) return out
+  }
+}
+
 export async function getLatestSnapshot(): Promise<Snapshot | null> {
   const { data } = await supabase.from('snapshots')
     .select('id,data,custo_total_pf').order('data', { ascending: false }).limit(1)
@@ -32,8 +46,8 @@ function montarItens(rec: any[], precoMap: Record<number, number>): ItemDetalhe[
 
 // Carrega a composição de TODOS os pratos de uma vez (gaveta abre instantânea, sem rede no clique).
 export async function getAllDetalhes(snapshotId: number): Promise<Record<number, ItemDetalhe[]>> {
-  const [{ data: rec }, { data: precos }] = await Promise.all([
-    supabase.from('receitas').select('prato_id,qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual,preco_manual_link)'),
+  const [rec, { data: precos }] = await Promise.all([
+    fetchAll(() => supabase.from('receitas').select('prato_id,qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual,preco_manual_link)').order('id')),
     supabase.from('precos').select('ingrediente_id,mediana_normalizada').eq('snapshot_id', snapshotId),
   ])
   const precoMap: Record<number, number> = {}
@@ -48,11 +62,13 @@ export async function getAllDetalhes(snapshotId: number): Promise<Record<number,
 
 // Fontes (resultados brutos) de todos os ingredientes do snapshot, agrupadas por ingrediente.
 export async function getAllFontes(snapshotId: number): Promise<Record<number, Fonte[]>> {
-  const { data } = await supabase.from('resultados_brutos')
+  const data = await fetchAll(() => supabase.from('resultados_brutos')
     .select('ingrediente_id,titulo,loja,preco_bruto,exibicao,link')
-    .eq('snapshot_id', snapshotId).order('preco_bruto', { ascending: true })
+    .eq('snapshot_id', snapshotId).order('id'))
   const out: Record<number, Fonte[]> = {}
-  ;((data || []) as any[]).forEach(f => { (out[f.ingrediente_id] ||= []).push(f) })
+  ;(data as any[]).forEach(f => { (out[f.ingrediente_id] ||= []).push(f) })
+  // mais barato primeiro dentro de cada ingrediente (a paginação foi por id)
+  for (const k of Object.keys(out)) out[+k].sort((a, b) => Number(a.preco_bruto) - Number(b.preco_bruto))
   return out
 }
 
