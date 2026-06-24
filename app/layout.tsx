@@ -15,9 +15,23 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://indice-pf-ashen.vercel.app"),
   title: "Índice PF — custo do prato feito no Brasil",
   description:
     "O custo de produção de pratos feitos regionais brasileiros, medido a cada coleta.",
+  openGraph: {
+    title: "Índice PF — custo do prato feito no Brasil",
+    description:
+      "O custo de produção de pratos feitos regionais brasileiros, medido a cada coleta.",
+    type: "website",
+    locale: "pt_BR",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Índice PF — custo do prato feito no Brasil",
+    description:
+      "O custo de produção de pratos feitos regionais brasileiros, medido a cada coleta.",
+  },
 };
 
 export default function RootLayout({
