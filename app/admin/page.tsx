@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import {
   isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
   getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, getHistoricoManual,
+  getOrigensManuais,
   type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
 import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
@@ -26,6 +27,10 @@ export default function AdminPage() {
   const [precoMsg, setPrecoMsg] = useState(''); const [recalcBusy, setRecalcBusy] = useState(false)
   const [hist, setHist] = useState<Record<number, PrecoManualHist[]>>({})
   const [leituras, setLeituras] = useState<Record<number, string>>({})
+  const [origens, setOrigens] = useState<Record<number, { net: boolean; campo: boolean }>>({})
+  const [buscaPreco, setBuscaPreco] = useState('')
+  const [filtroOrigem, setFiltroOrigem] = useState<'todos' | 'net' | 'campo'>('todos')
+  const [visiveisPrecos, setVisiveisPrecos] = useState(20)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -36,6 +41,7 @@ export default function AdminPage() {
       setItens(await getContribuicoes('pendente'))
       setSaques(await getSaques('solicitado'))
       setManuais(await getIngredientesManuais())
+      setOrigens(await getOrigensManuais())
       setEstado('ok')
     })
   }, [router])
@@ -64,6 +70,7 @@ export default function AdminPage() {
     await recalcularCustos()
     setLeituras(l => ({ ...l, [m.id]: '' }))
     setManuais(await getIngredientesManuais())
+    setOrigens(await getOrigensManuais())
     if (m.id in hist) { const d = await getHistoricoManual(m.id); setHist(h => ({ ...h, [m.id]: d })) }
     setPrecoMsg(`Leitura registrada para ${m.nome} e custos atualizados.`)
   }
@@ -83,6 +90,7 @@ export default function AdminPage() {
     if (error) { setPrecoMsg(error.message); return }
     await recalcularCustos()
     setManuais(await getIngredientesManuais())
+    setOrigens(await getOrigensManuais())
     setAddId(''); setAddPreco(''); setAddFixo(''); setAddLoja(''); setAddLink('')
     setPrecoMsg('Preço manual definido e custos atualizados.')
   }
@@ -126,6 +134,14 @@ export default function AdminPage() {
       </main>
     )
   }
+
+  const manuaisFiltrados = manuais.filter(m => {
+    const o = origens[m.id]
+    if (filtroOrigem === 'net' && !o?.net) return false
+    if (filtroOrigem === 'campo' && !o?.campo) return false
+    if (buscaPreco.trim() && !m.nome.toLowerCase().includes(buscaPreco.trim().toLowerCase())) return false
+    return true
+  })
 
   return (
     <main className="min-h-screen">
@@ -242,13 +258,34 @@ export default function AdminPage() {
           {precoMsg && <span className="text-xs text-muted">{precoMsg}</span>}
         </div>
 
+        {/* busca + filtro por origem */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <input value={buscaPreco} onChange={e => { setBuscaPreco(e.target.value); setVisiveisPrecos(20) }}
+            placeholder="Buscar ingrediente…" className="bg-cream border border-line rounded-md px-3 py-1.5 text-sm w-full sm:w-56 focus:outline-none focus:border-paprika" />
+          <div className="inline-flex border border-line rounded-md overflow-hidden bg-cream text-sm self-start">
+            {([['todos', 'Todos'], ['net', 'Rede'], ['campo', 'Campo']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => { setFiltroOrigem(k); setVisiveisPrecos(20) }}
+                className={`px-3 py-1.5 transition-colors ${filtroOrigem === k ? 'bg-paprika text-white' : 'text-muted hover:bg-cream'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-muted sm:ml-auto">{manuaisFiltrados.length} de {manuais.length}</span>
+        </div>
+
         {/* lista dos que têm preço manual */}
         <div className="space-y-3">
           {!manuais.length && <p className="text-sm text-muted">Nenhum preço manual definido.</p>}
-          {manuais.map(m => (
+          {manuais.length > 0 && !manuaisFiltrados.length && <p className="text-sm text-muted">Nenhum item para este filtro/busca.</p>}
+          {manuaisFiltrados.slice(0, visiveisPrecos).map(m => (
             <div key={m.id} className="border border-line rounded-lg bg-panel p-4">
               <div className="flex items-baseline justify-between gap-3">
-                <p className="font-medium">{m.nome}</p>
+                <p className="font-medium flex items-center gap-1.5 flex-wrap">
+                  {m.nome}
+                  {origens[m.id]?.net && <Badge texto="rede" cls="text-muted border-line" />}
+                  {origens[m.id]?.campo && <Badge texto="campo" cls="text-olive border-olive/30 bg-olive/5" />}
+                  {!origens[m.id] && m.custo_fixo != null && <Badge texto="fixo" cls="text-muted border-line" />}
+                </p>
                 <span className="text-xs text-muted">{m.categoria || '—'}</span>
               </div>
               <p className="text-xs text-muted mt-1">
@@ -314,6 +351,12 @@ export default function AdminPage() {
               )}
             </div>
           ))}
+          {manuaisFiltrados.length > visiveisPrecos && (
+            <button onClick={() => setVisiveisPrecos(v => v + 20)}
+              className="w-full text-sm text-paprika border border-line rounded-md py-2 hover:bg-cream transition">
+              Ver mais ({manuaisFiltrados.length - visiveisPrecos} restantes)
+            </button>
+          )}
         </div>
 
         {/* definir preço manual para outro ingrediente */}
@@ -350,3 +393,7 @@ export default function AdminPage() {
 }
 
 const inputCls = 'w-full bg-cream border border-line rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
+
+function Badge({ texto, cls }: { texto: string; cls: string }) {
+  return <span className={`text-[0.6rem] uppercase tracking-wide border rounded px-1 py-px ${cls}`}>{texto}</span>
+}

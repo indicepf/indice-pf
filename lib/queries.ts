@@ -213,6 +213,17 @@ export async function limparPrecoManual(id: number) {
     .update({ preco_manual: null, custo_fixo: null, preco_manual_loja: null, preco_manual_link: null }).eq('id', id)
 }
 
+// por ingrediente, quais origens de leitura existem: rede (manual/admin) e/ou campo (usuário)
+export async function getOrigensManuais(): Promise<Record<number, { net: boolean; campo: boolean }>> {
+  const rows = await fetchAll(() => supabase.from('precos_manuais_hist').select('ingrediente_id,origem').order('id'))
+  const out: Record<number, { net: boolean; campo: boolean }> = {}
+  ;(rows as any[]).forEach(r => {
+    const o = (out[r.ingrediente_id] ||= { net: false, campo: false })
+    if (r.origem === 'campo') o.campo = true; else o.net = true   // default 'manual' → rede
+  })
+  return out
+}
+
 export async function getHistoricoManual(ingredienteId: number): Promise<PrecoManualHist[]> {
   const { data } = await supabase.from('precos_manuais_hist')
     .select('id,preco_manual,custo_fixo,loja,link,criado_em')
