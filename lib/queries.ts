@@ -110,7 +110,7 @@ export async function isAdmin(uid: string): Promise<boolean> {
 
 export async function getContribuicoes(status: string): Promise<ContribuicaoFull[]> {
   const { data } = await supabase.from('contribuicoes')
-    .select('id,user_id,ingrediente_id,produto,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)')
+    .select('id,user_id,ingrediente_id,produto,marca,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)')
     .eq('status', status).order('criado_em', { ascending: true })
   return (data as unknown as ContribuicaoFull[]) || []
 }
@@ -123,9 +123,10 @@ export async function moderarContribuicao(id: number, campos: Record<string, any
 // (vira uma leitura humana no mesmo balde das leituras manuais — média 50/50 com o online).
 export async function aprovarContribuicao(
   id: number, ingrediente_id: number | null, preco: number | null, peso_g: number | null,
+  marca: string | null,
 ) {
   return supabase.rpc('aprovar_contribuicao', {
-    p_id: id, p_ingrediente: ingrediente_id, p_preco: preco, p_peso: peso_g,
+    p_id: id, p_ingrediente: ingrediente_id, p_preco: preco, p_peso: peso_g, p_marca: marca,
   })
 }
 

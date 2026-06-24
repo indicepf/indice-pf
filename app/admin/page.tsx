@@ -102,7 +102,7 @@ export default function AdminPage() {
   async function moderar(c: ContribuicaoFull, status: 'aprovada' | 'rejeitada') {
     if (status === 'aprovada') {
       // aprova + registra a leitura de campo (calibra o índice) + recalcula
-      await aprovarContribuicao(c.id, c.ingrediente_id, c.preco, c.peso_g)
+      await aprovarContribuicao(c.id, c.ingrediente_id, c.preco, c.peso_g, c.marca)
       await recalcularCustos()
     } else {
       await moderarContribuicao(c.id, { status: 'rejeitada' })
@@ -175,6 +175,10 @@ export default function AdminPage() {
                 <label>Qtd ({unidadeCurta(ings.find(i => i.id === c.ingrediente_id)?.unidade)})
                   <input value={c.peso_g ?? ''} onChange={e => patch(c.id, 'peso_g', e.target.value ? Number(e.target.value) : null)}
                     inputMode="decimal" className={inputCls} />
+                </label>
+                <label className="col-span-3">Marca (opcional — deixe vazio p/ itens sem marca)
+                  <input value={c.marca ?? ''} onChange={e => patch(c.id, 'marca', e.target.value || null)}
+                    placeholder="ex: Ancelli" className={inputCls} />
                 </label>
               </div>
               <div className="flex gap-2 mt-3">

@@ -47,6 +47,7 @@ export type ContribuicaoFull = {
   user_id: string
   ingrediente_id: number | null
   produto: string | null
+  marca: string | null
   preco: number | null
   peso_g: number | null
   tipo_loja: string | null

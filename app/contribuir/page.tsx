@@ -43,6 +43,7 @@ export default function ContribuirPage() {
   const [ings, setIngs] = useState<Ing[]>([])
   const [ingredienteId, setIngredienteId] = useState('')
   const [produto, setProduto] = useState('')
+  const [marca, setMarca] = useState('')
   const [preco, setPreco] = useState('')
   const [pesoG, setPesoG] = useState('')
   const [tipoLoja, setTipoLoja] = useState('')
@@ -125,7 +126,7 @@ export default function ContribuirPage() {
       const foto_url = await uploadFoto(fotoProduto, 'produto')
       const { error } = await supabase.from('contribuicoes').insert({
         user_id: userId, ingrediente_id: ingredienteId ? Number(ingredienteId) : null,
-        produto: produto.trim() || null, preco: preco ? Number(preco.replace(',', '.')) : null,
+        produto: produto.trim() || null, marca: marca.trim() || null, preco: preco ? Number(preco.replace(',', '.')) : null,
         peso_g: pesoG ? Number(pesoG.replace(',', '.')) : null, tipo_loja: tipoLoja || null,
         mercado: mercado.trim() || null, cidade: cidade.trim() || null,
         lat: coord?.lat ?? null, lng: coord?.lng ?? null,
@@ -165,7 +166,7 @@ export default function ContribuirPage() {
               índice — e conta para a sua recompensa.
             </p>
             <div className="flex gap-3 justify-center">
-              <button onClick={() => { setOk(false); setFotoProduto(null); setPreview(''); setPreco(''); setIngredienteId('') }}
+              <button onClick={() => { setOk(false); setFotoProduto(null); setPreview(''); setPreco(''); setIngredienteId(''); setMarca('') }}
                 className="text-sm border border-paprika text-paprika px-4 py-2 rounded-md hover:bg-paprika hover:text-white transition">
                 Enviar outra
               </button>
@@ -207,6 +208,9 @@ export default function ContribuirPage() {
               </label>
               <label className="text-xs text-muted">{rotuloQtd(unidadeSel)} (opcional)
                 <input value={pesoG} onChange={e => setPesoG(e.target.value)} inputMode="decimal" placeholder={exemploQtd(unidadeSel)} className={inputCls} />
+              </label>
+              <label className="text-xs text-muted col-span-2">Marca (opcional — deixe vazio se não tiver)
+                <input value={marca} onChange={e => setMarca(e.target.value)} placeholder="ex: Ancelli, Tio João…" className={inputCls} />
               </label>
               <label className="text-xs text-muted col-span-2">Mercado / rede (opcional)
                 <input value={mercado} onChange={e => setMercado(e.target.value)} placeholder="ex: Assaí, Carrefour…" className={inputCls} />
