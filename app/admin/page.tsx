@@ -31,6 +31,7 @@ export default function AdminPage() {
   const [buscaPreco, setBuscaPreco] = useState('')
   const [filtroOrigem, setFiltroOrigem] = useState<'todos' | 'net' | 'campo'>('todos')
   const [visiveisPrecos, setVisiveisPrecos] = useState(20)
+  const [addAberto, setAddAberto] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -92,6 +93,7 @@ export default function AdminPage() {
     setManuais(await getIngredientesManuais())
     setOrigens(await getOrigensManuais())
     setAddId(''); setAddPreco(''); setAddFixo(''); setAddLoja(''); setAddLink('')
+    setAddAberto(false)
     setPrecoMsg('Preço manual definido e custos atualizados.')
   }
   async function verHistorico(id: number) {
@@ -258,6 +260,42 @@ export default function AdminPage() {
           {precoMsg && <span className="text-xs text-muted">{precoMsg}</span>}
         </div>
 
+        {/* definir preço manual para outro ingrediente (recolhível, no topo) */}
+        <div className="border border-line rounded-lg bg-panel">
+          <button onClick={() => setAddAberto(a => !a)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-cream transition rounded-lg">
+            <span>+ Definir preço manual para outro ingrediente</span>
+            <span className="text-muted">{addAberto ? '−' : '+'}</span>
+          </button>
+          {addAberto && (
+            <div className="px-4 pb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <label className="col-span-2 sm:col-span-4">Ingrediente
+                  <select value={addId} onChange={e => setAddId(e.target.value)} className={inputCls}>
+                    <option value="">Selecione…</option>
+                    {ings.filter(i => !manuais.some(m => m.id === i.id))
+                      .map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
+                  </select>
+                </label>
+                <label>Preço (R$/kg)
+                  <input value={addPreco} onChange={e => setAddPreco(e.target.value)} inputMode="decimal" placeholder="0,00" className={inputCls} />
+                </label>
+                <label>Custo fixo (R$/prato)
+                  <input value={addFixo} onChange={e => setAddFixo(e.target.value)} inputMode="decimal" placeholder="simbólico" className={inputCls} />
+                </label>
+                <label>Loja/fonte
+                  <input value={addLoja} onChange={e => setAddLoja(e.target.value)} placeholder="ex: feira local" className={inputCls} />
+                </label>
+                <label>Link
+                  <input value={addLink} onChange={e => setAddLink(e.target.value)} placeholder="https://…" className={inputCls} />
+                </label>
+              </div>
+              <button onClick={adicionarManual}
+                className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition mt-3">Definir</button>
+            </div>
+          )}
+        </div>
+
         {/* busca + filtro por origem */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <input value={buscaPreco} onChange={e => { setBuscaPreco(e.target.value); setVisiveisPrecos(20) }}
@@ -359,33 +397,6 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* definir preço manual para outro ingrediente */}
-        <div className="border border-line rounded-lg bg-panel p-4">
-          <p className="font-medium mb-3">Definir preço manual para outro ingrediente</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <label className="col-span-2 sm:col-span-4">Ingrediente
-              <select value={addId} onChange={e => setAddId(e.target.value)} className={inputCls}>
-                <option value="">Selecione…</option>
-                {ings.filter(i => !manuais.some(m => m.id === i.id))
-                  .map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
-              </select>
-            </label>
-            <label>Preço (R$/kg)
-              <input value={addPreco} onChange={e => setAddPreco(e.target.value)} inputMode="decimal" placeholder="0,00" className={inputCls} />
-            </label>
-            <label>Custo fixo (R$/prato)
-              <input value={addFixo} onChange={e => setAddFixo(e.target.value)} inputMode="decimal" placeholder="simbólico" className={inputCls} />
-            </label>
-            <label>Loja/fonte
-              <input value={addLoja} onChange={e => setAddLoja(e.target.value)} placeholder="ex: feira local" className={inputCls} />
-            </label>
-            <label>Link
-              <input value={addLink} onChange={e => setAddLink(e.target.value)} placeholder="https://…" className={inputCls} />
-            </label>
-          </div>
-          <button onClick={adicionarManual}
-            className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition mt-3">Definir</button>
-        </div>
       </div>
       )}
     </main>
