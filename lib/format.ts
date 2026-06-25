@@ -27,6 +27,25 @@ export const REGIOES = [
 	"Norte",
 ] as const;
 
+export const SEXOS = [
+	{ value: "M", label: "Masculino" },
+	{ value: "F", label: "Feminino" },
+	{ value: "O", label: "Outro" },
+	{ value: "N", label: "Prefiro não informar" },
+] as const;
+
+// idade em anos cheios a partir da data de nascimento (YYYY-MM-DD); null se vazio
+export function idade(dataNasc?: string | null): number | null {
+	if (!dataNasc) return null;
+	const n = new Date(dataNasc);
+	if (isNaN(n.getTime())) return null;
+	const hoje = new Date();
+	let anos = hoje.getFullYear() - n.getFullYear();
+	const m = hoje.getMonth() - n.getMonth();
+	if (m < 0 || (m === 0 && hoje.getDate() < n.getDate())) anos--;
+	return anos >= 0 && anos < 130 ? anos : null;
+}
+
 export const brl = (v: number) =>
 	v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 

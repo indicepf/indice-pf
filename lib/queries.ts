@@ -92,7 +92,7 @@ export async function getIngredientes(): Promise<Ing[]> {
 }
 
 export async function getProfile(uid: string): Promise<Profile | null> {
-  const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao,is_admin').eq('id', uid).single()
+  const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao,is_admin,sexo,data_nascimento').eq('id', uid).single()
   return (data as Profile) ?? null
 }
 
@@ -199,6 +199,29 @@ export async function getSaques(status: string) {
   const { data } = await supabase.from('pagamentos')
     .select('id,user_id,valor,cpf,chave_pix,status,criado_em')
     .eq('status', status).order('criado_em', { ascending: true })
+  const saques = (data as any[]) || []
+  const ids = [...new Set(saques.map(s => s.user_id).filter(Boolean))]
+  const nomes: Record<string, { nome: string | null; telefone: string | null }> = {}
+  if (ids.length) {
+    const { data: profs } = await supabase.from('profiles').select('id,nome,telefone').in('id', ids)
+    ;(profs || []).forEach((p: any) => { nomes[p.id] = { nome: p.nome, telefone: p.telefone } })
+  }
+  return saques.map(s => ({ ...s, nome: nomes[s.user_id]?.nome ?? null, telefone: nomes[s.user_id]?.telefone ?? null }))
+}
+
+// histórico de saques do próprio usuário (todos os status), mais recentes primeiro
+export async function getMeusSaques(uid: string) {
+  const { data } = await supabase.from('pagamentos')
+    .select('id,valor,status,criado_em,pago_em')
+    .eq('user_id', uid).order('criado_em', { ascending: false })
+  return (data as { id: number; valor: number; status: string; criado_em: string; pago_em: string | null }[]) || []
+}
+
+// admin: histórico de TODOS os saques (com nome/telefone), mais recentes primeiro
+export async function getTodosSaques() {
+  const { data } = await supabase.from('pagamentos')
+    .select('id,user_id,valor,cpf,chave_pix,status,criado_em,pago_em')
+    .order('criado_em', { ascending: false })
   const saques = (data as any[]) || []
   const ids = [...new Set(saques.map(s => s.user_id).filter(Boolean))]
   const nomes: Record<string, { nome: string | null; telefone: string | null }> = {}

@@ -6,13 +6,17 @@ import { supabase } from '@/lib/supabase'
 import {
   isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
   getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, getHistoricoManual,
-  getOrigensManuais, getContribuicoesAprovadas, editarContribuicaoAprovada,
+  getOrigensManuais, getContribuicoesAprovadas, editarContribuicaoAprovada, getTodosSaques,
   type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
 import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
 
-type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; nome: string | null; telefone: string | null }
+type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; pago_em?: string | null; nome: string | null; telefone: string | null }
+const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
+  pago:      { txt: 'pago',      cls: 'text-olive border-olive/30 bg-olive/5' },
+  rejeitada: { txt: 'rejeitado', cls: 'text-red-600 border-red-200 bg-red-50' },
+}
 
 export default function AdminPage() {
   const router = useRouter()
@@ -25,6 +29,7 @@ export default function AdminPage() {
   const [aprDirty, setAprDirty] = useState(false); const [aprMsg, setAprMsg] = useState(''); const [salvandoId, setSalvandoId] = useState<number | null>(null)
   const [ings, setIngs] = useState<Ing[]>([])
   const [saques, setSaques] = useState<Saque[]>([])
+  const [histSaques, setHistSaques] = useState<Saque[] | null>(null)
   const [manuais, setManuais] = useState<IngManual[]>([])
   const [addId, setAddId] = useState(''); const [addPreco, setAddPreco] = useState('')
   const [addFixo, setAddFixo] = useState(''); const [addLoja, setAddLoja] = useState(''); const [addLink, setAddLink] = useState('')
@@ -114,10 +119,17 @@ export default function AdminPage() {
     setAprMsg(error ? `Erro ao recalcular: ${error.message}` : 'Custos do índice recalculados.')
   }
 
+  // histórico de saques carrega ao abrir a aba (1ª vez)
+  useEffect(() => {
+    if (aba === 'saques' && estado === 'ok' && histSaques === null) getTodosSaques().then(setHistSaques)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, estado])
+
   async function pagar(s: Saque) {
     if (!confirm(`Confirmar pagamento de ${brl(Number(s.valor))} via PIX (${s.chave_pix})?`)) return
     await marcarSaquePago(s.id)
     setSaques(prev => prev.filter(x => x.id !== s.id))
+    setHistSaques(prev => [{ ...s, status: 'pago', pago_em: new Date().toISOString() }, ...(prev || [])])
   }
 
   function patchManual(id: number, campo: keyof IngManual, valor: any) {
@@ -380,7 +392,7 @@ export default function AdminPage() {
       </div>
       ) : aba === 'saques' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-3" key="saques">
-        {!saques.length && <p className="text-sm text-muted text-center py-10">Nenhuma solicitação de saque.</p>}
+        {!saques.length && <p className="text-sm text-muted text-center py-6">Nenhuma solicitação de saque pendente.</p>}
         {saques.map(s => (
           <div key={s.id} className="border border-line rounded-lg bg-panel p-4">
             <div className="flex items-baseline justify-between gap-3 mb-3">
@@ -412,6 +424,44 @@ export default function AdminPage() {
             </div>
           </div>
         ))}
+
+        {/* histórico de saques concluídos */}
+        <div className="pt-6">
+          <h3 className="text-sm font-medium mb-3">Histórico de saques</h3>
+          {histSaques === null ? <p className="text-sm text-muted">Carregando…</p>
+            : !histSaques.filter(s => s.status !== 'solicitado').length ? <p className="text-sm text-muted">Nenhum saque concluído ainda.</p>
+            : (
+              <div className="border border-line rounded-lg bg-panel overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-muted border-b border-line">
+                      <th className="font-medium px-3 py-2">Usuário</th>
+                      <th className="font-medium px-3 py-2 text-right">Valor</th>
+                      <th className="font-medium px-3 py-2">Solicitado</th>
+                      <th className="font-medium px-3 py-2">Pago</th>
+                      <th className="font-medium px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {histSaques.filter(s => s.status !== 'solicitado').map(s => {
+                      const st = SAQUE_ST[s.status] || SAQUE_ST.pago
+                      return (
+                        <tr key={s.id} className="border-t border-line/60">
+                          <td className="px-3 py-2 truncate max-w-[10rem]">{s.nome || '—'}</td>
+                          <td className="px-3 py-2 text-right tnum">{brl(Number(s.valor))}</td>
+                          <td className="px-3 py-2 text-muted">{new Date(s.criado_em).toLocaleDateString('pt-BR')}</td>
+                          <td className="px-3 py-2 text-muted">{s.pago_em ? new Date(s.pago_em).toLocaleDateString('pt-BR') : '—'}</td>
+                          <td className="px-3 py-2">
+                            <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 ${st.cls}`}>{st.txt}</span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </div>
       </div>
       ) : (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6" key="precos">

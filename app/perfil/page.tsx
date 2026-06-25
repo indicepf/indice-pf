@@ -6,10 +6,17 @@ import dynamic from 'next/dynamic'
 import { supabase } from '@/lib/supabase'
 import {
   getProfile, getMinhasContribuicoes, excluirContribuicao,
-  getRecompensa, getDadosRecompensa, salvarDadosRecompensa, solicitarSaque,
+  getRecompensa, getDadosRecompensa, salvarDadosRecompensa, solicitarSaque, getMeusSaques,
 } from '@/lib/queries'
-import { REGIOES, mascararTel, telValido, mascararCpf, cpfValido, brl, SAQUE_MINIMO } from '@/lib/format'
+import { REGIOES, SEXOS, idade, mascararTel, telValido, mascararCpf, cpfValido, brl, SAQUE_MINIMO } from '@/lib/format'
 import type { Profile, Contribuicao } from '@/lib/types'
+
+type MeuSaque = { id: number; valor: number; status: string; criado_em: string; pago_em: string | null }
+const SAQUE_STATUS: Record<string, { txt: string; cls: string }> = {
+  solicitado: { txt: 'em processamento', cls: 'text-muted border-line' },
+  pago:       { txt: 'pago',             cls: 'text-olive border-olive/30 bg-olive/5' },
+  rejeitada:  { txt: 'rejeitado',        cls: 'text-red-600 border-red-200 bg-red-50' },
+}
 
 const MapaLocal = dynamic(() => import('../MapaLocal'), {
   ssr: false,
@@ -27,9 +34,13 @@ export default function PerfilPage() {
   const [userId, setUserId] = useState<string | null | undefined>(undefined)
   const [email, setEmail] = useState('')
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [aba, setAba] = useState<'dados' | 'recompensas' | 'contribuicoes'>('dados')
   const [nome, setNome] = useState('')
   const [tel, setTel] = useState('')
   const [regiao, setRegiao] = useState('')
+  const [sexo, setSexo] = useState('')
+  const [dataNasc, setDataNasc] = useState('')
+  const [saques, setSaques] = useState<MeuSaque[]>([])
   const [salvando, setSalvando] = useState(false)
   const [msg, setMsg] = useState('')
   const [erro, setErro] = useState('')
@@ -59,14 +70,16 @@ export default function PerfilPage() {
     if (userId === null) { router.replace('/'); return }
     let cancelado = false
     ;(async () => {
-      const [p, cs, r, dr] = await Promise.all([
-        getProfile(userId), getMinhasContribuicoes(userId), getRecompensa(userId), getDadosRecompensa(userId),
+      const [p, cs, r, dr, sq] = await Promise.all([
+        getProfile(userId), getMinhasContribuicoes(userId), getRecompensa(userId), getDadosRecompensa(userId), getMeusSaques(userId),
       ])
       if (cancelado) return
       setProfile(p)
       setNome(p?.nome ?? ''); setTel(p?.telefone ?? ''); setRegiao(p?.regiao ?? '')
+      setSexo(p?.sexo ?? ''); setDataNasc(p?.data_nascimento ?? '')
       setContribs(cs)
       setRec(r)
+      setSaques(sq)
       if (dr) {
         if (dr.cpf) { setCpf(mascararCpf(dr.cpf)); setConsent(true) }
         setChavePix(dr.chave_pix ?? '')
@@ -108,7 +121,7 @@ export default function PerfilPage() {
     if (!regiao) { setErro('Selecione sua região.'); return }
     setSalvando(true)
     const { error } = await supabase.from('profiles')
-      .update({ nome: nome.trim(), telefone: tel, regiao }).eq('id', userId!)
+      .update({ nome: nome.trim(), telefone: tel, regiao, sexo: sexo || null, data_nascimento: dataNasc || null }).eq('id', userId!)
     setSalvando(false)
     if (error) { setErro(error.message); return }
     setMsg('Perfil salvo.')
@@ -136,10 +149,19 @@ export default function PerfilPage() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-6 py-8 space-y-10">
+      <nav className="max-w-lg mx-auto px-6 flex gap-5 border-b border-line">
+        {([['dados', 'Dados'], ['recompensas', 'Recompensas'], ['contribuicoes', 'Minhas contribuições']] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setAba(k)}
+            className={`text-sm pb-2 -mb-px border-b-2 transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="max-w-lg mx-auto px-6 py-8">
         {/* Dados */}
+        {aba === 'dados' && (
         <section>
-          <h2 className="font-[family-name:var(--font-serif)] text-lg mb-3">Dados</h2>
           <div className="space-y-3">
             <div>
               <label className="text-xs text-muted">E-mail</label>
@@ -161,6 +183,19 @@ export default function PerfilPage() {
                 {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted">Sexo</label>
+                <select value={sexo} onChange={e => setSexo(e.target.value)} className={inputCls}>
+                  <option value="">Selecione…</option>
+                  {SEXOS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted">Nascimento{idade(dataNasc) != null ? ` · ${idade(dataNasc)} anos` : ''}</label>
+                <input type="date" value={dataNasc} onChange={e => setDataNasc(e.target.value)} className={inputCls} />
+              </div>
+            </div>
             {erro && <p className="text-xs text-red-600">{erro}</p>}
             {msg && <p className="text-xs text-olive">{msg}</p>}
             <button disabled={salvando} onClick={salvar} className={btnCls}>
@@ -168,10 +203,11 @@ export default function PerfilPage() {
             </button>
           </div>
         </section>
+        )}
 
-        {/* Recompensas (Frente C fase 2) */}
+        {/* Recompensas */}
+        {aba === 'recompensas' && (
         <section>
-          <h2 className="font-[family-name:var(--font-serif)] text-lg mb-3">Recompensas</h2>
           {!rec ? <p className="text-sm text-muted">Carregando…</p> : (
             <>
               <div className="border border-line rounded-md bg-panel p-4 mb-4">
@@ -215,11 +251,34 @@ export default function PerfilPage() {
                   </button>
                 </div>
               </div>
+
+              {saques.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium mb-2">Histórico de saques</h3>
+                  <div className="space-y-2">
+                    {saques.map(s => {
+                      const st = SAQUE_STATUS[s.status] || SAQUE_STATUS.solicitado
+                      return (
+                        <div key={s.id} className="flex items-center gap-3 border border-line rounded-md p-2 bg-panel text-sm">
+                          <span className="tnum font-medium">{brl(Number(s.valor))}</span>
+                          <span className="text-xs text-muted">
+                            solicitado {new Date(s.criado_em).toLocaleDateString('pt-BR')}
+                            {s.pago_em ? ` · pago ${new Date(s.pago_em).toLocaleDateString('pt-BR')}` : ''}
+                          </span>
+                          <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 ml-auto shrink-0 ${st.cls}`}>{st.txt}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </section>
+        )}
 
         {/* Contribuições */}
+        {aba === 'contribuicoes' && (
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-[family-name:var(--font-serif)] text-lg">Minhas contribuições</h2>
@@ -270,6 +329,7 @@ export default function PerfilPage() {
               </div>
             )}
         </section>
+        )}
       </div>
     </main>
   )
