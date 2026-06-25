@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Lora, Inter } from "next/font/google";
 import "./globals.css";
+import RegistrarSW from "./RegistrarSW";
 
 const lora = Lora({
   subsets: ["latin"],
@@ -32,6 +33,19 @@ export const metadata: Metadata = {
     description:
       "O custo de produção de pratos feitos regionais brasileiros, medido a cada coleta.",
   },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Índice PF",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#c0492b",
 };
 
 export default function RootLayout({
@@ -40,6 +54,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={`${lora.variable} ${inter.variable} antialiased`}>
+        <RegistrarSW />
         {children}
       </body>
     </html>
