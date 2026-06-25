@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, limparSessaoLocal } from '@/lib/supabase'
 import {
   isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
   getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, getHistoricoManual,
@@ -47,10 +47,15 @@ export default function AdminPage() {
   // a sessão vem do onAuthStateChange (INITIAL_SESSION sai na hora, sem travar no
   // lock de refresh — ao contrário do getSession() em navegação client-side)
   useEffect(() => {
+    let resolvido = false
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      resolvido = true
       setUid(session?.user?.id ?? null)
     })
-    return () => subscription.unsubscribe()
+    // salvaguarda: se a auth não resolver (token quebrado segurando o lock),
+    // limpa a sessão e trata como deslogado em vez de congelar a tela
+    const t = setTimeout(() => { if (!resolvido) { limparSessaoLocal(); setUid(null) } }, 4000)
+    return () => { subscription.unsubscribe(); clearTimeout(t) }
   }, [])
 
   // carrega os dados FORA do callback de auth (chamar supabase lá dentro deadlocka)

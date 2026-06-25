@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { supabase } from '@/lib/supabase'
+import { supabase, limparSessaoLocal } from '@/lib/supabase'
 import {
   getProfile, getMinhasContribuicoes, excluirContribuicao,
   getRecompensa, getDadosRecompensa, salvarDadosRecompensa, solicitarSaque, getMeusSaques,
@@ -57,11 +57,16 @@ export default function PerfilPage() {
   // sessão via onAuthStateChange (INITIAL_SESSION sai na hora; getSession() trava no
   // lock de refresh em navegação client-side quando o refresh token está inválido)
   useEffect(() => {
+    let resolvido = false
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      resolvido = true
       setUserId(session?.user?.id ?? null)
       setEmail(session?.user?.email ?? '')
     })
-    return () => subscription.unsubscribe()
+    // salvaguarda: se a auth não resolver (token quebrado segurando o lock),
+    // limpa a sessão e trata como deslogado em vez de congelar a tela
+    const t = setTimeout(() => { if (!resolvido) { limparSessaoLocal(); setUserId(null) } }, 4000)
+    return () => { subscription.unsubscribe(); clearTimeout(t) }
   }, [])
 
   // dados carregam FORA do callback de auth (chamar supabase lá dentro deadlocka)
