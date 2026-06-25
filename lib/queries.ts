@@ -119,6 +119,38 @@ export async function moderarContribuicao(id: number, campos: Record<string, any
   return supabase.from('contribuicoes').update(campos).eq('id', id)
 }
 
+// contribuições aprovadas, para a esteira de auditoria. Filtros: período (desde),
+// preço mínimo (R$ digitado — útil p/ caçar erros tipo "799"), e busca textual.
+export async function getContribuicoesAprovadas(opts: {
+  desde?: string; precoMin?: number; busca?: string
+} = {}): Promise<ContribuicaoFull[]> {
+  let q = supabase.from('contribuicoes')
+    .select('id,user_id,ingrediente_id,produto,marca,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)')
+    .eq('status', 'aprovada')
+  if (opts.desde) q = q.gte('criado_em', opts.desde)
+  if (opts.precoMin != null) q = q.gte('preco', opts.precoMin)
+  const { data } = await q.order('criado_em', { ascending: false })
+  let rows = (data as unknown as ContribuicaoFull[]) || []
+  const b = opts.busca?.trim().toLowerCase()
+  if (b) rows = rows.filter(r =>
+    (r.ingredientes?.nome || '').toLowerCase().includes(b) ||
+    (r.mercado || '').toLowerCase().includes(b) ||
+    (r.produto || '').toLowerCase().includes(b))
+  return rows
+}
+
+// edita uma contribuição já aprovada: propaga para a leitura ligada e refaz os
+// preços efetivos. Retorna o R$/kg resultante (null se não calibra mais).
+export async function editarContribuicaoAprovada(id: number, c: {
+  ingrediente_id: number | null; preco: number | null; peso_g: number | null
+  marca: string | null; mercado: string | null; tipo_loja: string | null; produto: string | null
+}) {
+  return supabase.rpc('editar_contribuicao_aprovada', {
+    p_id: id, p_ingrediente: c.ingrediente_id, p_preco: c.preco, p_peso: c.peso_g,
+    p_marca: c.marca, p_mercado: c.mercado, p_tipo_loja: c.tipo_loja, p_produto: c.produto,
+  })
+}
+
 // aprova a contribuição E registra a leitura de campo que calibra o índice
 // (vira uma leitura humana no mesmo balde das leituras manuais — média 50/50 com o online).
 export async function aprovarContribuicao(
