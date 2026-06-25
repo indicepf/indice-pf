@@ -43,15 +43,26 @@ export default function PerfilPage() {
   const [recErro, setRecErro] = useState('')
   const [recBusy, setRecBusy] = useState(false)
 
+  // sessão via onAuthStateChange (INITIAL_SESSION sai na hora; getSession() trava no
+  // lock de refresh em navegação client-side quando o refresh token está inválido)
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      const u = data.session?.user
-      if (!u) { router.replace('/'); setUserId(null); return }
-      setUserId(u.id); setEmail(u.email ?? '')
-      // tudo em paralelo — antes eram 4 idas ao banco em série
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserId(session?.user?.id ?? null)
+      setEmail(session?.user?.email ?? '')
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // dados carregam FORA do callback de auth (chamar supabase lá dentro deadlocka)
+  useEffect(() => {
+    if (userId === undefined) return
+    if (userId === null) { router.replace('/'); return }
+    let cancelado = false
+    ;(async () => {
       const [p, cs, r, dr] = await Promise.all([
-        getProfile(u.id), getMinhasContribuicoes(u.id), getRecompensa(u.id), getDadosRecompensa(u.id),
+        getProfile(userId), getMinhasContribuicoes(userId), getRecompensa(userId), getDadosRecompensa(userId),
       ])
+      if (cancelado) return
       setProfile(p)
       setNome(p?.nome ?? ''); setTel(p?.telefone ?? ''); setRegiao(p?.regiao ?? '')
       setContribs(cs)
@@ -60,8 +71,9 @@ export default function PerfilPage() {
         if (dr.cpf) { setCpf(mascararCpf(dr.cpf)); setConsent(true) }
         setChavePix(dr.chave_pix ?? '')
       }
-    })
-  }, [router])
+    })()
+    return () => { cancelado = true }
+  }, [userId, router])
 
   async function salvarRecDados() {
     setRecErro(''); setRecMsg('')

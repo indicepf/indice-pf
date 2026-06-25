@@ -37,20 +37,34 @@ export default function AdminPage() {
   const [visiveisPrecos, setVisiveisPrecos] = useState(20)
   const [addAberto, setAddAberto] = useState(false)
 
+  const [uid, setUid] = useState<string | null | undefined>(undefined)
+
+  // a sessão vem do onAuthStateChange (INITIAL_SESSION sai na hora, sem travar no
+  // lock de refresh — ao contrário do getSession() em navegação client-side)
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      const u = data.session?.user
-      if (!u) { router.replace('/'); return }
-      if (!(await isAdmin(u.id))) { setEstado('negado'); return }
-      // consultas independentes em paralelo — a espera vira a mais lenta, não a soma
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUid(session?.user?.id ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // carrega os dados FORA do callback de auth (chamar supabase lá dentro deadlocka)
+  useEffect(() => {
+    if (uid === undefined) return
+    if (uid === null) { router.replace('/'); return }
+    let cancelado = false
+    ;(async () => {
+      if (!(await isAdmin(uid))) { if (!cancelado) setEstado('negado'); return }
       const [ings, itens, saques, manuais, origens] = await Promise.all([
         getIngredientes(), getContribuicoes('pendente'), getSaques('solicitado'),
         getIngredientesManuais(), getOrigensManuais(),
       ])
+      if (cancelado) return
       setIngs(ings); setItens(itens); setSaques(saques); setManuais(manuais); setOrigens(origens)
       setEstado('ok')
-    })
-  }, [router])
+    })()
+    return () => { cancelado = true }
+  }, [uid, router])
 
   // carrega a esteira de aprovadas ao entrar na aba (1ª vez)
   useEffect(() => {
