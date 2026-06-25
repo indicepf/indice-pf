@@ -119,24 +119,29 @@ export async function moderarContribuicao(id: number, campos: Record<string, any
   return supabase.from('contribuicoes').update(campos).eq('id', id)
 }
 
-// contribuições aprovadas, para a esteira de auditoria. Filtros: período (desde),
-// preço mínimo (R$ digitado — útil p/ caçar erros tipo "799"), e busca textual.
+export const APROVADAS_PAGINA = 20
+
+// contribuições aprovadas, para a esteira de auditoria. Paginada (range) para não
+// carregar tudo. Filtros: período (desde), preço mínimo (R$ — caça erros tipo "799")
+// e busca server-side por produto/mercado + ingredientes resolvidos no cliente
+// (ingIds, já que o nome do ingrediente está em tabela ligada). Retorna o total.
 export async function getContribuicoesAprovadas(opts: {
-  desde?: string; precoMin?: number; busca?: string
-} = {}): Promise<ContribuicaoFull[]> {
+  desde?: string; precoMin?: number; busca?: string; ingIds?: number[]; offset?: number
+} = {}): Promise<{ rows: ContribuicaoFull[]; total: number }> {
+  const offset = opts.offset ?? 0
   let q = supabase.from('contribuicoes')
-    .select('id,user_id,ingrediente_id,produto,marca,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)')
+    .select('id,user_id,ingrediente_id,produto,marca,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)', { count: 'exact' })
     .eq('status', 'aprovada')
   if (opts.desde) q = q.gte('criado_em', opts.desde)
   if (opts.precoMin != null) q = q.gte('preco', opts.precoMin)
-  const { data } = await q.order('criado_em', { ascending: false })
-  let rows = (data as unknown as ContribuicaoFull[]) || []
-  const b = opts.busca?.trim().toLowerCase()
-  if (b) rows = rows.filter(r =>
-    (r.ingredientes?.nome || '').toLowerCase().includes(b) ||
-    (r.mercado || '').toLowerCase().includes(b) ||
-    (r.produto || '').toLowerCase().includes(b))
-  return rows
+  const b = opts.busca?.trim().replace(/[(),*%]/g, ' ').trim()  // limpa chars que quebram o filtro or
+  if (b) {
+    const ors = [`produto.ilike.*${b}*`, `mercado.ilike.*${b}*`]
+    if (opts.ingIds?.length) ors.push(`ingrediente_id.in.(${opts.ingIds.join(',')})`)
+    q = q.or(ors.join(','))
+  }
+  const { data, count } = await q.order('criado_em', { ascending: false }).range(offset, offset + APROVADAS_PAGINA - 1)
+  return { rows: (data as unknown as ContribuicaoFull[]) || [], total: count ?? 0 }
 }
 
 // edita uma contribuição já aprovada: propaga para a leitura ligada e refaz os
