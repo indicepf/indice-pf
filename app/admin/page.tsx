@@ -20,7 +20,7 @@ export default function AdminPage() {
   const [aba, setAba] = useState<'mod' | 'aprovadas' | 'saques' | 'precos'>('mod')
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
-  const [aprLoaded, setAprLoaded] = useState(false); const [aprBusy, setAprBusy] = useState(false)
+  const [aprLoaded, setAprLoaded] = useState(false); const [aprBusy, setAprBusy] = useState(false); const [aprTotal, setAprTotal] = useState(0)
   const [aprDesde, setAprDesde] = useState(''); const [aprPrecoMin, setAprPrecoMin] = useState(''); const [aprBusca, setAprBusca] = useState('')
   const [aprDirty, setAprDirty] = useState(false); const [aprMsg, setAprMsg] = useState(''); const [salvandoId, setSalvandoId] = useState<number | null>(null)
   const [ings, setIngs] = useState<Ing[]>([])
@@ -42,11 +42,12 @@ export default function AdminPage() {
       const u = data.session?.user
       if (!u) { router.replace('/'); return }
       if (!(await isAdmin(u.id))) { setEstado('negado'); return }
-      setIngs(await getIngredientes())
-      setItens(await getContribuicoes('pendente'))
-      setSaques(await getSaques('solicitado'))
-      setManuais(await getIngredientesManuais())
-      setOrigens(await getOrigensManuais())
+      // consultas independentes em paralelo — a espera vira a mais lenta, não a soma
+      const [ings, itens, saques, manuais, origens] = await Promise.all([
+        getIngredientes(), getContribuicoes('pendente'), getSaques('solicitado'),
+        getIngredientesManuais(), getOrigensManuais(),
+      ])
+      setIngs(ings); setItens(itens); setSaques(saques); setManuais(manuais); setOrigens(origens)
       setEstado('ok')
     })
   }, [router])
@@ -57,14 +58,18 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, estado])
 
-  async function carregarAprovadas() {
+  // mais=true → anexa a próxima página; senão recarrega do zero (novo filtro)
+  async function carregarAprovadas(mais = false) {
     setAprBusy(true); setAprMsg('')
-    const data = await getContribuicoesAprovadas({
+    const b = aprBusca.trim().toLowerCase()
+    const ingIds = b ? ings.filter(i => i.nome.toLowerCase().includes(b)).map(i => i.id) : undefined
+    const { rows, total } = await getContribuicoesAprovadas({
       desde: aprDesde ? new Date(aprDesde + 'T00:00:00').toISOString() : undefined,
       precoMin: aprPrecoMin.trim() ? Number(aprPrecoMin.replace(',', '.')) : undefined,
-      busca: aprBusca,
+      busca: aprBusca, ingIds, offset: mais ? aprovadas.length : 0,
     })
-    setAprovadas(data); setAprLoaded(true); setAprBusy(false)
+    setAprovadas(prev => mais ? [...prev, ...rows] : rows)
+    setAprTotal(total); setAprLoaded(true); setAprBusy(false)
   }
   function patchApr(id: number, campo: keyof ContribuicaoFull, valor: any) {
     setAprovadas(prev => prev.map(i => i.id === id ? { ...i, [campo]: valor } : i))
@@ -201,7 +206,7 @@ export default function AdminPage() {
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
         <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3">
-          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprovadas.length})` : ''}`], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
+          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -277,7 +282,7 @@ export default function AdminPage() {
           <label className="text-xs flex-1">Buscar (ingrediente / mercado / produto)
             <input value={aprBusca} onChange={e => setAprBusca(e.target.value)} placeholder="ex: cebola" className={inputCls} />
           </label>
-          <button onClick={carregarAprovadas} disabled={aprBusy}
+          <button onClick={() => carregarAprovadas()} disabled={aprBusy}
             className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
             {aprBusy ? 'Filtrando…' : 'Aplicar filtros'}
           </button>
@@ -346,6 +351,18 @@ export default function AdminPage() {
           </div>
           )
         })}
+
+        {aprLoaded && aprovadas.length > 0 && (
+          <div className="flex items-center justify-center gap-3 pt-2">
+            {aprovadas.length < aprTotal ? (
+              <button onClick={() => carregarAprovadas(true)} disabled={aprBusy}
+                className="text-sm text-paprika border border-line rounded-md px-4 py-2 hover:bg-cream transition disabled:opacity-60">
+                {aprBusy ? 'Carregando…' : `Carregar mais (${aprTotal - aprovadas.length} restantes)`}
+              </button>
+            ) : null}
+            <span className="text-xs text-muted">{aprovadas.length} de {aprTotal}</span>
+          </div>
+        )}
       </div>
       ) : aba === 'saques' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-3" key="saques">
