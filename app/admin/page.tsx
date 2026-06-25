@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import {
   isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
   getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, getHistoricoManual,
-  getOrigensManuais,
+  getOrigensManuais, getContribuicoesAprovadas, editarContribuicaoAprovada,
   type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
 import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
@@ -17,8 +17,12 @@ type Saque = { id: number; user_id: string; valor: number; cpf: string | null; c
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'saques' | 'precos'>('mod')
+  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'saques' | 'precos'>('mod')
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
+  const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
+  const [aprLoaded, setAprLoaded] = useState(false); const [aprBusy, setAprBusy] = useState(false)
+  const [aprDesde, setAprDesde] = useState(''); const [aprPrecoMin, setAprPrecoMin] = useState(''); const [aprBusca, setAprBusca] = useState('')
+  const [aprDirty, setAprDirty] = useState(false); const [aprMsg, setAprMsg] = useState(''); const [salvandoId, setSalvandoId] = useState<number | null>(null)
   const [ings, setIngs] = useState<Ing[]>([])
   const [saques, setSaques] = useState<Saque[]>([])
   const [manuais, setManuais] = useState<IngManual[]>([])
@@ -46,6 +50,50 @@ export default function AdminPage() {
       setEstado('ok')
     })
   }, [router])
+
+  // carrega a esteira de aprovadas ao entrar na aba (1ª vez)
+  useEffect(() => {
+    if (aba === 'aprovadas' && estado === 'ok' && !aprLoaded && !aprBusy) carregarAprovadas()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, estado])
+
+  async function carregarAprovadas() {
+    setAprBusy(true); setAprMsg('')
+    const data = await getContribuicoesAprovadas({
+      desde: aprDesde ? new Date(aprDesde + 'T00:00:00').toISOString() : undefined,
+      precoMin: aprPrecoMin.trim() ? Number(aprPrecoMin.replace(',', '.')) : undefined,
+      busca: aprBusca,
+    })
+    setAprovadas(data); setAprLoaded(true); setAprBusy(false)
+  }
+  function patchApr(id: number, campo: keyof ContribuicaoFull, valor: any) {
+    setAprovadas(prev => prev.map(i => i.id === id ? { ...i, [campo]: valor } : i))
+  }
+  // R$/kg que a leitura terá — o índice usa R$/kg, então é aqui que o "799" aparece
+  function rsPorKg(c: ContribuicaoFull): number | null {
+    const ing = ings.find(i => i.id === c.ingrediente_id)
+    if (!ing || !c.preco || !c.peso_g || c.preco <= 0 || c.peso_g <= 0) return null
+    const gramas = (ing.unidade === 'unidade' || ing.unidade === 'maco') ? c.peso_g * (ing.peso_ref_g || 0) : c.peso_g
+    if (!gramas || gramas <= 0) return null
+    return c.preco / gramas * 1000
+  }
+  async function salvarAprovada(c: ContribuicaoFull) {
+    setSalvandoId(c.id); setAprMsg('')
+    const { error } = await editarContribuicaoAprovada(c.id, {
+      ingrediente_id: c.ingrediente_id, preco: c.preco, peso_g: c.peso_g,
+      marca: c.marca, mercado: c.mercado, tipo_loja: c.tipo_loja, produto: c.produto,
+    })
+    setSalvandoId(null)
+    if (error) { setAprMsg(`Erro ao salvar #${c.id}: ${error.message}`); return }
+    setAprDirty(true)
+    setAprMsg(`Contribuição #${c.id} atualizada. Clique em “Recalcular custos” para refletir no índice.`)
+  }
+  async function recalcularApr() {
+    setAprBusy(true); setAprMsg('')
+    const { error } = await recalcularCustos()
+    setAprBusy(false); setAprDirty(false)
+    setAprMsg(error ? `Erro ao recalcular: ${error.message}` : 'Custos do índice recalculados.')
+  }
 
   async function pagar(s: Saque) {
     if (!confirm(`Confirmar pagamento de ${brl(Number(s.valor))} via PIX (${s.chave_pix})?`)) return
@@ -153,7 +201,7 @@ export default function AdminPage() {
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
         <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3">
-          {([['mod', `Moderação (${itens.length})`], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
+          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprovadas.length})` : ''}`], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -209,6 +257,95 @@ export default function AdminPage() {
             </div>
           </div>
         ))}
+      </div>
+      ) : aba === 'aprovadas' ? (
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-5" key="aprovadas">
+        <p className="text-sm text-muted">
+          Esteira de auditoria das contribuições já aprovadas. Editar aqui propaga para o
+          índice (a leitura de campo é reescrita). O <strong>R$/kg</strong> ao lado do preço é o
+          valor que entra no índice — confira-o para pegar erros de digitação.
+        </p>
+
+        {/* filtros */}
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <label className="text-xs">A partir de
+            <input type="date" value={aprDesde} onChange={e => setAprDesde(e.target.value)} className={inputCls} />
+          </label>
+          <label className="text-xs">Preço ≥ R$
+            <input value={aprPrecoMin} onChange={e => setAprPrecoMin(e.target.value)} inputMode="decimal" placeholder="ex: 50" className={inputCls} />
+          </label>
+          <label className="text-xs flex-1">Buscar (ingrediente / mercado / produto)
+            <input value={aprBusca} onChange={e => setAprBusca(e.target.value)} placeholder="ex: cebola" className={inputCls} />
+          </label>
+          <button onClick={carregarAprovadas} disabled={aprBusy}
+            className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+            {aprBusy ? 'Filtrando…' : 'Aplicar filtros'}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button onClick={recalcularApr} disabled={aprBusy}
+            className={`text-sm px-4 py-1.5 rounded-md transition disabled:opacity-60 ${aprDirty ? 'bg-olive text-white hover:brightness-95' : 'border border-line text-muted hover:bg-cream'}`}>
+            {aprBusy ? 'Recalculando…' : 'Recalcular custos do índice'}
+          </button>
+          {aprDirty && <span className="text-xs text-paprika">há edições não refletidas no índice</span>}
+          {aprMsg && <span className="text-xs text-muted">{aprMsg}</span>}
+        </div>
+
+        {aprLoaded && !aprovadas.length && <p className="text-sm text-muted text-center py-10">Nenhuma contribuição aprovada para este filtro.</p>}
+
+        {aprovadas.map(c => {
+          const rk = rsPorKg(c)
+          return (
+          <div key={c.id} className="border border-line rounded-lg bg-panel overflow-hidden sm:flex">
+            <a href={c.foto_url || undefined} target="_blank" rel="noopener noreferrer" className="sm:w-48 shrink-0 block">
+              {c.foto_url
+                ? <img src={c.foto_url} alt="" className="w-full h-40 sm:h-full object-cover" />
+                : <div className="w-full h-40 bg-cream grid place-items-center text-muted text-xs">sem foto</div>}
+            </a>
+            <div className="p-4 flex-1">
+              <p className="text-[0.7rem] text-muted mb-2">
+                #{c.id} · {c.ingredientes?.nome || 'sem ingrediente'} · {new Date(c.criado_em).toLocaleString('pt-BR')}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <label>Ingrediente
+                  <select value={c.ingrediente_id ?? ''} onChange={e => patchApr(c.id, 'ingrediente_id', e.target.value ? Number(e.target.value) : null)} className={inputCls}>
+                    <option value="">—</option>
+                    {ings.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
+                  </select>
+                </label>
+                <label>Preço (R$)
+                  <input value={c.preco ?? ''} onChange={e => patchApr(c.id, 'preco', e.target.value ? Number(e.target.value.replace(',', '.')) : null)} inputMode="decimal" className={inputCls} />
+                </label>
+                <label>Qtd ({unidadeCurta(ings.find(i => i.id === c.ingrediente_id)?.unidade)})
+                  <input value={c.peso_g ?? ''} onChange={e => patchApr(c.id, 'peso_g', e.target.value ? Number(e.target.value.replace(',', '.')) : null)} inputMode="decimal" className={inputCls} />
+                </label>
+                <label>Marca
+                  <input value={c.marca ?? ''} onChange={e => patchApr(c.id, 'marca', e.target.value || null)} placeholder="opcional" className={inputCls} />
+                </label>
+                <label>Mercado
+                  <input value={c.mercado ?? ''} onChange={e => patchApr(c.id, 'mercado', e.target.value || null)} placeholder="ex: feira local" className={inputCls} />
+                </label>
+                <label>Tipo de loja
+                  <input value={c.tipo_loja ?? ''} onChange={e => patchApr(c.id, 'tipo_loja', e.target.value || null)} placeholder="ex: Feira" className={inputCls} />
+                </label>
+                <label className="col-span-2 sm:col-span-3">Produto (descrição)
+                  <input value={c.produto ?? ''} onChange={e => patchApr(c.id, 'produto', e.target.value || null)} placeholder="opcional" className={inputCls} />
+                </label>
+              </div>
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
+                <button onClick={() => salvarAprovada(c)} disabled={salvandoId === c.id}
+                  className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+                  {salvandoId === c.id ? 'Salvando…' : 'Salvar'}
+                </button>
+                <span className={`text-xs px-2 py-1 rounded ${rk == null ? 'text-muted' : rk > 100 ? 'bg-paprika/10 text-paprika font-medium' : 'text-muted'}`}>
+                  {rk == null ? 'não calibra o índice' : `${brl(rk)}/kg${rk > 100 ? ' · confira' : ''}`}
+                </span>
+              </div>
+            </div>
+          </div>
+          )
+        })}
       </div>
       ) : aba === 'saques' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-3" key="saques">
