@@ -8,12 +8,26 @@ const SUPABASE_ANON_KEY =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+function chaveSessao() {
+  return `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`
+}
+
+// lê o usuário da sessão persistida de forma SÍNCRONA (sem rede, sem o lock de
+// auth). Permite renderizar admin/perfil na hora em navegação client-side, em
+// vez de esperar o getSession() — que trava no lock quando o auto-refresh roda.
+export function usuarioDoStorage(): { id: string; email: string } | null {
+  try {
+    const raw = localStorage.getItem(chaveSessao())
+    if (!raw) return null
+    const p = JSON.parse(raw)
+    const u = p?.user ?? p?.currentSession?.user ?? p?.session?.user
+    return u?.id ? { id: u.id, email: u.email ?? '' } : null
+  } catch { return null }
+}
+
 // remove a sessão persistida direto do storage (sem passar pela auth, que pode
 // estar travada). Usado quando a renovação de token quebra e segura o lock —
 // na próxima carga o cliente nasce limpo e a pessoa só precisa logar de novo.
 export function limparSessaoLocal() {
-  try {
-    const ref = new URL(SUPABASE_URL).hostname.split('.')[0]
-    localStorage.removeItem(`sb-${ref}-auth-token`)
-  } catch { /* storage indisponível */ }
+  try { localStorage.removeItem(chaveSessao()) } catch { /* storage indisponível */ }
 }
