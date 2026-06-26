@@ -130,7 +130,7 @@ export async function getContribuicoesAprovadas(opts: {
 } = {}): Promise<{ rows: ContribuicaoFull[]; total: number }> {
   const offset = opts.offset ?? 0
   let q = supabase.from('contribuicoes')
-    .select('id,user_id,ingrediente_id,produto,marca,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)', { count: 'exact' })
+    .select('id,user_id,ingrediente_id,produto,marca,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,aprovado_por,aprovado_dispositivo,aprovado_lat,aprovado_lng,ingredientes(nome)', { count: 'exact' })
     .eq('status', 'aprovada')
   if (opts.desde) q = q.gte('criado_em', opts.desde)
   if (opts.precoMin != null) q = q.gte('preco', opts.precoMin)
@@ -141,7 +141,12 @@ export async function getContribuicoesAprovadas(opts: {
     q = q.or(ors.join(','))
   }
   const { data, count } = await q.order('criado_em', { ascending: false }).range(offset, offset + APROVADAS_PAGINA - 1)
-  return { rows: (data as unknown as ContribuicaoFull[]) || [], total: count ?? 0 }
+  const rows = (data as any[]) || []
+  const nomes = await nomesPorId(rows.map(r => r.aprovado_por))
+  return {
+    rows: rows.map(r => ({ ...r, aprovador_nome: r.aprovado_por ? (nomes[r.aprovado_por] ?? 'admin') : null })) as unknown as ContribuicaoFull[],
+    total: count ?? 0,
+  }
 }
 
 // edita uma contribuição já aprovada: propaga para a leitura ligada e refaz os
@@ -160,10 +165,11 @@ export async function editarContribuicaoAprovada(id: number, c: {
 // (vira uma leitura humana no mesmo balde das leituras manuais — média 50/50 com o online).
 export async function aprovarContribuicao(
   id: number, ingrediente_id: number | null, preco: number | null, peso_g: number | null,
-  marca: string | null,
+  marca: string | null, ctx?: { dispositivo: string; lat: number | null; lng: number | null },
 ) {
   return supabase.rpc('aprovar_contribuicao', {
     p_id: id, p_ingrediente: ingrediente_id, p_preco: preco, p_peso: peso_g, p_marca: marca,
+    p_dispositivo: ctx?.dispositivo ?? null, p_lat: ctx?.lat ?? null, p_lng: ctx?.lng ?? null,
   })
 }
 
@@ -217,23 +223,68 @@ export async function getMeusSaques(uid: string) {
   return (data as { id: number; valor: number; status: string; criado_em: string; pago_em: string | null }[]) || []
 }
 
-// admin: histórico de TODOS os saques (com nome/telefone), mais recentes primeiro
+// admin: histórico de TODOS os saques (com nome, quem pagou e contexto)
 export async function getTodosSaques() {
   const { data } = await supabase.from('pagamentos')
-    .select('id,user_id,valor,cpf,chave_pix,status,criado_em,pago_em')
+    .select('id,user_id,valor,cpf,chave_pix,status,criado_em,pago_em,pago_por,pago_dispositivo,pago_lat,pago_lng')
     .order('criado_em', { ascending: false })
   const saques = (data as any[]) || []
-  const ids = [...new Set(saques.map(s => s.user_id).filter(Boolean))]
+  const ids = [...new Set(saques.flatMap(s => [s.user_id, s.pago_por]).filter(Boolean))]
   const nomes: Record<string, { nome: string | null; telefone: string | null }> = {}
   if (ids.length) {
     const { data: profs } = await supabase.from('profiles').select('id,nome,telefone').in('id', ids)
     ;(profs || []).forEach((p: any) => { nomes[p.id] = { nome: p.nome, telefone: p.telefone } })
   }
-  return saques.map(s => ({ ...s, nome: nomes[s.user_id]?.nome ?? null, telefone: nomes[s.user_id]?.telefone ?? null }))
+  return saques.map(s => ({
+    ...s, nome: nomes[s.user_id]?.nome ?? null, telefone: nomes[s.user_id]?.telefone ?? null,
+    aprovador: s.pago_por ? (nomes[s.pago_por]?.nome ?? 'admin') : null,
+  }))
 }
 
-export async function marcarSaquePago(id: number) {
-  return supabase.from('pagamentos').update({ status: 'pago', pago_em: new Date().toISOString() }).eq('id', id)
+export async function marcarSaquePago(
+  id: number, uid: string, ctx?: { dispositivo: string; lat: number | null; lng: number | null },
+) {
+  return supabase.from('pagamentos').update({
+    status: 'pago', pago_em: new Date().toISOString(),
+    pago_por: uid, pago_dispositivo: ctx?.dispositivo ?? null, pago_lat: ctx?.lat ?? null, pago_lng: ctx?.lng ?? null,
+  }).eq('id', id)
+}
+
+// ---- Auditoria / logins ----
+export type LoginRow = { id: number; user_id: string | null; dispositivo: string | null; lat: number | null; lng: number | null; precisao: number | null; criado_em: string; nome: string | null }
+export type AuditRow = { id: number; tabela: string; registro_id: string | null; acao: string; ator: string | null; dados_antes: any; dados_depois: any; criado_em: string; ator_nome: string | null }
+
+export async function registrarLogin(uid: string, ctx: { dispositivo: string; lat: number | null; lng: number | null; precisao: number | null }) {
+  return supabase.from('login_log').insert({ user_id: uid, dispositivo: ctx.dispositivo, lat: ctx.lat, lng: ctx.lng, precisao: ctx.precisao })
+}
+
+async function nomesPorId(ids: string[]): Promise<Record<string, string | null>> {
+  const u = [...new Set(ids.filter(Boolean))]
+  const out: Record<string, string | null> = {}
+  if (u.length) {
+    const { data } = await supabase.from('profiles').select('id,nome').in('id', u)
+    ;(data || []).forEach((p: any) => { out[p.id] = p.nome })
+  }
+  return out
+}
+
+export async function getLogins(): Promise<LoginRow[]> {
+  const { data } = await supabase.from('login_log')
+    .select('id,user_id,dispositivo,lat,lng,precisao,criado_em').order('criado_em', { ascending: false }).limit(500)
+  const rows = (data as any[]) || []
+  const nomes = await nomesPorId(rows.map(r => r.user_id))
+  return rows.map(r => ({ ...r, nome: r.user_id ? (nomes[r.user_id] ?? null) : null }))
+}
+
+export async function getAuditLog(opts: { tabela?: string; acao?: string; desde?: string } = {}): Promise<AuditRow[]> {
+  let q = supabase.from('audit_log').select('id,tabela,registro_id,acao,ator,dados_antes,dados_depois,criado_em')
+  if (opts.tabela) q = q.eq('tabela', opts.tabela)
+  if (opts.acao) q = q.eq('acao', opts.acao)
+  if (opts.desde) q = q.gte('criado_em', opts.desde)
+  const { data } = await q.order('criado_em', { ascending: false }).limit(500)
+  const rows = (data as any[]) || []
+  const nomes = await nomesPorId(rows.map(r => r.ator))
+  return rows.map(r => ({ ...r, ator_nome: r.ator ? (nomes[r.ator] ?? 'admin') : 'sistema' }))
 }
 
 export type IngManual = {

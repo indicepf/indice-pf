@@ -10,10 +10,12 @@ import {
   type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
 import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
+import { capturarContexto, resumoDispositivo } from '@/lib/contexto'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
 import Painel from './Painel'
+import Auditoria from './Auditoria'
 
-type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; pago_em?: string | null; nome: string | null; telefone: string | null }
+type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; pago_em?: string | null; nome: string | null; telefone: string | null; aprovador?: string | null; pago_dispositivo?: string | null }
 const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
   pago:      { txt: 'pago',      cls: 'text-olive border-olive/30 bg-olive/5' },
   rejeitada: { txt: 'rejeitado', cls: 'text-red-600 border-red-200 bg-red-50' },
@@ -22,7 +24,7 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos'>('mod')
+  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'auditoria'>('mod')
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
   const [aprLoaded, setAprLoaded] = useState(false); const [aprBusy, setAprBusy] = useState(false); const [aprTotal, setAprTotal] = useState(0)
@@ -135,9 +137,10 @@ export default function AdminPage() {
 
   async function pagar(s: Saque) {
     if (!confirm(`Confirmar pagamento de ${brl(Number(s.valor))} via PIX (${s.chave_pix})?`)) return
-    await marcarSaquePago(s.id)
+    const ctx = await capturarContexto()
+    await marcarSaquePago(s.id, uid!, ctx)
     setSaques(prev => prev.filter(x => x.id !== s.id))
-    setHistSaques(prev => [{ ...s, status: 'pago', pago_em: new Date().toISOString() }, ...(prev || [])])
+    setHistSaques(prev => [{ ...s, status: 'pago', pago_em: new Date().toISOString(), aprovador: 'você' }, ...(prev || [])])
   }
 
   function patchManual(id: number, campo: keyof IngManual, valor: any) {
@@ -199,7 +202,8 @@ export default function AdminPage() {
   async function moderar(c: ContribuicaoFull, status: 'aprovada' | 'rejeitada') {
     if (status === 'aprovada') {
       // aprova + registra a leitura de campo (calibra o índice) + recalcula
-      await aprovarContribuicao(c.id, c.ingrediente_id, c.preco, c.peso_g, c.marca)
+      const ctx = await capturarContexto()
+      await aprovarContribuicao(c.id, c.ingrediente_id, c.preco, c.peso_g, c.marca, ctx)
       await recalcularCustos()
     } else {
       await moderarContribuicao(c.id, { status: 'rejeitada' })
@@ -240,7 +244,7 @@ export default function AdminPage() {
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
         <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3">
-          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['painel', 'Painel'], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
+          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -345,6 +349,10 @@ export default function AdminPage() {
             <div className="p-4 flex-1">
               <p className="text-[0.7rem] text-muted mb-2">
                 #{c.id} · {c.ingredientes?.nome || 'sem ingrediente'} · {new Date(c.criado_em).toLocaleString('pt-BR')}
+                {c.aprovador_nome && <> · aprovado por <span className="text-ink">{c.aprovador_nome}</span>
+                  {c.aprovado_dispositivo ? ` (${resumoDispositivo(c.aprovado_dispositivo)})` : ''}
+                  {c.aprovado_lat != null && c.aprovado_lng != null && <> · <a href={`https://www.openstreetmap.org/?mlat=${c.aprovado_lat}&mlon=${c.aprovado_lng}#map=16/${c.aprovado_lat}/${c.aprovado_lng}`} target="_blank" rel="noopener noreferrer" className="text-paprika hover:underline">local</a></>}
+                </>}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                 <label>Ingrediente
@@ -402,6 +410,10 @@ export default function AdminPage() {
       <div className="max-w-3xl mx-auto px-6 py-8" key="painel">
         <Painel ings={ings} />
       </div>
+      ) : aba === 'auditoria' ? (
+      <div className="max-w-3xl mx-auto px-6 py-8" key="auditoria">
+        <Auditoria />
+      </div>
       ) : aba === 'saques' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-3" key="saques">
         {!saques.length && <p className="text-sm text-muted text-center py-6">Nenhuma solicitação de saque pendente.</p>}
@@ -451,6 +463,7 @@ export default function AdminPage() {
                       <th className="font-medium px-3 py-2 text-right">Valor</th>
                       <th className="font-medium px-3 py-2">Solicitado</th>
                       <th className="font-medium px-3 py-2">Pago</th>
+                      <th className="font-medium px-3 py-2">Aprovado por</th>
                       <th className="font-medium px-3 py-2">Status</th>
                     </tr>
                   </thead>
@@ -463,6 +476,7 @@ export default function AdminPage() {
                           <td className="px-3 py-2 text-right tnum">{brl(Number(s.valor))}</td>
                           <td className="px-3 py-2 text-muted">{new Date(s.criado_em).toLocaleDateString('pt-BR')}</td>
                           <td className="px-3 py-2 text-muted">{s.pago_em ? new Date(s.pago_em).toLocaleDateString('pt-BR') : '—'}</td>
+                          <td className="px-3 py-2 text-muted" title={s.pago_dispositivo || ''}>{s.aprovador || '—'}</td>
                           <td className="px-3 py-2">
                             <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 ${st.cls}`}>{st.txt}</span>
                           </td>

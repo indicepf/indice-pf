@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth, perfilCompleto } from './useAuth'
+import { capturarContexto } from '@/lib/contexto'
+import { registrarLogin } from '@/lib/queries'
 import { REGIOES, mascararTel, telValido } from '@/lib/format'
 
 export default function AuthControls() {
@@ -29,6 +31,8 @@ export default function AuthControls() {
   function fechar() { setModal('none'); setErro(''); setInfo('') }
 
   async function aposLogin(uid: string) {
+    // registra o login (dispositivo + GPS) em segundo plano — não bloqueia
+    capturarContexto().then(ctx => registrarLogin(uid, ctx)).catch(() => {})
     const p = await refresh(uid)
     if (!perfilCompleto(p)) setStep('perfil')
     else fechar()
