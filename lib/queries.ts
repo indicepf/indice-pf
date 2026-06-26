@@ -294,3 +294,41 @@ export async function getHistoricoManual(ingredienteId: number): Promise<PrecoMa
 export async function recalcularCustos() {
   return supabase.rpc('recalcular_custos_ultimo_snapshot')
 }
+
+// ---- Painel de controle (admin) ----
+export type PainelContrib = {
+  id: number; user_id: string; ingrediente_id: number | null
+  preco: number | null; peso_g: number | null; status: string; criado_em: string
+  cidade: string | null; lat: number | null; lng: number | null
+  mercado: string | null; produto: string | null; ingredientes: { nome: string } | null
+}
+export type PerfilBasico = {
+  id: string; nome: string | null; regiao: string | null
+  telefone: string | null; sexo: string | null; data_nascimento: string | null
+}
+
+// todas as contribuições (volume pequeno → agregação no cliente)
+export async function getPainelContribuicoes(): Promise<PainelContrib[]> {
+  const data = await fetchAll(() => supabase.from('contribuicoes')
+    .select('id,user_id,ingrediente_id,preco,peso_g,status,criado_em,cidade,lat,lng,mercado,produto,ingredientes(nome)')
+    .order('criado_em', { ascending: false }))
+  return (data as unknown as PainelContrib[]) || []
+}
+
+// perfis dos contribuidores (mesmo padrão do getSaques: por ids)
+export async function getPerfis(ids: string[]): Promise<PerfilBasico[]> {
+  if (!ids.length) return []
+  const { data } = await supabase.from('profiles')
+    .select('id,nome,regiao,telefone,sexo,data_nascimento').in('id', ids)
+  return (data as PerfilBasico[]) || []
+}
+
+// nº de pratos distintos por ingrediente (impacto no índice)
+export async function getUsoPorIngrediente(): Promise<Record<number, number>> {
+  const rows = await fetchAll(() => supabase.from('receitas').select('ingrediente_id,prato_id'))
+  const sets: Record<number, Set<number>> = {}
+  ;(rows as any[]).forEach(r => { (sets[r.ingrediente_id] ||= new Set()).add(r.prato_id) })
+  const out: Record<number, number> = {}
+  Object.entries(sets).forEach(([k, v]) => { out[+k] = v.size })
+  return out
+}

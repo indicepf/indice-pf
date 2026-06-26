@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaf
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-export type Ponto = { lat: number; lng: number; label?: string }
+export type Ponto = { lat: number; lng: number; label?: string; color?: string }
 
 function Ajuste({ points }: { points: Ponto[] }) {
   const map = useMap()
@@ -26,7 +26,7 @@ export default function MapaLocal({ points, height = '320px' }: { points: Ponto[
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {points.map((p, i) => (
         <CircleMarker key={i} center={[p.lat, p.lng]} radius={8}
-          pathOptions={{ color: '#ffffff', weight: 2, fillColor: '#c0492b', fillOpacity: 0.9 }}>
+          pathOptions={{ color: '#ffffff', weight: 2, fillColor: p.color ?? '#c0492b', fillOpacity: 0.9 }}>
           {p.label && <Popup>{p.label}</Popup>}
         </CircleMarker>
       ))}
