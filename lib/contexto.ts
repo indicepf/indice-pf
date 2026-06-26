@@ -2,10 +2,13 @@
 // Best-effort: nunca lança nem trava a ação — se o GPS for negado/demorar,
 // lat/lng ficam null e a ação segue normalmente.
 
-export type Contexto = { dispositivo: string; lat: number | null; lng: number | null; precisao: number | null }
+// fonte: 'gps' = preciso (autorizado) · 'ip' = aproximado (Vercel) · null = sem local
+export type Contexto = { dispositivo: string; lat: number | null; lng: number | null; precisao: number | null; fonte: 'gps' | 'ip' | null }
 
 export async function capturarContexto(): Promise<Contexto> {
   const dispositivo = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+
+  // 1. GPS preciso (se autorizado)
   const pos = await new Promise<GeolocationPosition | null>((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null)
     navigator.geolocation.getCurrentPosition(
@@ -14,12 +17,18 @@ export async function capturarContexto(): Promise<Contexto> {
       { timeout: 8000, maximumAge: 300000, enableHighAccuracy: true },
     )
   })
-  return {
-    dispositivo,
-    lat: pos?.coords.latitude ?? null,
-    lng: pos?.coords.longitude ?? null,
-    precisao: pos?.coords.accuracy ?? null,
-  }
+  if (pos) return { dispositivo, lat: pos.coords.latitude, lng: pos.coords.longitude, precisao: pos.coords.accuracy, fonte: 'gps' }
+
+  // 2. fallback: geo aproximada por IP (Vercel)
+  try {
+    const r = await fetch('/api/geo')
+    if (r.ok) {
+      const g = await r.json()
+      if (g.lat != null && g.lng != null) return { dispositivo, lat: g.lat, lng: g.lng, precisao: null, fonte: 'ip' }
+    }
+  } catch { /* sem fallback */ }
+
+  return { dispositivo, lat: null, lng: null, precisao: null, fonte: null }
 }
 
 // resumo legível de um user agent ("Chrome · Android", etc.)

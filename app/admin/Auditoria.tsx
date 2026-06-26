@@ -147,7 +147,10 @@ export default function Auditoria() {
                         <tr key={l.id} className="border-t border-line/60">
                           <td className="px-3 py-2 truncate max-w-[10rem]">{l.nome || '—'}</td>
                           <td className="px-3 py-2 text-muted" title={l.dispositivo || ''}>{resumoDispositivo(l.dispositivo)}</td>
-                          <td className="px-3 py-2">{link ? <a href={link} target="_blank" rel="noopener noreferrer" className="text-paprika hover:underline">ver no mapa</a> : <span className="text-muted">—</span>}</td>
+                          <td className="px-3 py-2">{link ? <>
+                            <a href={link} target="_blank" rel="noopener noreferrer" className="text-paprika hover:underline">ver no mapa</a>
+                            <span className="text-[0.6rem] text-muted ml-1">{l.precisao != null ? 'GPS' : 'aprox.'}</span>
+                          </> : <span className="text-muted">—</span>}</td>
                           <td className="px-3 py-2 text-muted">{new Date(l.criado_em).toLocaleString('pt-BR')}</td>
                         </tr>
                       )

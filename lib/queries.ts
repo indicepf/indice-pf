@@ -251,7 +251,7 @@ export async function marcarSaquePago(
 }
 
 // ---- Auditoria / logins ----
-export type LoginRow = { id: number; user_id: string | null; dispositivo: string | null; lat: number | null; lng: number | null; criado_em: string; nome: string | null }
+export type LoginRow = { id: number; user_id: string | null; dispositivo: string | null; lat: number | null; lng: number | null; precisao: number | null; criado_em: string; nome: string | null }
 export type AuditRow = { id: number; tabela: string; registro_id: string | null; acao: string; ator: string | null; dados_antes: any; dados_depois: any; criado_em: string; ator_nome: string | null }
 
 export async function registrarLogin(uid: string, ctx: { dispositivo: string; lat: number | null; lng: number | null; precisao: number | null }) {
@@ -270,7 +270,7 @@ async function nomesPorId(ids: string[]): Promise<Record<string, string | null>>
 
 export async function getLogins(): Promise<LoginRow[]> {
   const { data } = await supabase.from('login_log')
-    .select('id,user_id,dispositivo,lat,lng,criado_em').order('criado_em', { ascending: false }).limit(500)
+    .select('id,user_id,dispositivo,lat,lng,precisao,criado_em').order('criado_em', { ascending: false }).limit(500)
   const rows = (data as any[]) || []
   const nomes = await nomesPorId(rows.map(r => r.user_id))
   return rows.map(r => ({ ...r, nome: r.user_id ? (nomes[r.user_id] ?? null) : null }))
