@@ -5,8 +5,10 @@ import dynamic from 'next/dynamic'
 import {
   getPainelContribuicoes, getPerfis, getUsoPorIngrediente, getLatestSnapshot,
   editarContribuicaoAprovada, moderarContribuicao, recalcularCustos,
+  superExcluir, superEditarPerfil,
   type PainelContrib, type PerfilBasico,
 } from '@/lib/queries'
+import { capturarContexto } from '@/lib/contexto'
 import { brl, idade, SEXOS, unidadeCurta } from '@/lib/format'
 import type { Ing } from '@/lib/types'
 
@@ -84,9 +86,10 @@ function baixarCSV(nome: string, linhas: (string | number | null)[][]) {
   const a = document.createElement('a'); a.href = url; a.download = nome; a.click(); URL.revokeObjectURL(url)
 }
 
-export default function Painel({ ings }: { ings: Ing[] }) {
+export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: boolean }) {
   const [contribs, setContribs] = useState<PainelContrib[] | null>(null)
   const [perfis, setPerfis] = useState<Record<string, PerfilBasico>>({})
+  const [editPerfil, setEditPerfil] = useState<PerfilBasico | null>(null)
   const [uso, setUso] = useState<Record<number, number>>({})
   const [indice, setIndice] = useState<number | null>(null)
   const [sub, setSub] = useState<'usuarios' | 'mapa' | 'ingredientes'>('usuarios')
@@ -181,6 +184,32 @@ export default function Painel({ ings }: { ings: Ing[] }) {
     setEditMsg(error ? `Erro ao recalcular: ${error.message}` : 'Custos do índice recalculados.')
   }
 
+  async function salvarPerfil(p: PerfilBasico) {
+    const ctx = await capturarContexto()
+    const { error } = await superEditarPerfil(p.id, {
+      nome: p.nome, telefone: p.telefone, regiao: p.regiao,
+      is_admin: !!p.is_admin, is_super: !!p.is_super,
+    }, ctx)
+    if (error) { setEditMsg('Erro ao salvar perfil: ' + error.message); return }
+    setPerfis(prev => ({ ...prev, [p.id]: p }))
+    setEditPerfil(null)
+  }
+  async function excluirPerfil(id: string) {
+    if (!confirm('Excluir DEFINITIVAMENTE este perfil? A ação fica registrada em "Ações do super".')) return
+    const ctx = await capturarContexto()
+    const { error } = await superExcluir('profiles', id, ctx)
+    if (error) { setEditMsg('Erro ao excluir perfil: ' + error.message); return }
+    setPerfis(prev => { const c = { ...prev }; delete c[id]; return c })
+    setUserSel(null)
+  }
+  async function excluirIngrediente(id: number, nome: string) {
+    if (!confirm(`Excluir o ingrediente "${nome}"? Isso pode quebrar os custos dos pratos que o usam. A ação fica registrada em "Ações do super".`)) return
+    const ctx = await capturarContexto()
+    const { error } = await superExcluir('ingredientes', id, ctx)
+    if (error) { alert('Erro ao excluir: ' + error.message); return }
+    window.location.reload()
+  }
+
   if (!contribs) return <p className="text-sm text-muted text-center py-16">Carregando painel…</p>
 
   // ── detalhe de um usuário ───────────────────────────────────────────────────
@@ -209,6 +238,38 @@ export default function Painel({ ings }: { ings: Ing[] }) {
             <div><dt className="text-xs text-muted">Rejeitadas</dt><dd className="text-red-600">{rj}</dd></div>
             <div><dt className="text-xs text-muted">Taxa de aprovação</dt><dd>{taxa != null ? `${taxa}%` : '—'}</dd></div>
           </dl>
+          {souSuper && (
+            <div className="mt-3 pt-3 border-t border-line flex items-center gap-2 flex-wrap">
+              <button onClick={() => setEditPerfil(editPerfil?.id === userSel ? null : { ...(p ?? { id: userSel, nome: null, regiao: null, telefone: null, sexo: null, data_nascimento: null, is_admin: false, is_super: false }) })}
+                className="text-sm border border-line text-muted px-3 py-1.5 rounded-md hover:bg-cream transition">
+                {editPerfil?.id === userSel ? 'Cancelar' : 'Editar perfil'}
+              </button>
+              <button onClick={() => excluirPerfil(userSel)}
+                className="text-sm border border-red-200 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 transition">Excluir perfil</button>
+              {editMsg && <span className="text-xs text-muted">{editMsg}</span>}
+            </div>
+          )}
+          {souSuper && editPerfil?.id === userSel && (
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <label>Nome
+                <input value={editPerfil.nome ?? ''} onChange={e => setEditPerfil(v => v && ({ ...v, nome: e.target.value || null }))} className={inputCls} />
+              </label>
+              <label>Telefone
+                <input value={editPerfil.telefone ?? ''} onChange={e => setEditPerfil(v => v && ({ ...v, telefone: e.target.value || null }))} className={inputCls} />
+              </label>
+              <label>Região
+                <input value={editPerfil.regiao ?? ''} onChange={e => setEditPerfil(v => v && ({ ...v, regiao: e.target.value || null }))} className={inputCls} />
+              </label>
+              <label className="flex items-center gap-2 mt-1 col-span-2 sm:col-span-1">
+                <input type="checkbox" checked={!!editPerfil.is_admin} onChange={e => setEditPerfil(v => v && ({ ...v, is_admin: e.target.checked }))} /> admin
+              </label>
+              <label className="flex items-center gap-2 mt-1 col-span-2 sm:col-span-1">
+                <input type="checkbox" checked={!!editPerfil.is_super} onChange={e => setEditPerfil(v => v && ({ ...v, is_super: e.target.checked }))} /> superusuário
+              </label>
+              <button onClick={() => salvarPerfil(editPerfil)}
+                className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition col-span-2 sm:col-span-1 self-end">Salvar perfil</button>
+            </div>
+          )}
         </div>
         {pontos.length > 0 && <MapaLocal points={pontos} height="320px" />}
         {(recalcDirty || editMsg) && (
@@ -380,6 +441,10 @@ export default function Painel({ ings }: { ings: Ing[] }) {
                             <button onClick={() => { setEdit({ ...c }); setEditMsg('') }} className="text-paprika hover:underline shrink-0">editar</button>
                           </div>
                         ))}
+                        {souSuper && (
+                          <button onClick={() => excluirIngrediente(x.ing.id, x.ing.nome)}
+                            className="text-xs text-red-600 hover:underline">excluir ingrediente</button>
+                        )}
                       </div>
                     )}
                   </div>

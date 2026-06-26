@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getAuditLog, getLogins, type AuditRow, type LoginRow } from '@/lib/queries'
-import { resumoDispositivo } from '@/lib/contexto'
+import { getAuditLog, getLogins, superExcluir, type AuditRow, type LoginRow } from '@/lib/queries'
+import { capturarContexto, resumoDispositivo } from '@/lib/contexto'
 
 const TABELAS = ['contribuicoes', 'pagamentos', 'profiles', 'precos_manuais_hist', 'ingredientes']
 const ACAO_CLS: Record<string, string> = {
@@ -10,12 +10,12 @@ const ACAO_CLS: Record<string, string> = {
   UPDATE: 'text-muted border-line',
   DELETE: 'text-red-600 border-red-200 bg-red-50',
 }
-function mapaLink(lat: number | null, lng: number | null) {
+export function mapaLink(lat: number | null, lng: number | null) {
   if (lat == null || lng == null) return null
   return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`
 }
 // campos que mudaram entre antes e depois
-function diffCampos(antes: any, depois: any) {
+export function diffCampos(antes: any, depois: any) {
   const ks = new Set([...Object.keys(antes || {}), ...Object.keys(depois || {})])
   const out: { campo: string; antes: any; depois: any }[] = []
   ks.forEach(k => {
@@ -24,9 +24,9 @@ function diffCampos(antes: any, depois: any) {
   })
   return out
 }
-const val = (v: any) => v == null ? '∅' : typeof v === 'object' ? JSON.stringify(v) : String(v)
+export const val = (v: any) => v == null ? '∅' : typeof v === 'object' ? JSON.stringify(v) : String(v)
 
-export default function Auditoria() {
+export default function Auditoria({ souSuper }: { souSuper: boolean }) {
   const [sub, setSub] = useState<'alteracoes' | 'logins'>('alteracoes')
   const [rows, setRows] = useState<AuditRow[] | null>(null)
   const [logins, setLogins] = useState<LoginRow[] | null>(null)
@@ -44,6 +44,14 @@ export default function Auditoria() {
   }
   useEffect(() => { carregar() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
   useEffect(() => { if (sub === 'logins' && logins === null) getLogins().then(setLogins) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sub])
+
+  async function excluirLogin(id: number) {
+    if (!confirm('Excluir DEFINITIVAMENTE este login? A ação fica registrada em "Ações do super".')) return
+    const ctx = await capturarContexto()
+    const { error } = await superExcluir('login_log', id, ctx)
+    if (error) { alert('Erro ao excluir: ' + error.message); return }
+    setLogins(prev => (prev || []).filter(l => l.id !== id))
+  }
 
   return (
     <div className="space-y-5">
@@ -138,6 +146,7 @@ export default function Auditoria() {
                       <th className="font-medium px-3 py-2">Dispositivo</th>
                       <th className="font-medium px-3 py-2">Local</th>
                       <th className="font-medium px-3 py-2">Quando</th>
+                      {souSuper && <th className="font-medium px-3 py-2"></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -152,6 +161,11 @@ export default function Auditoria() {
                             <span className="text-[0.6rem] text-muted ml-1">{l.precisao != null ? 'GPS' : 'aprox.'}</span>
                           </> : <span className="text-muted">—</span>}</td>
                           <td className="px-3 py-2 text-muted">{new Date(l.criado_em).toLocaleString('pt-BR')}</td>
+                          {souSuper && (
+                            <td className="px-3 py-2 text-right">
+                              <button onClick={() => excluirLogin(l.id)} className="text-xs text-red-600 hover:underline">excluir</button>
+                            </td>
+                          )}
                         </tr>
                       )
                     })}
