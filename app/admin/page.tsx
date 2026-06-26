@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, limparSessaoLocal } from '@/lib/supabase'
+import { supabase, limparSessaoLocal, usuarioDoStorage } from '@/lib/supabase'
 import {
   isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
   getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, getHistoricoManual,
@@ -44,10 +44,12 @@ export default function AdminPage() {
 
   const [uid, setUid] = useState<string | null | undefined>(undefined)
 
-  // a sessão vem do onAuthStateChange (INITIAL_SESSION sai na hora, sem travar no
-  // lock de refresh — ao contrário do getSession() em navegação client-side)
+  // gate de auth: lê o usuário do storage (síncrono, sem lock) p/ renderizar na
+  // hora e reconcilia com a auth real em segundo plano (login/logout)
   useEffect(() => {
-    let resolvido = false
+    const u = usuarioDoStorage()                 // instantâneo (sem lock) → renderiza já
+    if (u) setUid(u.id)
+    let resolvido = !!u
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       resolvido = true
       setUid(session?.user?.id ?? null)

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { supabase, limparSessaoLocal } from '@/lib/supabase'
+import { supabase, limparSessaoLocal, usuarioDoStorage } from '@/lib/supabase'
 import {
   getProfile, getMinhasContribuicoes, excluirContribuicao,
   getRecompensa, getDadosRecompensa, salvarDadosRecompensa, solicitarSaque, getMeusSaques,
@@ -54,10 +54,12 @@ export default function PerfilPage() {
   const [recErro, setRecErro] = useState('')
   const [recBusy, setRecBusy] = useState(false)
 
-  // sessão via onAuthStateChange (INITIAL_SESSION sai na hora; getSession() trava no
-  // lock de refresh em navegação client-side quando o refresh token está inválido)
+  // gate de auth: lê o usuário do storage (síncrono, sem lock) p/ renderizar na
+  // hora e reconcilia com a auth real em segundo plano (login/logout)
   useEffect(() => {
-    let resolvido = false
+    const u = usuarioDoStorage()                 // instantâneo (sem lock) → renderiza já
+    if (u) { setUserId(u.id); setEmail(u.email) }
+    let resolvido = !!u
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       resolvido = true
       setUserId(session?.user?.id ?? null)
