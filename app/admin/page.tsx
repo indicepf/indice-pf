@@ -11,6 +11,7 @@ import {
 } from '@/lib/queries'
 import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
+import Painel from './Painel'
 
 type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; pago_em?: string | null; nome: string | null; telefone: string | null }
 const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
@@ -21,7 +22,7 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'saques' | 'precos'>('mod')
+  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos'>('mod')
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
   const [aprLoaded, setAprLoaded] = useState(false); const [aprBusy, setAprBusy] = useState(false); const [aprTotal, setAprTotal] = useState(0)
@@ -239,7 +240,7 @@ export default function AdminPage() {
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
         <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3">
-          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
+          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['painel', 'Painel'], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -396,6 +397,10 @@ export default function AdminPage() {
             <span className="text-xs text-muted">{aprovadas.length} de {aprTotal}</span>
           </div>
         )}
+      </div>
+      ) : aba === 'painel' ? (
+      <div className="max-w-3xl mx-auto px-6 py-8" key="painel">
+        <Painel ings={ings} />
       </div>
       ) : aba === 'saques' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-3" key="saques">
