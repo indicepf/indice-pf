@@ -300,7 +300,8 @@ export type PainelContrib = {
   id: number; user_id: string; ingrediente_id: number | null
   preco: number | null; peso_g: number | null; status: string; criado_em: string
   cidade: string | null; lat: number | null; lng: number | null
-  mercado: string | null; produto: string | null; ingredientes: { nome: string } | null
+  mercado: string | null; tipo_loja: string | null; marca: string | null
+  produto: string | null; ingredientes: { nome: string } | null
 }
 export type PerfilBasico = {
   id: string; nome: string | null; regiao: string | null
@@ -310,7 +311,7 @@ export type PerfilBasico = {
 // todas as contribuições (volume pequeno → agregação no cliente)
 export async function getPainelContribuicoes(): Promise<PainelContrib[]> {
   const data = await fetchAll(() => supabase.from('contribuicoes')
-    .select('id,user_id,ingrediente_id,preco,peso_g,status,criado_em,cidade,lat,lng,mercado,produto,ingredientes(nome)')
+    .select('id,user_id,ingrediente_id,preco,peso_g,status,criado_em,cidade,lat,lng,mercado,tipo_loja,marca,produto,ingredientes(nome)')
     .order('criado_em', { ascending: false }))
   return (data as unknown as PainelContrib[]) || []
 }
