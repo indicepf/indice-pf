@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, limparSessaoLocal, usuarioDoStorage } from '@/lib/supabase'
 import {
-  isAdmin, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
+  isAdmin, isSuper, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
   getIngredientesManuais, setPrecoManual, limparPrecoManual, recalcularCustos, getHistoricoManual,
   getOrigensManuais, getContribuicoesAprovadas, editarContribuicaoAprovada, getTodosSaques,
+  superExcluir, superEditarSaque,
   type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
 import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
@@ -14,6 +15,7 @@ import { capturarContexto, resumoDispositivo } from '@/lib/contexto'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
 import Painel from './Painel'
 import Auditoria from './Auditoria'
+import SuperAcoes from './SuperAcoes'
 
 type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; pago_em?: string | null; nome: string | null; telefone: string | null; aprovador?: string | null; pago_dispositivo?: string | null }
 const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
@@ -24,7 +26,8 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'auditoria'>('mod')
+  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'auditoria' | 'super'>('mod')
+  const [souSuper, setSouSuper] = useState(false)
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
   const [aprLoaded, setAprLoaded] = useState(false); const [aprBusy, setAprBusy] = useState(false); const [aprTotal, setAprTotal] = useState(0)
@@ -33,6 +36,7 @@ export default function AdminPage() {
   const [ings, setIngs] = useState<Ing[]>([])
   const [saques, setSaques] = useState<Saque[]>([])
   const [histSaques, setHistSaques] = useState<Saque[] | null>(null)
+  const [editSaque, setEditSaque] = useState<Saque | null>(null)
   const [manuais, setManuais] = useState<IngManual[]>([])
   const [addId, setAddId] = useState(''); const [addPreco, setAddPreco] = useState('')
   const [addFixo, setAddFixo] = useState(''); const [addLoja, setAddLoja] = useState(''); const [addLink, setAddLink] = useState('')
@@ -69,7 +73,9 @@ export default function AdminPage() {
     if (uid === null) { router.replace('/'); return }
     let cancelado = false
     ;(async () => {
-      if (!(await isAdmin(uid))) { if (!cancelado) setEstado('negado'); return }
+      const [adminOk, superOk] = await Promise.all([isAdmin(uid), isSuper(uid)])
+      if (!adminOk && !superOk) { if (!cancelado) setEstado('negado'); return }
+      if (!cancelado) setSouSuper(superOk)
       const [ings, itens, saques, manuais, origens] = await Promise.all([
         getIngredientes(), getContribuicoes('pendente'), getSaques('solicitado'),
         getIngredientesManuais(), getOrigensManuais(),
@@ -134,6 +140,26 @@ export default function AdminPage() {
     if (aba === 'saques' && estado === 'ok' && histSaques === null) getTodosSaques().then(setHistSaques)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, estado])
+
+  // exclusão god-mode: confirma, captura contexto, exclui via RPC (que registra
+  // em "Ações do super") e, no sucesso, roda onOk para tirar a linha da tela.
+  async function excluirSuper(tabela: string, id: number | string, onOk: () => void) {
+    if (!confirm('Excluir DEFINITIVAMENTE este registro? A ação é irreversível e fica registrada em "Ações do super".')) return
+    const ctx = await capturarContexto()
+    const { error } = await superExcluir(tabela, id, ctx)
+    if (error) { alert('Erro ao excluir: ' + error.message); return }
+    onOk()
+  }
+
+  async function salvarSaqueSuper(s: Saque) {
+    const ctx = await capturarContexto()
+    const { error } = await superEditarSaque(s.id, { valor: Number(s.valor), status: s.status, chave_pix: s.chave_pix, cpf: s.cpf }, ctx)
+    if (error) { alert('Erro ao salvar: ' + error.message); return }
+    setEditSaque(null)
+    // status pode ter mudado (ex.: solicitado→pago) → recarrega as duas listas
+    setSaques(await getSaques('solicitado'))
+    setHistSaques(await getTodosSaques())
+  }
 
   async function pagar(s: Saque) {
     if (!confirm(`Confirmar pagamento de ${brl(Number(s.valor))} via PIX (${s.chave_pix})?`)) return
@@ -244,7 +270,7 @@ export default function AdminPage() {
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
         <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3">
-          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`]] as const).map(([k, label]) => (
+          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`], ...(souSuper ? [['super', 'Ações do super']] : [])] as [typeof aba, string][]).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -295,6 +321,10 @@ export default function AdminPage() {
                   className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition">Aprovar</button>
                 <button onClick={() => moderar(c, 'rejeitada')}
                   className="text-sm border border-line text-muted px-4 py-1.5 rounded-md hover:bg-cream transition">Rejeitar</button>
+                {souSuper && (
+                  <button onClick={() => excluirSuper('contribuicoes', c.id, () => setItens(prev => prev.filter(i => i.id !== c.id)))}
+                    className="text-sm border border-red-200 text-red-600 px-4 py-1.5 rounded-md hover:bg-red-50 transition">Excluir</button>
+                )}
                 <span className="text-xs text-muted ml-auto self-center">vale {brl(VALOR_POR_FOTO)}</span>
               </div>
             </div>
@@ -388,6 +418,10 @@ export default function AdminPage() {
                 <span className={`text-xs px-2 py-1 rounded ${rk == null ? 'text-muted' : rk > 100 ? 'bg-paprika/10 text-paprika font-medium' : 'text-muted'}`}>
                   {rk == null ? 'não calibra o índice' : `${brl(rk)}/kg${rk > 100 ? ' · confira' : ''}`}
                 </span>
+                {souSuper && (
+                  <button onClick={() => excluirSuper('contribuicoes', c.id, () => { setAprovadas(prev => prev.filter(i => i.id !== c.id)); setAprTotal(t => Math.max(0, t - 1)) })}
+                    className="text-sm border border-red-200 text-red-600 px-4 py-1.5 rounded-md hover:bg-red-50 transition">Excluir</button>
+                )}
               </div>
             </div>
           </div>
@@ -408,11 +442,11 @@ export default function AdminPage() {
       </div>
       ) : aba === 'painel' ? (
       <div className="max-w-3xl mx-auto px-6 py-8" key="painel">
-        <Painel ings={ings} />
+        <Painel ings={ings} souSuper={souSuper} />
       </div>
       ) : aba === 'auditoria' ? (
       <div className="max-w-3xl mx-auto px-6 py-8" key="auditoria">
-        <Auditoria />
+        <Auditoria souSuper={souSuper} />
       </div>
       ) : aba === 'saques' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-3" key="saques">
@@ -439,13 +473,42 @@ export default function AdminPage() {
               <dt className="text-muted">Solicitado</dt>
               <dd className="text-muted">{new Date(s.criado_em).toLocaleString('pt-BR')}</dd>
             </dl>
-            <div className="flex items-center gap-3 mt-3 pt-3 border-t border-line">
+            <div className="flex items-center gap-3 mt-3 pt-3 border-t border-line flex-wrap">
               <p className="text-xs text-muted">Faça o PIX de {brl(Number(s.valor))} para a chave acima, depois:</p>
               <button onClick={() => pagar(s)}
                 className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition ml-auto shrink-0">
                 Marcar como pago
               </button>
+              {souSuper && <>
+                <button onClick={() => setEditSaque(editSaque?.id === s.id ? null : { ...s })}
+                  className="text-sm border border-line text-muted px-3 py-1.5 rounded-md hover:bg-cream transition shrink-0">
+                  {editSaque?.id === s.id ? 'Cancelar' : 'Editar'}
+                </button>
+                <button onClick={() => excluirSuper('pagamentos', s.id, () => setSaques(prev => prev.filter(x => x.id !== s.id)))}
+                  className="text-sm border border-red-200 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 transition shrink-0">Excluir</button>
+              </>}
             </div>
+            {souSuper && editSaque?.id === s.id && (
+              <div className="mt-3 pt-3 border-t border-line grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <label>Valor (R$)
+                  <input value={editSaque.valor ?? ''} inputMode="decimal"
+                    onChange={e => setEditSaque(v => v && ({ ...v, valor: Number(e.target.value.replace(',', '.')) || 0 }))} className={inputCls} />
+                </label>
+                <label>Status
+                  <select value={editSaque.status} onChange={e => setEditSaque(v => v && ({ ...v, status: e.target.value }))} className={inputCls}>
+                    {['solicitado', 'pago', 'rejeitada'].map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </label>
+                <label>Chave PIX
+                  <input value={editSaque.chave_pix ?? ''} onChange={e => setEditSaque(v => v && ({ ...v, chave_pix: e.target.value || null }))} className={inputCls} />
+                </label>
+                <label>CPF
+                  <input value={editSaque.cpf ?? ''} onChange={e => setEditSaque(v => v && ({ ...v, cpf: e.target.value || null }))} className={inputCls} />
+                </label>
+                <button onClick={() => salvarSaqueSuper(editSaque)}
+                  className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition col-span-2 sm:col-span-1 self-end">Salvar</button>
+              </div>
+            )}
           </div>
         ))}
 
@@ -465,6 +528,7 @@ export default function AdminPage() {
                       <th className="font-medium px-3 py-2">Pago</th>
                       <th className="font-medium px-3 py-2">Aprovado por</th>
                       <th className="font-medium px-3 py-2">Status</th>
+                      {souSuper && <th className="font-medium px-3 py-2"></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -480,6 +544,12 @@ export default function AdminPage() {
                           <td className="px-3 py-2">
                             <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 ${st.cls}`}>{st.txt}</span>
                           </td>
+                          {souSuper && (
+                            <td className="px-3 py-2 text-right">
+                              <button onClick={() => excluirSuper('pagamentos', s.id, () => setHistSaques(prev => (prev || []).filter(x => x.id !== s.id)))}
+                                className="text-xs text-red-600 hover:underline">excluir</button>
+                            </td>
+                          )}
                         </tr>
                       )
                     })}
@@ -488,6 +558,10 @@ export default function AdminPage() {
               </div>
             )}
         </div>
+      </div>
+      ) : aba === 'super' ? (
+      <div className="max-w-3xl mx-auto px-6 py-8" key="super">
+        <SuperAcoes />
       </div>
       ) : (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6" key="precos">
@@ -615,6 +689,7 @@ export default function AdminPage() {
                           <th className="font-medium py-1 text-right">R$/kg</th>
                           <th className="font-medium py-1 text-right">Fixo</th>
                           <th className="font-medium py-1">Loja</th>
+                          {souSuper && <th className="font-medium py-1"></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -624,6 +699,12 @@ export default function AdminPage() {
                             <td className="py-1 text-right tnum">{h.preco_manual != null ? brl(Number(h.preco_manual)) : '—'}</td>
                             <td className="py-1 text-right tnum">{h.custo_fixo != null ? brl(Number(h.custo_fixo)) : '—'}</td>
                             <td className="py-1">{h.loja || (h.link ? <a href={h.link} target="_blank" rel="noopener noreferrer" className="text-paprika hover:underline">fonte</a> : '—')}</td>
+                            {souSuper && (
+                              <td className="py-1 text-right">
+                                <button onClick={() => excluirSuper('precos_manuais_hist', h.id, () => setHist(hh => ({ ...hh, [m.id]: hh[m.id].filter(x => x.id !== h.id) })))}
+                                  className="text-xs text-red-600 hover:underline">excluir</button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>

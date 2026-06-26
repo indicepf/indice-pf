@@ -108,6 +108,11 @@ export async function isAdmin(uid: string): Promise<boolean> {
   return !!(data as any)?.is_admin
 }
 
+export async function isSuper(uid: string): Promise<boolean> {
+  const { data } = await supabase.from('profiles').select('is_super').eq('id', uid).single()
+  return !!(data as any)?.is_super
+}
+
 export async function getContribuicoes(status: string): Promise<ContribuicaoFull[]> {
   const { data } = await supabase.from('contribuicoes')
     .select('id,user_id,ingrediente_id,produto,marca,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)')
@@ -287,6 +292,55 @@ export async function getAuditLog(opts: { tabela?: string; acao?: string; desde?
   return rows.map(r => ({ ...r, ator_nome: r.ator ? (nomes[r.ator] ?? 'admin') : 'sistema' }))
 }
 
+// ---- Superusuário (god-mode) ----
+// Toda ação destrutiva/edição passa por RPCs SECURITY DEFINER que fazem a
+// operação E gravam em super_acoes no mesmo passo (migração 23).
+type Ctx = { dispositivo: string; lat: number | null; lng: number | null }
+
+export type SuperAcaoRow = {
+  id: number; ator: string | null; ator_nome: string | null; acao: string
+  tabela: string; registro_id: string | null; dados_antes: any; dados_depois: any
+  dispositivo: string | null; lat: number | null; lng: number | null; criado_em: string
+}
+
+// exclui um registro (whitelist no banco). id como texto cobre bigint e uuid.
+export async function superExcluir(tabela: string, id: number | string, ctx?: Ctx) {
+  return supabase.rpc('super_excluir', {
+    p_tabela: tabela, p_id: String(id),
+    p_dispositivo: ctx?.dispositivo ?? null, p_lat: ctx?.lat ?? null, p_lng: ctx?.lng ?? null,
+  })
+}
+
+export async function superEditarSaque(id: number, s: {
+  valor: number; status: string; chave_pix: string | null; cpf: string | null
+}, ctx?: Ctx) {
+  return supabase.rpc('super_editar_saque', {
+    p_id: id, p_valor: s.valor, p_status: s.status, p_chave_pix: s.chave_pix, p_cpf: s.cpf,
+    p_dispositivo: ctx?.dispositivo ?? null, p_lat: ctx?.lat ?? null, p_lng: ctx?.lng ?? null,
+  })
+}
+
+export async function superEditarPerfil(id: string, p: {
+  nome: string | null; telefone: string | null; regiao: string | null
+  is_admin: boolean; is_super: boolean
+}, ctx?: Ctx) {
+  return supabase.rpc('super_editar_perfil', {
+    p_id: id, p_nome: p.nome, p_telefone: p.telefone, p_regiao: p.regiao,
+    p_is_admin: p.is_admin, p_is_super: p.is_super,
+    p_dispositivo: ctx?.dispositivo ?? null, p_lat: ctx?.lat ?? null, p_lng: ctx?.lng ?? null,
+  })
+}
+
+export async function getSuperAcoes(opts: { tabela?: string; acao?: string; desde?: string } = {}): Promise<SuperAcaoRow[]> {
+  let q = supabase.from('super_acoes')
+    .select('id,ator,ator_nome,acao,tabela,registro_id,dados_antes,dados_depois,dispositivo,lat,lng,criado_em')
+  if (opts.tabela) q = q.eq('tabela', opts.tabela)
+  if (opts.acao) q = q.eq('acao', opts.acao)
+  if (opts.desde) q = q.gte('criado_em', opts.desde)
+  const { data } = await q.order('criado_em', { ascending: false }).limit(500)
+  return (data as SuperAcaoRow[]) || []
+}
+
 export type IngManual = {
   id: number; nome: string; categoria: string | null
   preco_manual: number | null; custo_fixo: number | null
@@ -357,6 +411,7 @@ export type PainelContrib = {
 export type PerfilBasico = {
   id: string; nome: string | null; regiao: string | null
   telefone: string | null; sexo: string | null; data_nascimento: string | null
+  is_admin: boolean | null; is_super: boolean | null
 }
 
 // todas as contribuições (volume pequeno → agregação no cliente)
@@ -371,7 +426,7 @@ export async function getPainelContribuicoes(): Promise<PainelContrib[]> {
 export async function getPerfis(ids: string[]): Promise<PerfilBasico[]> {
   if (!ids.length) return []
   const { data } = await supabase.from('profiles')
-    .select('id,nome,regiao,telefone,sexo,data_nascimento').in('id', ids)
+    .select('id,nome,regiao,telefone,sexo,data_nascimento,is_admin,is_super').in('id', ids)
   return (data as PerfilBasico[]) || []
 }
 
