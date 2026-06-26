@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import {
   getPainelContribuicoes, getPerfis, getUsoPorIngrediente, getLatestSnapshot,
+  editarContribuicaoAprovada, moderarContribuicao, recalcularCustos,
   type PainelContrib, type PerfilBasico,
 } from '@/lib/queries'
-import { brl, idade, SEXOS } from '@/lib/format'
+import { brl, idade, SEXOS, unidadeCurta } from '@/lib/format'
 import type { Ing } from '@/lib/types'
 
 const MapaLocal = dynamic(() => import('../MapaLocal'), {
@@ -29,6 +30,13 @@ function frescor(d: number | null): { txt: string; cls: string } {
   if (d <= 30) return { txt: `há ${d}d`, cls: 'text-muted border-line' }
   return { txt: `há ${d}d`, cls: 'text-red-600 border-red-200 bg-red-50' }
 }
+function rsKgDe(c: PainelContrib, ings: Ing[]): number | null {
+  const ing = ings.find(i => i.id === c.ingrediente_id)
+  if (!ing || !c.preco || !c.peso_g || c.preco <= 0 || c.peso_g <= 0) return null
+  const g = (ing.unidade === 'unidade' || ing.unidade === 'maco') ? c.peso_g * (ing.peso_ref_g || 0) : c.peso_g
+  if (!g || g <= 0) return null
+  return c.preco / g * 1000
+}
 function baixarCSV(nome: string, linhas: (string | number | null)[][]) {
   const csv = linhas.map(l => l.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
@@ -45,6 +53,8 @@ export default function Painel({ ings }: { ings: Ing[] }) {
   const [userSel, setUserSel] = useState<string | null>(null)
   const [ingAberto, setIngAberto] = useState<number | null>(null)
   const [ingBusca, setIngBusca] = useState(''); const [ingDesde, setIngDesde] = useState(''); const [ingPrecoMin, setIngPrecoMin] = useState('')
+  const [edit, setEdit] = useState<PainelContrib | null>(null)  // contribuição em edição inline (cópia)
+  const [salvandoEdit, setSalvandoEdit] = useState(false); const [recalcDirty, setRecalcDirty] = useState(false); const [editMsg, setEditMsg] = useState('')
 
   useEffect(() => {
     (async () => {
@@ -106,6 +116,31 @@ export default function Painel({ ings }: { ings: Ing[] }) {
     }
   }, [contribs, ings, uso, ingBusca, ingDesde, ingPrecoMin])
 
+  async function salvarEdit() {
+    if (!edit) return
+    setSalvandoEdit(true); setEditMsg('')
+    const campos = {
+      ingrediente_id: edit.ingrediente_id, preco: edit.preco, peso_g: edit.peso_g,
+      marca: edit.marca, mercado: edit.mercado, tipo_loja: edit.tipo_loja, produto: edit.produto,
+    }
+    // aprovada → RPC que reescreve a leitura e calibra o índice; senão, update simples
+    const { error } = edit.status === 'aprovada'
+      ? await editarContribuicaoAprovada(edit.id, campos)
+      : await moderarContribuicao(edit.id, campos)
+    setSalvandoEdit(false)
+    if (error) { setEditMsg(`Erro: ${error.message}`); return }
+    if (edit.status === 'aprovada') setRecalcDirty(true)
+    const novoNome = edit.ingrediente_id != null ? { nome: nomeIng[edit.ingrediente_id] ?? '' } : null
+    setContribs(prev => (prev || []).map(c => c.id === edit.id ? { ...c, ...campos, ingredientes: novoNome } : c))
+    setEdit(null)
+  }
+  async function recalcEdit() {
+    setSalvandoEdit(true); setEditMsg('')
+    const { error } = await recalcularCustos()
+    setSalvandoEdit(false); setRecalcDirty(false)
+    setEditMsg(error ? `Erro ao recalcular: ${error.message}` : 'Custos do índice recalculados.')
+  }
+
   if (!contribs) return <p className="text-sm text-muted text-center py-16">Carregando painel…</p>
 
   // ── detalhe de um usuário ───────────────────────────────────────────────────
@@ -136,13 +171,57 @@ export default function Painel({ ings }: { ings: Ing[] }) {
           </dl>
         </div>
         {pontos.length > 0 && <MapaLocal points={pontos} height="320px" />}
+        {(recalcDirty || editMsg) && (
+          <div className="flex items-center gap-3">
+            {recalcDirty && (
+              <button onClick={recalcEdit} disabled={salvandoEdit}
+                className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+                {salvandoEdit ? 'Recalculando…' : 'Recalcular custos do índice'}
+              </button>
+            )}
+            {editMsg && <span className="text-xs text-muted">{editMsg}</span>}
+          </div>
+        )}
         <div className="space-y-2">
-          {cs.map(c => (
+          {cs.map(c => edit?.id === c.id ? (
+            <div key={c.id} className="border border-line rounded-lg bg-panel p-3 space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <label>Ingrediente
+                  <select value={edit.ingrediente_id ?? ''} onChange={e => setEdit(v => v && ({ ...v, ingrediente_id: e.target.value ? Number(e.target.value) : null }))} className={inputCls}>
+                    <option value="">—</option>
+                    {ings.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
+                  </select>
+                </label>
+                <label>Preço (R$)
+                  <input value={edit.preco ?? ''} onChange={e => setEdit(v => v && ({ ...v, preco: e.target.value ? Number(e.target.value.replace(',', '.')) : null }))} inputMode="decimal" className={inputCls} />
+                </label>
+                <label>Qtd ({unidadeCurta(ings.find(i => i.id === edit.ingrediente_id)?.unidade)})
+                  <input value={edit.peso_g ?? ''} onChange={e => setEdit(v => v && ({ ...v, peso_g: e.target.value ? Number(e.target.value.replace(',', '.')) : null }))} inputMode="decimal" className={inputCls} />
+                </label>
+                <label>Marca
+                  <input value={edit.marca ?? ''} onChange={e => setEdit(v => v && ({ ...v, marca: e.target.value || null }))} placeholder="opcional" className={inputCls} />
+                </label>
+                <label>Mercado
+                  <input value={edit.mercado ?? ''} onChange={e => setEdit(v => v && ({ ...v, mercado: e.target.value || null }))} className={inputCls} />
+                </label>
+                <label>Tipo de loja
+                  <input value={edit.tipo_loja ?? ''} onChange={e => setEdit(v => v && ({ ...v, tipo_loja: e.target.value || null }))} className={inputCls} />
+                </label>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={salvarEdit} disabled={salvandoEdit} className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">{salvandoEdit ? 'Salvando…' : 'Salvar'}</button>
+                <button onClick={() => setEdit(null)} className="text-sm border border-line text-muted px-3 py-1.5 rounded-md hover:bg-cream transition">Cancelar</button>
+                {(() => { const rk = rsKgDe(edit, ings); return <span className={`text-xs px-2 py-1 rounded ${rk == null ? 'text-muted' : rk > 100 ? 'bg-paprika/10 text-paprika font-medium' : 'text-muted'}`}>{rk == null ? 'não calibra o índice' : `${brl(rk)}/kg${rk > 100 ? ' · confira' : ''}`}</span> })()}
+                <span className="text-[0.6rem] uppercase tracking-wide text-muted ml-auto">{c.status}</span>
+              </div>
+            </div>
+          ) : (
             <div key={c.id} className="flex items-center gap-3 border border-line rounded-md p-2 bg-panel text-sm">
               <span className="flex-1 min-w-0 truncate">{c.ingredientes?.nome || c.produto || 'Produto'}</span>
               <span className="tnum">{c.preco != null ? brl(Number(c.preco)) : '—'}</span>
               <span className="text-xs text-muted shrink-0">{new Date(c.criado_em).toLocaleDateString('pt-BR')}{c.cidade ? ` · ${c.cidade}` : ''}</span>
               <span className="text-[0.6rem] uppercase tracking-wide text-muted shrink-0">{c.status}</span>
+              <button onClick={() => { setEdit({ ...c }); setEditMsg('') }} className="text-xs text-paprika hover:underline shrink-0">editar</button>
             </div>
           ))}
         </div>
