@@ -60,4 +60,8 @@ export type ContribuicaoFull = {
   status: string
   criado_em: string
   ingredientes: { nome: string } | null
+  aprovado_dispositivo?: string | null
+  aprovado_lat?: number | null
+  aprovado_lng?: number | null
+  aprovador_nome?: string | null
 }
