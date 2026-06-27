@@ -262,6 +262,12 @@ export default function AdminPage() {
     return true
   })
 
+  const abas: [typeof aba, string][] = [
+    ['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`],
+    ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`],
+    ['precos', `Preços manuais (${manuais.length})`], ...(souSuper ? [['super', 'Ações do super'] as [typeof aba, string]] : []),
+  ]
+
   return (
     <main className="min-h-screen">
       <header className="border-b border-line sticky top-0 bg-cream/90 backdrop-blur z-10">
@@ -269,13 +275,21 @@ export default function AdminPage() {
           <button onClick={() => router.push('/')} className="text-sm text-muted hover:text-ink">← voltar</button>
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
-        <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3 overflow-x-auto">
-          {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`], ...(souSuper ? [['super', 'Ações do super']] : [])] as [typeof aba, string][]).map(([k, label]) => (
-            <button key={k} onClick={() => setAba(k)}
-              className={`text-sm pb-2 border-b-2 -mb-px transition shrink-0 whitespace-nowrap ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
-              {label}
-            </button>
-          ))}
+        <div className="max-w-3xl mx-auto px-6 mt-3">
+          {/* mobile: dropdown (evita o menu correndo pro lado) */}
+          <select value={aba} onChange={e => setAba(e.target.value as typeof aba)}
+            className="sm:hidden w-full bg-cream border border-line rounded-md px-3 py-2 text-sm mb-2 focus:outline-none focus:border-paprika">
+            {abas.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+          {/* desktop: abas */}
+          <div className="hidden sm:flex gap-5">
+            {abas.map(([k, label]) => (
+              <button key={k} onClick={() => setAba(k)}
+                className={`text-sm pb-2 border-b-2 -mb-px transition whitespace-nowrap ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
