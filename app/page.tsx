@@ -111,8 +111,8 @@ export default function Dashboard() {
               </p>
               <p className="text-xs text-muted mt-2">mediana de {custos.length} pratos · {MODOS.find(m => m.key === modo)!.nota}</p>
               <p className="text-sm text-muted mt-4 max-w-sm leading-relaxed">
-                A cor de cada região indica o custo médio do prato feito ali. Clique numa região para filtrar
-                os pratos (e dar zoom); clique de novo ou use o filtro da lista para voltar.
+                A cor de cada região indica o custo médio do prato feito ali. Clique numa região para destacá-la
+                e filtrar os pratos; clique de novo ou use o filtro da lista para voltar.
               </p>
             </div>
             <MapaBrasil regionais={regionais} sel={regiao}

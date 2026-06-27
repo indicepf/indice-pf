@@ -6,7 +6,16 @@ const SUPABASE_ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloZ2RsbW10aXl2ZGdlb3hhdnpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NTM5NzQsImV4cCI6MjA5NzEyOTk3NH0.BeYgp7CBg7K9faeQd9vFXxLSHiqlGNa3VYVSxaJaUqA'
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    // O LockManager global do supabase-js (navigator.locks) às vezes trava em
+    // navegação SPA/PWA: o getSession() interno fica esperando o lock e a tela
+    // só destrava com refresh (que recria o client). Usamos um lock não-
+    // bloqueante — roda a função na hora, sem coordenação de token entre abas
+    // (aceitável aqui: uma aba por usuário). Elimina o deadlock recorrente.
+    lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => fn(),
+  },
+})
 
 function chaveSessao() {
   return `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`

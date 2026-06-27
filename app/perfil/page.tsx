@@ -156,7 +156,7 @@ export default function PerfilPage() {
         </div>
       </header>
 
-      <nav className="max-w-lg mx-auto px-6 flex gap-5 border-b border-line">
+      <nav className="max-w-lg mx-auto px-6 flex gap-5 border-b border-line pt-4">
         {([['dados', 'Dados'], ['recompensas', 'Recompensas'], ['contribuicoes', 'Minhas contribuições']] as const).map(([k, label]) => (
           <button key={k} onClick={() => setAba(k)}
             className={`text-sm pb-2 -mb-px border-b-2 transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>

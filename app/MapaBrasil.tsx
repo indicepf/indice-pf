@@ -52,15 +52,13 @@ export default function MapaBrasil({ regionais, sel, onSel }: {
     [regionais],
   )
 
-  const center = sel !== 'Todas' && REGIAO_CENTRO[sel] ? REGIAO_CENTRO[sel] : BR_CENTRO
-  const zoom = sel !== 'Todas' ? 2.6 : 1
-
   return (
     <div className="w-full max-w-[440px]">
       <ComposableMap projection="geoMercator"
         projectionConfig={{ center: BR_CENTRO, scale: 620 }}
         width={440} height={460} style={{ width: '100%', height: 'auto', background: 'transparent' }}>
-        <ZoomableGroup center={center} zoom={zoom} minZoom={1} maxZoom={4}
+        {/* sem zoom: clicar destaca a região (contorno + esmaece as demais), mapa fica fixo */}
+        <ZoomableGroup center={BR_CENTRO} zoom={1} minZoom={1} maxZoom={1}
           filterZoomEvent={() => false}>
           <Geographies geography={REGIOES_FC as object}>
             {({ geographies }: { geographies: any[] }) =>
@@ -72,7 +70,7 @@ export default function MapaBrasil({ regionais, sel, onSel }: {
                   <Geography key={regiao} geography={geo}
                     onClick={() => onSel(regiao)}
                     fill={corPorRegiao[regiao] || '#eee'}
-                    stroke="#faf7f2" strokeWidth={1}
+                    stroke={ativo ? '#1a1a1a' : '#faf7f2'} strokeWidth={ativo ? 1.8 : 1}
                     style={{
                       default: { outline: 'none', opacity: ofusca ? 0.32 : 1, transition: 'opacity .2s' },
                       hover:   { outline: 'none', cursor: 'pointer', filter: 'brightness(0.93)' },
