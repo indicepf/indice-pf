@@ -269,10 +269,10 @@ export default function AdminPage() {
           <button onClick={() => router.push('/')} className="text-sm text-muted hover:text-ink">← voltar</button>
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
-        <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3">
+        <div className="max-w-3xl mx-auto px-6 flex gap-5 mt-3 overflow-x-auto">
           {([['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`], ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`], ['precos', `Preços manuais (${manuais.length})`], ...(souSuper ? [['super', 'Ações do super']] : [])] as [typeof aba, string][]).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
-              className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+              className={`text-sm pb-2 border-b-2 -mb-px transition shrink-0 whitespace-nowrap ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
             </button>
           ))}
