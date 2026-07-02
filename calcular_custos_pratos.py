@@ -8,8 +8,9 @@ custo_total(prato) = Σ (preço R$/g do ingrediente × qtd_g da receita)
 Regras:
   - Ingrediente de preço fixo (custo_fixo not null): soma custo_fixo (flat).
   - Ingrediente cotado neste snapshot: usa mediana_normalizada (R$/g) × qtd_g.
-  - Ingrediente sem cotação nesta semana: usa a MÉDIA dos últimos 3 valores
-    (mediana_normalizada) em snapshots anteriores (fallback) × qtd_g.
+  - Ingrediente sem cotação nesta semana: usa o ÚLTIMO preço online conhecido
+    (mediana_normalizada da coleta anterior mais recente) × qtd_g. Vale também no
+    blend: se só o online faltou nesta semana, usa o último online × o manual atual.
   - Sem cotação e sem histórico: não contribui (prato fica parcial).
 
 Cobertura gravada: ingredientes_cobertos (fresco+fixo), ingredientes_estimados
@@ -97,9 +98,10 @@ def main():
         if d and d < snap_data:
             hist[p["ingrediente_id"]].append((d, float(p["mediana_normalizada"])))
 
-    def fallback(ing_id):
-        vals = [v for _, v in sorted(hist.get(ing_id, []), reverse=True)[:3]]
-        return sum(vals) / len(vals) if vals else None
+    def ultimo_online(ing_id):
+        # preço online da coleta ANTERIOR mais recente que teve o dado (último conhecido)
+        h = sorted(hist.get(ing_id, []), reverse=True)
+        return h[0][1] if h else None
 
     # ── custo por prato ──────────────────────────────────────────────────────
     por_prato = defaultdict(list)
@@ -113,21 +115,21 @@ def main():
             ing = ingredientes.get(ing_id, {})
             cfixo = ing.get("custo_fixo")
             pman  = ing.get("preco_manual")
-            m_g = float(pman) / 1000 if pman is not None else None   # R$/g manual
-            o_g = preco_atual.get(ing_id)                            # R$/g online
+            m_g   = float(pman) / 1000 if pman is not None else None  # R$/g manual
+            o_now = preco_atual.get(ing_id)                           # R$/g online desta coleta
+            o_g   = o_now if o_now is not None else ultimo_online(ing_id)  # senão, último conhecido
+            o_fresco = o_now is not None
             if cfixo is not None:
-                custo += float(cfixo); cobertos += 1                 # R$ flat por prato
+                custo += float(cfixo); cobertos += 1                  # R$ flat por prato
             elif m_g is not None and o_g is not None:
-                custo += (m_g + o_g) / 2 * qtd; cobertos += 1        # média das duas medianas
+                custo += (m_g + o_g) / 2 * qtd; cobertos += 1         # média manual × online (fresco ou último)
             elif m_g is not None:
                 custo += m_g * qtd; cobertos += 1
             elif o_g is not None:
-                custo += o_g * qtd; cobertos += 1
-            else:
-                fb = fallback(ing_id)
-                if fb is not None:
-                    custo += fb * qtd; estimados += 1
-                # senão: não contribui (parcial)
+                custo += o_g * qtd
+                cobertos += 1 if o_fresco else 0
+                estimados += 0 if o_fresco else 1                     # online carregado da última coleta
+            # sem preço algum: não contribui (parcial)
         linhas.append({
             "snapshot_id": snap_id, "prato_id": prato_id,
             "custo_total": round(custo, 2),

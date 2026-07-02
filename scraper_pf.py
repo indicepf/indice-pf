@@ -242,6 +242,10 @@ def _buscar_serp(query):
         erro = dados.get("error", "")
         if resp.status_code == 200 and not erro:
             return dados
+        # "Google hasn't returned any results" = busca válida que só não trouxe nada.
+        # Não é falha de chave: retorna vazio sem rotacionar (não gasta outra conta à toa).
+        if "returned any results" in erro:
+            return dados
         # 401/429 ou erro de cota → tenta a próxima conta
         print(f"  ⚠️  chave #{_serp_idx + 1} falhou ({resp.status_code} {erro}); tentando próxima")
         _serp_idx = (_serp_idx + 1) % len(SERP_API_KEYS)
