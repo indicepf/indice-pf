@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
-import { getEvolucao, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
+import { getEvolucao, getAllDetalhes, getSnapshotsNovos, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
+import { brl } from '@/lib/format'
+import type { ItemDetalhe } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
 
 // paleta categórica validada (dataviz validate_palette — todos os checks PASS em superfície branca)
@@ -33,6 +35,8 @@ export default function EvolucaoPage() {
   const [metricas, setMetricas] = useState({ mediana: true, media: false, min: false, max: false })
   const [banda, setBanda] = useState(true)
   const [percentual, setPercentual] = useState(false)
+  const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]>>({})
+  const [off, setOff] = useState<Set<number>>(new Set())   // ingredientes desmarcados no "e se"
 
   const compData = useMemo(() => {
     if (!ev) return []
@@ -44,7 +48,11 @@ export default function EvolucaoPage() {
     })
   }, [ev, percentual])
 
-  useEffect(() => { getEvolucao().then(setEv) }, [])
+  useEffect(() => {
+    getEvolucao().then(setEv)
+    getSnapshotsNovos().then(s => { if (s[0]) getAllDetalhes(s[0].id, s[0].data).then(setDetalhes) })
+  }, [])
+  useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
 
   const nacional = pratoId === 0
   const dados = useMemo(() => {
@@ -212,6 +220,34 @@ export default function EvolucaoPage() {
             </ResponsiveContainer>
           </div>
         </div>
+
+        {!nacional && (detalhes[pratoId]?.length ? (() => {
+          const its = detalhes[pratoId]
+          const cheio = its.reduce((s, it) => s + it.custo, 0)
+          const atual = its.reduce((s, it) => s + (off.has(it.ingrediente_id) ? 0 : it.custo), 0)
+          return (
+            <div className="border border-line rounded-lg bg-panel p-4">
+              <p className="text-sm font-medium mb-1">Simular sem ingredientes</p>
+              <p className="text-xs text-muted mb-3">Desmarque um item para ver o custo do prato sem ele (última coleta · blend).</p>
+              <div className="flex items-baseline gap-2 mb-3">
+                <span className="font-[family-name:var(--font-serif)] text-2xl text-paprika tnum">{brl(atual)}</span>
+                {off.size > 0 && <span className="text-xs text-muted">de {brl(cheio)} · −{brl(cheio - atual)}</span>}
+              </div>
+              <div>
+                {its.map(it => (
+                  <label key={it.ingrediente_id} className="flex items-center justify-between gap-3 text-sm py-1.5 border-b border-line/50 cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <input type="checkbox" checked={!off.has(it.ingrediente_id)}
+                        onChange={() => setOff(s => { const n = new Set(s); n.has(it.ingrediente_id) ? n.delete(it.ingrediente_id) : n.add(it.ingrediente_id); return n })} />
+                      <span className={off.has(it.ingrediente_id) ? 'line-through text-muted' : ''}>{it.nome}</span>
+                    </span>
+                    <span className="tnum text-muted">{brl(it.custo)}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )
+        })() : null)}
       </div>
       )}
     </main>
