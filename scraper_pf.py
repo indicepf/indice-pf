@@ -268,7 +268,7 @@ def buscar_ingrediente(ingrediente, cache):
         print("  ⚠️  Sem resultados")
         return []
 
-    resultados, rejeitados = [], 0
+    resultados, rejeitados, motivos = [], 0, []
     for item in itens[:15]:
         titulo    = item.get("title", "")
         preco_txt = item.get("price", "")
@@ -279,9 +279,10 @@ def buscar_ingrediente(ingrediente, cache):
             qs = urllib.parse.urlencode({"q": ingrediente["busca"], "tbm": "shop"})
             link = f"https://www.google.com/search?{qs}"
 
-        valido, _ = produto_valido(titulo, ingrediente)
+        valido, motivo = produto_valido(titulo, ingrediente)
         if not valido:
             rejeitados += 1
+            motivos.append((titulo, motivo))
             continue
         preco = limpar_preco(preco_txt)
         if not preco:
@@ -310,6 +311,11 @@ def buscar_ingrediente(ingrediente, cache):
     resultados = [r for r in resultados if r["preco_normalizado"] in norm]
     print(f"  ✅ {len(resultados)} válidos | {rejeitados} produto errado | "
           f"{antes - len(resultados)} descartados (sanidade/outlier)")
+    # diagnóstico: se nada passou mas vieram produtos, mostra o que foi rejeitado e por quê
+    if not resultados and motivos:
+        print("  🔎 nenhum válido — títulos rejeitados:")
+        for t, m in motivos[:8]:
+            print(f"       - [{m}] {t}")
 
     cache[chave] = resultados
     salvar_cache(cache)
