@@ -228,22 +228,39 @@ export default function EvolucaoPage() {
           return (
             <div className="border border-line rounded-lg bg-panel p-4">
               <p className="text-sm font-medium mb-1">Simular sem ingredientes</p>
-              <p className="text-xs text-muted mb-3">Desmarque um item para ver o custo do prato sem ele (última coleta · blend).</p>
-              <div className="flex items-baseline gap-2 mb-3">
+              <p className="text-xs text-muted mb-3">
+                Custo do prato = soma dos ingredientes marcados (última coleta · blend). O R$ ao lado de cada item é
+                o custo da <strong>quantidade da receita</strong> (em gramas). Desmarque para ver o prato sem ele.
+              </p>
+              <div className="flex items-baseline gap-2 mb-4">
                 <span className="font-[family-name:var(--font-serif)] text-2xl text-paprika tnum">{brl(atual)}</span>
                 {off.size > 0 && <span className="text-xs text-muted">de {brl(cheio)} · −{brl(cheio - atual)}</span>}
               </div>
-              <div>
-                {its.map(it => (
-                  <label key={it.ingrediente_id} className="flex items-center justify-between gap-3 text-sm py-1.5 border-b border-line/50 cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <input type="checkbox" checked={!off.has(it.ingrediente_id)}
-                        onChange={() => setOff(s => { const n = new Set(s); n.has(it.ingrediente_id) ? n.delete(it.ingrediente_id) : n.add(it.ingrediente_id); return n })} />
-                      <span className={off.has(it.ingrediente_id) ? 'line-through text-muted' : ''}>{it.nome}</span>
-                    </span>
-                    <span className="tnum text-muted">{brl(it.custo)}</span>
-                  </label>
-                ))}
+              <div className="space-y-3">
+                {(() => {
+                  const grupos: Record<string, ItemDetalhe[]> = {}
+                  its.forEach(it => (grupos[it.categoria || 'Outro'] ||= []).push(it))
+                  const soma = (arr: ItemDetalhe[]) => arr.reduce((s, x) => s + (off.has(x.ingrediente_id) ? 0 : x.custo), 0)
+                  const cats = Object.keys(grupos).sort((a, b) => grupos[b].reduce((s, x) => s + x.custo, 0) - grupos[a].reduce((s, x) => s + x.custo, 0))
+                  return cats.map(cat => (
+                    <div key={cat}>
+                      <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-wide text-muted border-b border-line/60 pb-1">
+                        <span>{cat}</span><span className="tnum">{brl(soma(grupos[cat]))}</span>
+                      </div>
+                      {grupos[cat].map(it => (
+                        <label key={it.ingrediente_id} className="flex items-center justify-between gap-3 text-sm py-1.5 border-b border-line/40 cursor-pointer">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <input type="checkbox" checked={!off.has(it.ingrediente_id)}
+                              onChange={() => setOff(s => { const n = new Set(s); n.has(it.ingrediente_id) ? n.delete(it.ingrediente_id) : n.add(it.ingrediente_id); return n })} />
+                            <span className={off.has(it.ingrediente_id) ? 'line-through text-muted' : ''}>{it.nome}</span>
+                            <span className="text-xs text-muted shrink-0">{it.qtd_g} g</span>
+                          </span>
+                          <span className="tnum text-muted">{brl(it.custo)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ))
+                })()}
               </div>
             </div>
           )
