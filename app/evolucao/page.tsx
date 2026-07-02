@@ -20,6 +20,8 @@ const fmt = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m
 const ts = (d: string) => new Date(d + 'T00:00:00Z').getTime()
 const r2 = (n: number) => Math.round(n * 100) / 100
 const numPrato = (nome: string) => parseInt(nome, 10) || 999   // prefixo "12. …"
+const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
+const mediana = (v: number[]) => { if (!v.length) return 0; const s = [...v].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
 
 export default function EvolucaoPage() {
   const router = useRouter()
@@ -27,6 +29,7 @@ export default function EvolucaoPage() {
   const [ev, setEv] = useState<Evolucao | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
+  const [regiao, setRegiao] = useState('')           // '' = todas as regiões
   const [metricas, setMetricas] = useState({ mediana: true, media: false, min: false, max: false })
   const [banda, setBanda] = useState(true)
   const [percentual, setPercentual] = useState(false)
@@ -46,15 +49,25 @@ export default function EvolucaoPage() {
   const nacional = pratoId === 0
   const dados = useMemo(() => {
     if (!ev) return []
-    if (nacional) return ev.serie.map(p => {
+    if (!nacional) return (ev.porPrato[pratoId] || []).map(p => ({ ts: ts(p.data), blend: r2(p.blend), online: r2(p.online), manual: r2(p.manual) }))
+    if (!regiao) return ev.serie.map(p => {
       const f = p[fonte]
       return { ts: ts(p.data), mediana: r2(f.mediana), media: r2(f.media), min: r2(f.min), max: r2(f.max), faixa: [r2(f.min), r2(f.max)] as [number, number] }
     })
-    return (ev.porPrato[pratoId] || []).map(p => ({ ts: ts(p.data), blend: r2(p.blend), online: r2(p.online), manual: r2(p.manual) }))
-  }, [ev, fonte, pratoId, nacional])
+    // distribuição recomputada só com os pratos da região, a partir de porPrato
+    const ids = ev.pratos.filter(p => p.regiao === regiao).map(p => p.id)
+    return ev.serie.map((p, i) => {
+      const vals = ids.map(id => ev.porPrato[id]?.[i]?.[fonte]).filter((v): v is number => v != null && v > 0).map(r2)
+      const s = [...vals].sort((a, b) => a - b)
+      const media = vals.length ? r2(vals.reduce((a, b) => a + b, 0) / vals.length) : 0
+      const min = s[0] ?? 0, max = s[s.length - 1] ?? 0
+      return { ts: ts(p.data), mediana: r2(mediana(vals)), media, min, max, faixa: [min, max] as [number, number] }
+    })
+  }, [ev, fonte, pratoId, nacional, regiao])
 
   const poucos = !ev || ev.serie.length < 2
   const ticks = dados.map(d => d.ts)
+  const regioes = ev ? [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b)) : []
 
   return (
     <main className="min-h-screen">
@@ -129,6 +142,20 @@ export default function EvolucaoPage() {
             </div>
           </div>
         </div>
+
+        {nacional && (
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            <span className="text-muted">Região:</span>
+            <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+              <button onClick={() => setRegiao('')}
+                className={`px-3 py-1.5 transition-colors ${regiao === '' ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>Todas</button>
+              {regioes.map(r => (
+                <button key={r} onClick={() => setRegiao(r)}
+                  className={`px-3 py-1.5 transition-colors border-l border-line ${regiao === r ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>{r}</button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {nacional && (
           <div className="flex items-center gap-4 flex-wrap text-xs">
