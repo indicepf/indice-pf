@@ -35,19 +35,22 @@ export default function EvolucaoPage() {
   const [metricas, setMetricas] = useState({ mediana: true, media: false, min: false, max: false })
   const [banda, setBanda] = useState(true)
   const [percentual, setPercentual] = useState(false)
+  const [ini, setIni] = useState('')   // período: início (YYYY-MM-DD, '' = desde o começo)
+  const [fim, setFim] = useState('')   // período: fim ('' = até a última coleta)
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]>>({})
   const [off, setOff] = useState<Set<number>>(new Set())   // ingredientes desmarcados no "e se"
 
+  const noPeriodo = (d: string) => (!ini || d >= ini) && (!fim || d <= fim)
   const compData = useMemo(() => {
     if (!ev) return []
-    const src = pratoId === 0 ? ev.composicao : (ev.porPratoComp[pratoId] || [])
+    const src = (pratoId === 0 ? ev.composicao : (ev.porPratoComp[pratoId] || [])).filter(p => noPeriodo(p.data))
     return src.map(p => {
       const tot = GRUPOS_CAT.reduce((s, g) => s + (p[g] || 0), 0) || 1
       const row: any = { data: fmt(p.data) }
       for (const g of GRUPOS_CAT) row[g] = percentual ? r2((p[g] || 0) / tot * 100) : r2(p[g] || 0)
       return row
     })
-  }, [ev, percentual, pratoId])
+  }, [ev, percentual, pratoId, ini, fim])
 
   useEffect(() => {
     getEvolucao().then(setEv)
@@ -75,8 +78,16 @@ export default function EvolucaoPage() {
   }, [ev, fonte, pratoId, nacional, regiao])
 
   const poucos = !ev || ev.serie.length < 2
-  const ticks = dados.map(d => d.ts)
+  const dadosP = dados.filter(d => noPeriodo(new Date(d.ts).toISOString().slice(0, 10)))
+  const ticks = dadosP.map(d => d.ts)
+  const mediaIndice = nacional && dadosP.length ? dadosP.reduce((s, d) => s + ((d as any).mediana || 0), 0) / dadosP.length : null
   const regioes = ev ? [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b)) : []
+  function preset(dias: number) {
+    if (!ev || !ev.serie.length) return
+    const ultima = ev.serie[ev.serie.length - 1].data
+    setFim(ultima)
+    if (dias === 0) { setIni(''); setFim('') } else { const d = new Date(ultima + 'T00:00:00Z'); d.setDate(d.getDate() - dias); setIni(d.toISOString().slice(0, 10)) }
+  }
 
   return (
     <main className="min-h-screen">
@@ -123,6 +134,19 @@ export default function EvolucaoPage() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-muted">Período:</span>
+          <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+            {([['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
+              <button key={label} onClick={() => preset(d)} className="px-3 py-1.5 text-muted hover:text-ink transition-colors">{label}</button>
+            ))}
+          </div>
+          <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+          <span className="text-muted">até</span>
+          <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+          {mediaIndice != null && <span className="ml-1 text-muted">Média do índice: <strong className="text-paprika tnum">{brl(mediaIndice)}</strong> · {dadosP.length} coleta{dadosP.length === 1 ? '' : 's'}</span>}
+        </div>
+
         {nacional && (
           <div className="flex items-center gap-2 flex-wrap text-xs">
             <span className="text-muted">Região:</span>
@@ -164,7 +188,7 @@ export default function EvolucaoPage() {
           </p>
           <div style={{ width: '100%', height: 360 }}>
             <ResponsiveContainer>
-              <ComposedChart data={dados} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+              <ComposedChart data={dadosP} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
                 <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                   ticks={ticks} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
