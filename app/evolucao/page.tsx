@@ -27,7 +27,7 @@ const mediana = (v: number[]) => { if (!v.length) return 0; const s = [...v].sor
 
 export default function EvolucaoPage() {
   const router = useRouter()
-  const [aba, setAba] = useState<'indice' | 'composicao' | 'ingredientes'>('indice')
+  const [aba, setAba] = useState<'indice' | 'ingredientes'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
@@ -40,13 +40,14 @@ export default function EvolucaoPage() {
 
   const compData = useMemo(() => {
     if (!ev) return []
-    return ev.composicao.map(p => {
+    const src = pratoId === 0 ? ev.composicao : (ev.porPratoComp[pratoId] || [])
+    return src.map(p => {
       const tot = GRUPOS_CAT.reduce((s, g) => s + (p[g] || 0), 0) || 1
       const row: any = { data: fmt(p.data) }
       for (const g of GRUPOS_CAT) row[g] = percentual ? r2((p[g] || 0) / tot * 100) : r2(p[g] || 0)
       return row
     })
-  }, [ev, percentual])
+  }, [ev, percentual, pratoId])
 
   useEffect(() => {
     getEvolucao().then(setEv)
@@ -89,7 +90,7 @@ export default function EvolucaoPage() {
       <div className="max-w-5xl mx-auto px-6">
         {/* abas */}
         <div className="flex gap-5 border-b border-line pt-2">
-          {([['indice', 'Índice'], ['composicao', 'Composição'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
+          {([['indice', 'Índice'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -102,35 +103,6 @@ export default function EvolucaoPage() {
         <div className="max-w-5xl mx-auto px-6 py-8"><TabelaIngredientes /></div>
       ) : !ev ? (
         <p className="max-w-5xl mx-auto px-6 py-10 text-sm text-muted">Carregando…</p>
-      ) : aba === 'composicao' ? (
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <p className="text-sm font-medium">Composição do custo por grupo de alimento</p>
-            <p className="text-xs text-muted">Média por prato · fonte blend (índice){poucos && ' · série curta, cresce a cada coleta.'}</p>
-          </div>
-          <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm">
-            {([['abs', 'R$'], ['pct', '% do total']] as const).map(([k, label]) => (
-              <button key={k} onClick={() => setPercentual(k === 'pct')}
-                className={`px-3 py-1.5 transition-colors ${(percentual ? 'pct' : 'abs') === k ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>{label}</button>
-            ))}
-          </div>
-        </div>
-        <div className="border border-line rounded-lg bg-panel p-4">
-          <div style={{ width: '100%', height: 380 }}>
-            <ResponsiveContainer>
-              <BarChart data={compData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" vertical={false} />
-                <XAxis dataKey="data" tick={{ fontSize: 13, fill: COR.muted }} />
-                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => percentual ? `${v}%` : `R$${v}`} />
-                <Tooltip formatter={(v: any, n: any) => [percentual ? `${Number(v).toFixed(1)}%` : `R$ ${Number(v).toFixed(2)}`, n]} />
-                <Legend wrapperStyle={{ fontSize: 13 }} />
-                {GRUPOS_CAT.map(g => <Bar key={g} dataKey={g} stackId="a" fill={CORES_GRUPO[g]} stroke="#fff" strokeWidth={1} />)}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
       ) : (
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         {/* controles */}
@@ -217,6 +189,35 @@ export default function EvolucaoPage() {
                   </>
                 )}
               </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* composição por grupo (total quando nacional; do prato quando selecionado) */}
+        <div className="border border-line rounded-lg bg-panel p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+            <div>
+              <p className="text-sm font-medium">{nacional ? 'Composição do custo por grupo de alimento' : 'Composição do prato por grupo'}</p>
+              <p className="text-xs text-muted">{nacional ? 'Média por prato · blend' : 'blend'}{poucos && ' · série curta, cresce a cada coleta.'}</p>
+            </div>
+            <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm">
+              {([['abs', 'R$'], ['pct', '% do total']] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setPercentual(k === 'pct')}
+                  className={`px-3 py-1.5 transition-colors ${(percentual ? 'pct' : 'abs') === k ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>{label}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ width: '100%', height: 340 }}>
+            <ResponsiveContainer>
+              <BarChart data={compData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" vertical={false} />
+                <XAxis dataKey="data" tick={{ fontSize: 13, fill: COR.muted }} />
+                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48}
+                  domain={percentual ? [0, 100] : ['auto', 'auto']} tickFormatter={v => percentual ? `${v}%` : `R$${v}`} />
+                <Tooltip formatter={(v: any, n: any) => [percentual ? `${Number(v).toFixed(1)}%` : `R$ ${Number(v).toFixed(2)}`, n]} />
+                <Legend wrapperStyle={{ fontSize: 13 }} />
+                {GRUPOS_CAT.map(g => <Bar key={g} dataKey={g} stackId="a" fill={CORES_GRUPO[g]} stroke="#fff" strokeWidth={1} />)}
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
