@@ -147,7 +147,8 @@ export type Evolucao = {
   serie: EvolucaoPonto[]                       // distribuição dos 100 pratos por coleta e fonte
   pratos: { id: number; nome: string; regiao: string }[]
   porPrato: Record<number, PratoSerie[]>       // custo de cada prato por coleta e fonte
-  composicao: CompPonto[]                       // composição do custo por grupo de alimento (blend)
+  composicao: CompPonto[]                       // composição do custo por grupo (blend) — média nacional por prato
+  porPratoComp: Record<number, CompPonto[]>    // composição por grupo de cada prato, por coleta
 }
 
 // 17 categorias de ingrediente → 7 grupos amplos, para a composição empilhada.
@@ -191,6 +192,7 @@ export async function getEvolucao(): Promise<Evolucao> {
   const serie: EvolucaoPonto[] = []
   const porPrato: Record<number, PratoSerie[]> = {}
   const composicao: CompPonto[] = []
+  const porPratoComp: Record<number, CompPonto[]> = {}
   const FONTES: FonteKey[] = ['blend', 'online', 'manual']
   const nPratos = Object.keys(recPorPrato).length || 1
 
@@ -228,25 +230,29 @@ export async function getEvolucao(): Promise<Evolucao> {
       return { mediana: mediana(vals), media: vals.reduce((a, b) => a + b, 0) / vals.length, min: s[0], max: s[s.length - 1] }
     }
     serie.push({ data: snap.data, blend: dist('blend'), online: dist('online'), manual: dist('manual') })
+    const gruposNac: Record<string, number> = {}
     for (const pidStr of Object.keys(recPorPrato)) {
       const pid = +pidStr
       const ponto: any = { data: snap.data }
       for (const f of FONTES) ponto[f] = custoPrato(recPorPrato[pid], f)
       ;(porPrato[pid] ||= []).push(ponto)
-    }
-    // composição por grupo (blend), média por prato
-    const grupos: Record<string, number> = {}
-    for (const itens of Object.values(recPorPrato)) for (const it of itens) {
-      const p = precoIng(it.ing, 'blend')
-      const custo = p.fixo != null ? p.fixo : (p.g != null ? p.g * it.qtd : 0)
-      if (custo) { const gr = grupoDe(ing.get(it.ing)?.categoria); grupos[gr] = (grupos[gr] || 0) + custo }
+      // composição do prato por grupo (blend) → alimenta o total nacional e a série do prato
+      const gp: Record<string, number> = {}
+      for (const it of recPorPrato[pid]) {
+        const p = precoIng(it.ing, 'blend')
+        const custo = p.fixo != null ? p.fixo : (p.g != null ? p.g * it.qtd : 0)
+        if (custo) { const gr = grupoDe(ing.get(it.ing)?.categoria); gp[gr] = (gp[gr] || 0) + custo; gruposNac[gr] = (gruposNac[gr] || 0) + custo }
+      }
+      const cp: CompPonto = { data: snap.data }
+      for (const g of GRUPOS_CAT) cp[g] = gp[g] || 0
+      ;(porPratoComp[pid] ||= []).push(cp)
     }
     const comp: CompPonto = { data: snap.data }
-    for (const g of GRUPOS_CAT) comp[g] = (grupos[g] || 0) / nPratos
+    for (const g of GRUPOS_CAT) comp[g] = (gruposNac[g] || 0) / nPratos    // média por prato
     composicao.push(comp)
   }
   const pratos = ((pratosRows.data || []) as any[]).map(p => ({ id: p.id, nome: p.nome, regiao: p.regiao }))
-  return { serie, pratos, porPrato, composicao }
+  return { serie, pratos, porPrato, composicao, porPratoComp }
 }
 
 // Snapshots do modelo novo (com custos_pratos), mais recente primeiro.
