@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Diagnóstico do scrape — 01/07/2026</title>
+<style>
+  body { font-family: Georgia, "Times New Roman", serif; color:#1a1a1a; margin:0; line-height:1.55; }
+  .wrap { max-width:820px; margin:0 auto; padding:56px 24px 96px; }
+  h1 { font-size:1.7rem; font-weight:normal; margin-bottom:4px; }
+  .subtitle { color:#555; margin-top:0; margin-bottom:32px; font-size:.95rem; font-family:Helvetica,Arial,sans-serif; }
+  h2 { font-size:1.2rem; margin-top:44px; padding-bottom:4px; border-bottom:1px solid #ccc; }
+  h3 { font-size:1.02rem; margin-top:26px; }
+  code { font-family:"Courier New",monospace; background:#f2f2f2; border:1px solid #ddd; padding:1px 5px; font-size:.88em; }
+  .dim { color:#888; font-size:.85em; font-family:Helvetica,Arial,sans-serif; }
+  table { width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem; font-family:Helvetica,Arial,sans-serif; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid #ddd; vertical-align:top; }
+  th { border-bottom:1px solid #1a1a1a; }
+  .kpis { display:flex; flex-wrap:wrap; gap:12px; margin:24px 0; }
+  .kpi { border:1px solid #ccc; padding:12px 16px; min-width:120px; font-family:Helvetica,Arial,sans-serif; }
+  .kpi .n { font-size:1.7rem; font-weight:bold; color:#8A3B2E; }
+  .kpi .l { font-size:.78rem; color:#555; }
+  .note { border:1px solid #1a1a1a; padding:14px 18px; margin:22px 0; }
+  .note.warn { border-color:#8A3B2E; background:#fbf4f2; }
+  ul.cols { column-count:2; }
+  ol.causes li { margin:12px 0; }
+  footer { margin-top:56px; color:#777; font-size:.8rem; font-family:Helvetica,Arial,sans-serif; }
+</style></head><body><div class="wrap">
+
+<h1>Diagnóstico do scrape — 01/07/2026</h1>
+<p class="subtitle">Por que 386 créditos SerpAPI foram consumidos e por que ingredientes básicos ficaram de fora. Baseado em consulta read-only ao Supabase (snapshot id 33) e leitura do código.</p>
+
+<div class="kpis">
+  <div class="kpi"><div class="n">386</div><div class="l">créditos gastos (250 + 136)</div></div>
+  <div class="kpi"><div class="n">100</div><div class="l">chamadas por execução</div></div>
+  <div class="kpi"><div class="n">~3.9</div><div class="l">execuções implícitas</div></div>
+  <div class="kpi"><div class="n">90</div><div class="l">ingredientes com dado</div></div>
+  <div class="kpi"><div class="n">10</div><div class="l">raspados vazios</div></div>
+  <div class="kpi"><div class="n">15</div><div class="l">excluídos (preço manual)</div></div>
+</div>
+
+<h2>Resumo executivo</h2>
+<p>O scraper <strong>não</strong> chama a API além do devido por execução: são <strong>100 chamadas por rodada</strong> (1 por ingrediente do catálogo scrapeável), e o snapshot de 01/07 tem exatamente 100 linhas em <code>precos</code>. O consumo de <strong>386 créditos</strong> vem de o pipeline ter rodado <strong>~3.9 vezes</strong> (<code>386 ÷ 100 ≈ 3.9</code>), e cada disparo custar 100 cheio porque o cache não é reaproveitado no CI e não há guarda contra re-scrape.</p>
+<p>Os "básicos que sumiram" (arroz, cebola, batata inglesa…) <strong>não gastaram API</strong>: eles têm <strong>preço manual</strong>, e o scraper exclui itens com preço manual do catálogo. Some por design, não por bug.</p>
+
+<h2>Q1 — Por que consumiu 386 créditos?</h2>
+<p>Free tier SerpAPI = <strong>250 chamadas/mês por conta</strong>. Com 100/execução, cada conta banca <strong>só 2 execuções</strong>. Foi observado <strong>250 (conta 1, esgotada) + 136 (conta 2)</strong>. As causas:</p>
+<ol class="causes">
+  <li><strong>Orçamento premissa = 2 execuções/mês.</strong> Cron nos dias 1 e 15 já consome as 2. Qualquer <code>workflow_dispatch</code> manual ou re-run após falha parcial estoura. (O comentário no workflow diz "99×2=198", mas o catálogo já é 100.)</li>
+  <li><strong>Cache inútil entre disparos.</strong> <code>cache_serpapi.json</code> é date-keyed (<code>AAAA-MM-DD_nome</code>), está no <code>.gitignore</code>, não é rastreado e o workflow não o restaura nem faz commit de volta. No CI todo disparo começa com cache zerado → re-scrapeia os 100 do zero.</li>
+  <li><strong>Sem guarda de dedupe.</strong> Existir snapshot de hoje não impede o re-scrape; <code>salvar_supabase.py</code> apenas sobrescreve (DELETE+INSERT).</li>
+  <li><strong>Rotação de chave drena as duas contas.</strong> Em <code>_buscar_serp</code>, quando a chave #1 esgota no meio da rodada, o restante cai na #2 — por isso o gasto aparece espalhado (250 + 136), exatamente o sintoma relatado.</li>
+  <li class="dim"><strong>(secundário)</strong> Em erro transitório não-cota, a rotação re-tenta a mesma query na próxima chave → 2 créditos por 1 ingrediente. Explica a fração do <code>~3.9</code>.</li>
+</ol>
+
+<h2>Q2 — Há conflito entre dados manuais e raspados?</h2>
+<p><strong>Sim.</strong> O filtro do catálogo (<code>scraper_pf.py:43-45</code>) exclui <code>preco_manual IS NOT NULL</code>. <strong>Definir um preço manual remove o ingrediente do scrape silenciosamente.</strong> Os 15 itens manuais são justamente os básicos que "sumiram":</p>
+<ul class="cols">
+<li><strong>Arroz branco</strong> — R$ 4.23/kg <span class='dim'>(id 7, Grão/Cereal)</span></li>
+<li><strong>Batata doce</strong> — R$ 3.99/kg <span class='dim'>(id 15, Tubérculo/Raiz)</span></li>
+<li><strong>Batata inglesa</strong> — R$ 10.99/kg <span class='dim'>(id 16, Tubérculo/Raiz)</span></li>
+<li><strong>Carne de bode</strong> — R$ 41.49/kg <span class='dim'>(id 24, Proteína bovina)</span></li>
+<li><strong>Cebola</strong> — R$ 7.99/kg <span class='dim'>(id 28, Tempero/Erva)</span></li>
+<li><strong>Cenoura</strong> — R$ 8.95/kg <span class='dim'>(id 29, Legume/Verdura)</span></li>
+<li><strong>Feijão carioca</strong> — R$ 9.98/kg <span class='dim'>(id 42, Leguminosa)</span></li>
+<li><strong>Jambu</strong> — R$ 60.0/kg <span class='dim'>(id 53, Legume/Verdura)</span></li>
+<li><strong>Matambre bovino</strong> — R$ 36.9/kg <span class='dim'>(id 1138, Proteína bovina)</span></li>
+<li><strong>Piranha (peixe)</strong> — R$ 45/kg <span class='dim'>(id 1142, Pescado)</span></li>
+<li><strong>Pão francês</strong> — R$ 15.99/kg <span class='dim'>(id 86, Grão/Cereal)</span></li>
+<li><strong>Repolho</strong> — R$ 4.95/kg <span class='dim'>(id 92, Legume/Verdura)</span></li>
+<li><strong>Sal</strong> — R$ 3.99/kg <span class='dim'>(id 93, Tempero/Erva)</span></li>
+<li><strong>Tomate</strong> — R$ 7.49/kg <span class='dim'>(id 95, Legume/Verdura)</span></li>
+<li><strong>Óleo de soja</strong> — R$ 7.54/kg <span class='dim'>(id 99, Gordura/Óleo)</span></li>
+</ul>
+<div class="note warn">
+<p><strong>Contradição com o modelo de <em>blend</em>.</strong> A doc (seção 9.8.1) e <code>calcular_custos_pratos.py</code> preveem usar a <em>média das medianas manual × online</em> quando o ingrediente tem os dois. Mas como o scraper nunca coleta online para itens manuais, <strong>o blend nunca dispara para eles</strong> — o filtro anula parcialmente a feature. Hoje o comportamento está no meio do caminho: manual não é só um complemento, ele <em>substitui</em> a raspagem.</p>
+</div>
+
+<h2>Os três grupos de ingredientes (total 117)</h2>
+<table>
+  <tr><th>Grupo</th><th>Qtd</th><th>Gastou API?</th><th>O que significa</th></tr>
+  <tr><td>Raspado com dado</td><td>90</td><td>Sim (produtivo)</td><td>Coletado e normalizado com sucesso no snapshot 33.</td></tr>
+  <tr><td>Raspado vazio</td><td>10</td><td>Sim (desperdício)</td><td>Chamou a API mas voltou 0 válidos — desperdício de crédito + lacuna de dado.</td></tr>
+  <tr><td>Excluído por preço manual</td><td>15</td><td>Não</td><td>Fora do catálogo por design; some da raspagem mas usa o valor manual no custo.</td></tr>
+  <tr><td>Excluído por unidade=fixo</td><td>2</td><td>Não</td><td>Sangue de aves / suíno — custo fixo R$0,50.</td></tr>
+</table>
+
+<h3>Os 10 raspados vazios (gastaram crédito, sem retorno)</h3>
+<ul>
+<li><strong>Carne moída bovina</strong> <span class='dim'>(id 830, g, Proteína bovina)</span></li>
+<li><strong>Champignon (conserva)</strong> <span class='dim'>(id 30, g, Legume/Verdura)</span></li>
+<li><strong>Grão-de-bico</strong> <span class='dim'>(id 50, g, Leguminosa)</span></li>
+<li><strong>Hortelã</strong> <span class='dim'>(id 52, maco, Tempero/Erva)</span></li>
+<li><strong>Lombo/Pernil suíno</strong> <span class='dim'>(id 60, g, Proteína suína)</span></li>
+<li><strong>Maionese</strong> <span class='dim'>(id 63, g, Condimento/Molho)</span></li>
+<li><strong>Mandioca</strong> <span class='dim'>(id 64, g, Tubérculo/Raiz)</span></li>
+<li><strong>Pimentão</strong> <span class='dim'>(id 81, g, Legume/Verdura)</span></li>
+<li><strong>Queijo mussarela/prato</strong> <span class='dim'>(id 88, g, Laticínio)</span></li>
+<li><strong>Tucupi</strong> <span class='dim'>(id 97, ml, Líquido regional)</span></li>
+</ul>
+<p class="dim">Causa provável: <code>palavras_ok/palavras_nao</code> restritivas demais, termo de busca ruim, ou <code>normalizar()</code> retornando None (título sem peso/volume detectável).</p>
+
+<h2>Solução recomendada <span class="dim">(itens 1–2 resolvem o consumo; item 4 resolve os sumidos)</span></h2>
+<table>
+  <tr><th>#</th><th>Ação</th><th>Onde</th><th>O que resolve</th></tr>
+  <tr>
+    <td>1</td>
+    <td><strong>Guarda de dedupe por 6 dias.</strong> No carregamento do catálogo, pular ingredientes com coleta bem-sucedida (<code>qtd_resultados &gt; 0</code>) nos últimos 6 dias; <code>FORCE_RESCRAPE=1</code> força o full run.</td>
+    <td><code>scraper_pf.py</code></td>
+    <td>Um 2º disparo no mesmo período pega só os que faltaram (manuais/não-encontrados), sem repagar os 100.</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td><strong>Cron explícito.</strong> Setar <code>FORCE_RESCRAPE=1</code> no passo agendado (dias 1 e 15) para o cron continuar fazendo a coleta completa e autoritativa.</td>
+    <td><code>.github/workflows/scraper-semanal.yml</code></td>
+    <td>Mantém o comportamento agendado idêntico; o skip só age em reruns manuais.</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td><strong>Rerun aditivo.</strong> Reexecutar com <code>SCRAPE_MERGE=1</code> para os itens recém-coletados serem somados ao último snapshot, em vez de criar um snapshot parcial.</td>
+    <td><code>salvar_supabase.py</code> (modo já existente)</td>
+    <td>Os manuais/não-encontrados entram no mesmo snapshot da coleta principal.</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td><strong>Sempre raspar, mesmo com preço manual.</strong> Remover o filtro <code>preco_manual=is.null</code> de <code>carregar_catalogo</code>. Catálogo passa de 100 → 115 (exclui só os 2 <code>fixo</code>).</td>
+    <td><code>scraper_pf.py:43-45</code></td>
+    <td>Arroz, cebola, batata e os outros 12 voltam a ser coletados online; o blend manual×online passa a funcionar.</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td><strong>Revisar os 10 itens que voltaram vazios.</strong> Ajustar <code>busca</code>, <code>palavras_ok</code>/<code>palavras_nao</code> e checar a extração de peso em <code>normalizar()</code>.</td>
+    <td>tabela <code>ingredientes</code> / <code>scraper_pf.py</code></td>
+    <td>Recupera dado e para de gastar crédito sem retorno.</td>
+  </tr>
+</table>
+
+<footer>Diagnóstico gerado a partir do Supabase <code>yhgdlmmtiyvdgeoxavzn</code> (snapshot 01/07/2026, id 33) e do código do repositório <code>indice-pf</code>. Dados detalhados em <code>data/diagnostico-scrape-01-07-2026.xlsx</code>.</footer>
+</div></body></html>

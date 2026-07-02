@@ -22,6 +22,30 @@ export async function getLatestSnapshot(): Promise<Snapshot | null> {
   return (data?.[0] as Snapshot) ?? null
 }
 
+export type ItemColeta = { id: number; nome: string; preco_manual: number | null }
+export type StatusColeta = { data: string; achados: ItemColeta[]; naoAchados: ItemColeta[] }
+
+// Status da última coleta: data + ingredientes achados (qtd_resultados>0) vs
+// não-achados (=0), a partir do snapshot mais recente. Usado na aba de superuser.
+// Traz o preço manual atual de cada item para permitir cadastrá-lo nos não-achados.
+export async function getStatusUltimaColeta(): Promise<StatusColeta | null> {
+  const { data: snaps } = await supabase.from('snapshots')
+    .select('id,data').order('data', { ascending: false }).limit(1)
+  const snap = snaps?.[0] as { id: number; data: string } | undefined
+  if (!snap) return null
+  const { data } = await supabase.from('precos')
+    .select('ingrediente_id,nome_ingrediente,qtd_resultados,ingredientes(preco_manual)')
+    .eq('snapshot_id', snap.id).order('nome_ingrediente')
+  const rows = (data || []) as any[]
+  const achados: ItemColeta[] = [], naoAchados: ItemColeta[] = []
+  for (const r of rows) {
+    if (r.ingrediente_id == null) continue
+    const item: ItemColeta = { id: r.ingrediente_id, nome: r.nome_ingrediente, preco_manual: r.ingredientes?.preco_manual ?? null }
+    ;((r.qtd_resultados || 0) > 0 ? achados : naoAchados).push(item)
+  }
+  return { data: snap.data, achados, naoAchados }
+}
+
 export async function getDishCosts(snapshotId: number): Promise<DishCost[]> {
   const { data } = await supabase.from('custos_pratos')
     .select('custo_total,ingredientes_cobertos,ingredientes_estimados,ingredientes_total,pratos(id,regiao,nome)')
