@@ -95,6 +95,7 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap justify-end">
+            <a href="/evolucao" className="text-sm text-muted hover:text-ink">Evolução</a>
             <ToggleModo modo={modo} setModo={setModo} />
             <AuthControls />
           </div>

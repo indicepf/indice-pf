@@ -137,6 +137,103 @@ export async function getAllFontesManuais(snapData: string): Promise<Record<numb
   return out
 }
 
+// ---- Evolução temporal (aba /evolucao) ----
+export type FonteKey = 'blend' | 'online' | 'manual'
+export type FonteSerie = { mediana: number; media: number; min: number; max: number }
+export type EvolucaoPonto = { data: string } & Record<FonteKey, FonteSerie>
+export type PratoSerie = { data: string } & Record<FonteKey, number>
+export type Evolucao = {
+  serie: EvolucaoPonto[]                       // distribuição dos 100 pratos por coleta e fonte
+  pratos: { id: number; nome: string; regiao: string }[]
+  porPrato: Record<number, PratoSerie[]>       // custo de cada prato por coleta e fonte
+}
+
+// Série do índice ao longo das coletas, por fonte (blend / online / manual). Recalcula
+// o custo de cada prato em cada snapshot do modelo novo, sob cada premissa de fonte:
+//   blend  = média manual×online (o índice real);
+//   online = online preferido (cai p/ manual/fixo onde não há online);
+//   manual = manual (janela ±10d) preferido (cai p/ online/fixo onde não há manual).
+export async function getEvolucao(): Promise<Evolucao> {
+  const [cp, snaps, receitas, ingRows, precosRows, manRows, pratosRows] = await Promise.all([
+    supabase.from('custos_pratos').select('snapshot_id'),
+    supabase.from('snapshots').select('id,data').order('data', { ascending: true }),
+    fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
+    supabase.from('ingredientes').select('id,custo_fixo,preco_manual'),
+    fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada').order('id')),
+    fetchAll(() => supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual,criado_em').order('id')),
+    supabase.from('pratos').select('id,nome,regiao'),
+  ])
+  const novos = new Set(((cp.data || []) as any[]).map(r => r.snapshot_id))
+  const snapList = ((snaps.data || []) as any[]).filter(s => novos.has(s.id))   // só modelo novo, cronológico
+  const ing = new Map<number, any>(); ((ingRows.data || []) as any[]).forEach(i => ing.set(i.id, i))
+  const recPorPrato: Record<number, { ing: number; qtd: number }[]> = {}
+  ;(receitas as any[]).forEach(r => { (recPorPrato[r.prato_id] ||= []).push({ ing: r.ingrediente_id, qtd: Number(r.qtd_g) }) })
+  const precoPorSnap: Record<number, Record<number, number>> = {}
+  ;(precosRows as any[]).forEach(p => { if (p.mediana_normalizada != null) (precoPorSnap[p.snapshot_id] ||= {})[p.ingrediente_id] = Number(p.mediana_normalizada) })
+  const manPorIng: Record<number, { t: number; v: number }[]> = {}
+  ;(manRows as any[]).forEach(m => { if (m.preco_manual != null) (manPorIng[m.ingrediente_id] ||= []).push({ t: new Date(m.criado_em).getTime(), v: Number(m.preco_manual) }) })
+
+  const lastOnline: Record<number, number> = {}
+  const serie: EvolucaoPonto[] = []
+  const porPrato: Record<number, PratoSerie[]> = {}
+  const FONTES: FonteKey[] = ['blend', 'online', 'manual']
+
+  for (const snap of snapList) {
+    const online = precoPorSnap[snap.id] || {}
+    for (const k in online) lastOnline[+k] = online[+k]        // carry-forward do último online
+    const base = new Date(snap.data + 'T00:00:00Z').getTime()
+    const ini = base - 10 * 86400000, fim = base + 11 * 86400000 - 1000
+    const manG: Record<number, number> = {}
+    for (const k in manPorIng) {
+      const vs = manPorIng[+k].filter(x => x.t >= ini && x.t <= fim).map(x => x.v)
+      if (vs.length) manG[+k] = mediana(vs) / 1000
+    }
+    const precoIng = (iid: number, modo: FonteKey): { fixo?: number; g?: number } => {
+      const fixo = ing.get(iid)?.custo_fixo
+      if (fixo != null) return { fixo: Number(fixo) }
+      const O = online[iid] ?? lastOnline[iid] ?? null
+      const M = manG[iid] ?? null
+      const mLast = ing.get(iid)?.preco_manual != null ? Number(ing.get(iid).preco_manual) / 1000 : null
+      let g: number | null
+      if (modo === 'blend') g = (M != null && O != null) ? (M + O) / 2 : (M ?? O ?? mLast)
+      else if (modo === 'online') g = O ?? M ?? mLast
+      else g = M ?? O ?? mLast
+      return { g: g ?? undefined }
+    }
+    const custoPrato = (itens: { ing: number; qtd: number }[], modo: FonteKey) => {
+      let c = 0
+      for (const it of itens) { const p = precoIng(it.ing, modo); if (p.fixo != null) c += p.fixo; else if (p.g != null) c += p.g * it.qtd }
+      return c
+    }
+    const dist = (modo: FonteKey): FonteSerie => {
+      const vals = Object.values(recPorPrato).map(itens => custoPrato(itens, modo)).filter(v => v > 0)
+      if (!vals.length) return { mediana: 0, media: 0, min: 0, max: 0 }
+      const s = [...vals].sort((a, b) => a - b)
+      return { mediana: mediana(vals), media: vals.reduce((a, b) => a + b, 0) / vals.length, min: s[0], max: s[s.length - 1] }
+    }
+    serie.push({ data: snap.data, blend: dist('blend'), online: dist('online'), manual: dist('manual') })
+    for (const pidStr of Object.keys(recPorPrato)) {
+      const pid = +pidStr
+      const ponto: any = { data: snap.data }
+      for (const f of FONTES) ponto[f] = custoPrato(recPorPrato[pid], f)
+      ;(porPrato[pid] ||= []).push(ponto)
+    }
+  }
+  const pratos = ((pratosRows.data || []) as any[]).map(p => ({ id: p.id, nome: p.nome, regiao: p.regiao }))
+  return { serie, pratos, porPrato }
+}
+
+// Contribuições de campo aprovadas com coordenada, p/ o mapa.
+export async function getContribuicoesMapa(): Promise<{ lat: number; lng: number; label: string }[]> {
+  const { data } = await supabase.from('contribuicoes')
+    .select('lat,lng,cidade,preco,ingredientes(nome)')
+    .eq('status', 'aprovada').not('lat', 'is', null).not('lng', 'is', null)
+  return ((data || []) as any[]).map(c => ({
+    lat: Number(c.lat), lng: Number(c.lng),
+    label: `${c.ingredientes?.nome || 'contribuição'}${c.preco ? ` — R$ ${Number(c.preco).toFixed(2)}` : ''}${c.cidade ? ` · ${c.cidade}` : ''}`,
+  }))
+}
+
 export async function getIngredientes(): Promise<Ing[]> {
   const { data } = await supabase.from('ingredientes').select('id,nome,categoria,unidade,peso_ref_g').order('nome')
   return (data as Ing[]) || []
