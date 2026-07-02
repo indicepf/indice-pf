@@ -298,6 +298,42 @@ export async function getDetalheIngredientes(snapshotId: number): Promise<LinhaI
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
 }
 
+// Detalhamento por ingrediente AGREGADO num intervalo de coletas: mediana/média =
+// média das coletas do período; mín/máx = extremos; n/±DP = média; variação = da
+// mediana entre a 1ª e a última coleta do período.
+export async function getDetalheIngredientesRange(ini: string, fim: string): Promise<LinhaIngrediente[]> {
+  const novos = await getSnapshotsNovos()   // desc
+  const range = novos.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim))
+  if (range.length <= 1) return getDetalheIngredientes(range[0]?.id ?? novos[0]?.id)
+  const ids = range.map(s => s.id)
+  const latestId = range[0].id, earliestId = range[range.length - 1].id
+  const [precos, ings] = await Promise.all([
+    fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,nome_ingrediente,mediana_exibicao,media_exibicao,minimo_exibicao,maximo_exibicao,desvio_padrao,qtd_resultados,label').in('snapshot_id', ids).order('id')),
+    supabase.from('ingredientes').select('id,categoria'),
+  ])
+  const catMap = new Map<number, string | null>(); ((ings.data || []) as any[]).forEach(i => catMap.set(i.id, i.categoria))
+  const byIng: Record<number, any[]> = {}
+  ;(precos as any[]).forEach(p => { if (p.ingrediente_id != null) (byIng[p.ingrediente_id] ||= []).push(p) })
+  const num = (v: any) => v != null ? Number(v) : null
+  const avg = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null
+  return Object.keys(byIng).map(k => {
+    const id = +k, rows = byIng[id]
+    const med = avg(rows.map(r => num(r.mediana_exibicao)).filter((v): v is number => v != null))
+    const medL = num(rows.find(r => r.snapshot_id === latestId)?.mediana_exibicao)
+    const medE = num(rows.find(r => r.snapshot_id === earliestId)?.mediana_exibicao)
+    const mins = rows.map(r => num(r.minimo_exibicao)).filter((v): v is number => v != null)
+    const maxs = rows.map(r => num(r.maximo_exibicao)).filter((v): v is number => v != null)
+    return {
+      id, nome: rows[0].nome_ingrediente, categoria: catMap.get(id) ?? null, label: rows[0].label,
+      mediana: med, media: avg(rows.map(r => num(r.media_exibicao)).filter((v): v is number => v != null)),
+      min: mins.length ? Math.min(...mins) : null, max: maxs.length ? Math.max(...maxs) : null,
+      dp: avg(rows.map(r => num(r.desvio_padrao)).filter((v): v is number => v != null)),
+      n: Math.round(avg(rows.map(r => r.qtd_resultados || 0)) || 0),
+      inflacao: (medL != null && medE != null && medE > 0) ? (medL - medE) / medE : null,
+    }
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+}
+
 // Contribuições de campo aprovadas com coordenada, p/ o mapa.
 export async function getContribuicoesMapa(): Promise<{ lat: number; lng: number; label: string }[]> {
   const { data } = await supabase.from('contribuicoes')

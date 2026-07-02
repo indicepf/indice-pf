@@ -2,14 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  getSnapshotsNovos, getDetalheIngredientes, getAllFontes, getAllFontesManuais,
+  getSnapshotsNovos, getDetalheIngredientesRange, getAllFontes, getAllFontesManuais,
   type LinhaIngrediente, type FonteManual,
 } from '@/lib/queries'
 import type { Fonte } from '@/lib/types'
 import ModalFontes from '../ModalFontes'
 import { brl } from '@/lib/format'
-
-const fmtData = (d: string) => { const [a, m, dia] = d.split('-'); return `${dia}/${m}/${a}` }
 
 type ColKey = keyof Pick<LinhaIngrediente, 'nome' | 'categoria' | 'mediana' | 'media' | 'min' | 'max' | 'dp' | 'n' | 'inflacao'>
 const COLS: { key: ColKey; label: string; tip: string; align: 'left' | 'right' }[] = [
@@ -26,7 +24,8 @@ const COLS: { key: ColKey; label: string; tip: string; align: 'left' | 'right' }
 
 export default function TabelaIngredientes() {
   const [snaps, setSnaps] = useState<{ id: number; data: string }[]>([])
-  const [snapId, setSnapId] = useState<number | null>(null)
+  const [ini, setIni] = useState('')
+  const [fim, setFim] = useState('')
   const [linhas, setLinhas] = useState<LinhaIngrediente[]>([])
   const [busca, setBusca] = useState('')
   const [ordCol, setOrdCol] = useState<ColKey>('nome')
@@ -36,14 +35,23 @@ export default function TabelaIngredientes() {
   const [modal, setModal] = useState<{ id: number; nome: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { getSnapshotsNovos().then(s => { setSnaps(s); setSnapId(s[0]?.id ?? null) }) }, [])
+  useEffect(() => { getSnapshotsNovos().then(s => { setSnaps(s); if (s[0]) { setIni(s[0].data); setFim(s[0].data) } }) }, [])
   useEffect(() => {
-    if (snapId == null) return
-    const snap = snaps.find(s => s.id === snapId); if (!snap) return
+    if (!snaps.length || !fim) return
+    const range = snaps.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim))
+    const latest = range[0] || snaps[0]
     setLoading(true)
-    Promise.all([getDetalheIngredientes(snapId), getAllFontes(snapId), getAllFontesManuais(snap.data)])
+    Promise.all([getDetalheIngredientesRange(ini, fim), getAllFontes(latest.id), getAllFontesManuais(latest.data)])
       .then(([l, f, m]) => { setLinhas(l); setFontesMap(f); setManuaisMap(m); setLoading(false) })
-  }, [snapId, snaps])
+  }, [ini, fim, snaps])
+
+  function preset(dias: number) {
+    if (!snaps.length) return
+    setFim(snaps[0].data)
+    if (dias === 0) setIni(snaps[snaps.length - 1].data)
+    else { const d = new Date(snaps[0].data + 'T00:00:00Z'); d.setDate(d.getDate() - dias); setIni(d.toISOString().slice(0, 10)) }
+  }
+  const nColetas = snaps.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim)).length
 
   function clicarCol(k: ColKey) {
     if (k === ordCol) setOrdDir(d => (d === 1 ? -1 : 1))
@@ -65,15 +73,24 @@ export default function TabelaIngredientes() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-end gap-3 flex-wrap">
-        <label className="text-xs text-muted">Coleta
-          <select value={snapId ?? ''} onChange={e => setSnapId(Number(e.target.value))} className={inputCls}>
-            {snaps.map((s, i) => <option key={s.id} value={s.id}>{fmtData(s.data)}{i === 0 ? ' (última)' : ''}</option>)}
-          </select>
-        </label>
+        <div className="text-xs text-muted">Período
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+              {([['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
+                <button key={label} onClick={() => preset(d)} className="px-2.5 py-1.5 text-muted hover:text-ink">{label}</button>
+              ))}
+            </div>
+            <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-cream border border-line rounded px-2 py-1.5 focus:outline-none focus:border-paprika" />
+            <span>até</span>
+            <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-cream border border-line rounded px-2 py-1.5 focus:outline-none focus:border-paprika" />
+          </div>
+        </div>
         <label className="text-xs text-muted flex-1 min-w-[12rem]">Buscar
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="ingrediente ou categoria…" className={inputCls} />
         </label>
-        <p className="text-xs text-muted self-end pb-2">Clique num cabeçalho para ordenar · passe o mouse para ver o que cada coluna significa.</p>
+        <p className="text-xs text-muted self-end pb-2">
+          {nColetas > 1 ? `Média de ${nColetas} coletas · ` : ''}Clique num cabeçalho para ordenar · passe o mouse nas colunas.
+        </p>
       </div>
 
       {loading ? <p className="text-sm text-muted py-6">Carregando…</p> : (
