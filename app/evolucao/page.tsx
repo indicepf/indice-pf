@@ -121,10 +121,10 @@ export default function EvolucaoPage() {
             <ResponsiveContainer>
               <BarChart data={compData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" vertical={false} />
-                <XAxis dataKey="data" tick={{ fontSize: 12, fill: COR.muted }} />
-                <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={48} tickFormatter={v => percentual ? `${v}%` : `R$${v}`} />
+                <XAxis dataKey="data" tick={{ fontSize: 13, fill: COR.muted }} />
+                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => percentual ? `${v}%` : `R$${v}`} />
                 <Tooltip formatter={(v: any, n: any) => [percentual ? `${Number(v).toFixed(1)}%` : `R$ ${Number(v).toFixed(2)}`, n]} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 13 }} />
                 {GRUPOS_CAT.map(g => <Bar key={g} dataKey={g} stackId="a" fill={CORES_GRUPO[g]} stroke="#fff" strokeWidth={1} />)}
               </BarChart>
             </ResponsiveContainer>
@@ -196,11 +196,11 @@ export default function EvolucaoPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
                 <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                   ticks={ticks} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
-                  tick={{ fontSize: 12, fill: COR.muted }} />
-                <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
+                  tick={{ fontSize: 13, fill: COR.muted }} />
+                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
                 <Tooltip formatter={(v: any) => `R$ ${Number(v).toFixed(2)}`}
                   labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 13 }} />
                 {nacional ? (
                   <>
                     {banda && <Area type="monotone" dataKey="faixa" name="faixa mín–máx" fill={COR.paprika} fillOpacity={0.1} stroke="none" />}
