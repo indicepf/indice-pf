@@ -78,12 +78,14 @@ function mediana(v: number[]): number {
 }
 
 // Carrega a composição de TODOS os pratos de uma vez (gaveta abre instantânea, sem rede no clique).
-export async function getAllDetalhes(snapshotId: number): Promise<Record<number, ItemDetalhe[]>> {
-  const desde = new Date(Date.now() - 5 * 86400000).toISOString()
+export async function getAllDetalhes(snapshotId: number, snapData: string): Promise<Record<number, ItemDetalhe[]>> {
+  const base = new Date(snapData + 'T00:00:00Z').getTime()
+  const ini = new Date(base - 10 * 86400000).toISOString()          // janela do manual: [data-10d, data+10d]
+  const fim = new Date(base + 11 * 86400000 - 1000).toISOString()
   const [rec, { data: precos }, { data: manuais }] = await Promise.all([
     fetchAll(() => supabase.from('receitas').select('prato_id,qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual,preco_manual_link)').order('id')),
     supabase.from('precos').select('ingrediente_id,mediana_normalizada').eq('snapshot_id', snapshotId),
-    supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual').gte('criado_em', desde).not('preco_manual', 'is', null),
+    supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual').gte('criado_em', ini).lte('criado_em', fim).not('preco_manual', 'is', null),
   ])
   const precoMap: Record<number, number> = {}
   ;(precos || []).forEach((p: any) => { if (p.mediana_normalizada != null) precoMap[p.ingrediente_id] = Number(p.mediana_normalizada) })
@@ -114,11 +116,12 @@ export async function getAllFontes(snapshotId: number): Promise<Record<number, F
 
 export type FonteManual = { preco_manual: number | null; loja: string | null; link: string | null; criado_em: string; origem: string | null }
 
-// Leituras manuais por ingrediente: as dos últimos 5 dias (as que alimentam a
-// mediana atual); se não houver nenhuma recente, mostra a última leitura conhecida
-// (que é o fallback usado nos itens de nicho sem cotação online).
-export async function getAllFontesManuais(): Promise<Record<number, FonteManual[]>> {
-  const desde = Date.now() - 5 * 86400000
+// Leituras manuais por ingrediente: as da janela do snapshot [data-10d, data+10d]
+// (as que alimentam a mediana atual); se não houver nenhuma na janela, mostra a
+// última leitura conhecida (fallback dos itens de nicho sem cotação online).
+export async function getAllFontesManuais(snapData: string): Promise<Record<number, FonteManual[]>> {
+  const base = new Date(snapData + 'T00:00:00Z').getTime()
+  const ini = base - 10 * 86400000, fim = base + 11 * 86400000 - 1000
   const { data } = await supabase.from('precos_manuais_hist')
     .select('ingrediente_id,preco_manual,loja,link,criado_em,origem')
     .not('preco_manual', 'is', null)
@@ -128,8 +131,8 @@ export async function getAllFontesManuais(): Promise<Record<number, FonteManual[
   const out: Record<number, FonteManual[]> = {}
   for (const k of Object.keys(todas)) {
     const arr = todas[+k]
-    const recentes = arr.filter(f => new Date(f.criado_em).getTime() >= desde)
-    out[+k] = recentes.length ? recentes : [arr[0]]   // 5 dias, ou a última leitura conhecida
+    const naJanela = arr.filter(f => { const t = new Date(f.criado_em).getTime(); return t >= ini && t <= fim })
+    out[+k] = naJanela.length ? naJanela : [arr[0]]   // janela ±10d, ou a última leitura conhecida
   }
   return out
 }

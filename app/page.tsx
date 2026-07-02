@@ -36,9 +36,9 @@ export default function Dashboard() {
       setCustos(await getDishCosts(snap.id))
       setLoading(false)
       // pré-carrega composição e fontes em segundo plano → gaveta abre instantânea
-      getAllDetalhes(snap.id).then(setDetalhes)
+      getAllDetalhes(snap.id, snap.data).then(setDetalhes)
       getAllFontes(snap.id).then(setFontes)
-      getAllFontesManuais().then(setFontesManuais)
+      getAllFontesManuais(snap.data).then(setFontesManuais)
     })()
   }, [])
 

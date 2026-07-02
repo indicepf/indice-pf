@@ -104,14 +104,17 @@ def main():
         h = sorted(hist.get(ing_id, []), reverse=True)
         return h[0][1] if h else None
 
-    # manual RECENTE (leituras dos últimos 5 dias) por ingrediente → R$/g.
-    # Só o manual recente conta como "manual atual" (entra no blend / tag). Manual
-    # antigo NÃO é misturado quando há online; serve apenas de fallback p/ itens
-    # de nicho sem cotação online (via ingredientes.preco_manual).
-    corte5 = (datetime.utcnow() - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # manual da JANELA do snapshot: leituras de [data-10d, data+10d] por ingrediente → R$/g.
+    # Só o manual dessa janela conta como "manual atual" (entra no blend / tag). Fora
+    # dela NÃO é misturado com o online; serve só de fallback p/ itens de nicho sem
+    # cotação online (via ingredientes.preco_manual).
+    _d = datetime.strptime(snap_data, "%Y-%m-%d")
+    _ini = (_d - timedelta(days=10)).strftime("%Y-%m-%dT00:00:00Z")
+    _fim = (_d + timedelta(days=10)).strftime("%Y-%m-%dT23:59:59Z")
     man_rec = defaultdict(list)
     for h in get_all("precos_manuais_hist", "ingrediente_id,preco_manual,criado_em",
-                     f"&preco_manual=not.is.null&ingrediente_id=not.is.null&criado_em=gte.{corte5}"):
+                     f"&preco_manual=not.is.null&ingrediente_id=not.is.null"
+                     f"&criado_em=gte.{_ini}&criado_em=lte.{_fim}"):
         man_rec[h["ingrediente_id"]].append(float(h["preco_manual"]))
 
     def manual_recente(ing_id):
@@ -130,7 +133,7 @@ def main():
             ing = ingredientes.get(ing_id, {})
             cfixo = ing.get("custo_fixo")
             pman  = ing.get("preco_manual")
-            m_rec  = manual_recente(ing_id)                          # manual recente (5 dias), R$/g
+            m_rec  = manual_recente(ing_id)                          # manual da janela ±10d, R$/g
             m_last = float(pman) / 1000 if pman is not None else None # último manual conhecido (fallback)
             o_now = preco_atual.get(ing_id)                          # R$/g online desta coleta
             o_g   = o_now if o_now is not None else ultimo_online(ing_id)  # senão, último online conhecido
