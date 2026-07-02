@@ -13,7 +13,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
   fator: number
   onClose: () => void
 }) {
-  const [fonteAberta, setFonteAberta] = useState<{ nome: string; id: number } | null>(null)
+  const [fonteAberta, setFonteAberta] = useState<{ nome: string; id: number; origem: ItemDetalhe['origem'] } | null>(null)
 
   const total = (itens || []).reduce((s, i) => s + i.custo, 0) * fator
 
@@ -62,7 +62,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
                     <td className="py-2 text-right tnum">{brl(i.custo * fator)}</td>
                     <td className="py-2 text-right whitespace-nowrap">
                       {(i.origem === 'online' || i.origem === 'manual' || i.origem === 'misto') && (
-                        <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id })}
+                        <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id, origem: i.origem })}
                           className="text-xs text-paprika hover:underline">fontes</button>
                       )}
                     </td>
@@ -77,7 +77,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
       {fonteAberta && (
         <ModalFontes nome={fonteAberta.nome}
           fontes={fontesPorIngrediente[fonteAberta.id] || []}
-          manuais={manuaisPorIngrediente[fonteAberta.id] || []}
+          manuais={(fonteAberta.origem === 'manual' || fonteAberta.origem === 'misto') ? (manuaisPorIngrediente[fonteAberta.id] || []) : []}
           onClose={() => setFonteAberta(null)} />
       )}
     </div>

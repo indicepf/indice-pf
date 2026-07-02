@@ -53,34 +53,50 @@ export async function getDishCosts(snapshotId: number): Promise<DishCost[]> {
   return (data as unknown as DishCost[]) || []
 }
 
-function montarItens(rec: any[], precoMap: Record<number, number>): ItemDetalhe[] {
+function montarItens(rec: any[], precoMap: Record<number, number>, manRecMap: Record<number, number>): ItemDetalhe[] {
   return rec.map((r): ItemDetalhe => {
     const ing = r.ingredientes
     const qtd = Number(r.qtd_g)
     let preco_g: number | null = null, origem: ItemDetalhe['origem'] = 'sem', custo = 0, link: string | null = null
-    const m = ing.preco_manual != null ? Number(ing.preco_manual) / 1000 : null  // R$/g manual
-    const o = precoMap[r.ingrediente_id] ?? null                                  // R$/g online
-    if (ing.custo_fixo != null) { origem = 'fixo'; custo = Number(ing.custo_fixo) }
-    else if (m != null && o != null) { origem = 'misto';  preco_g = (m + o) / 2; custo = preco_g * qtd; link = ing.preco_manual_link ?? null }
-    else if (m != null)              { origem = 'manual'; preco_g = m;           custo = preco_g * qtd; link = ing.preco_manual_link ?? null }
-    else if (o != null)              { origem = 'online'; preco_g = o;           custo = preco_g * qtd }
+    const mRec  = manRecMap[r.ingrediente_id] ?? null                               // manual recente (5 dias) R$/g
+    const mLast = ing.preco_manual != null ? Number(ing.preco_manual) / 1000 : null // último manual conhecido (fallback)
+    const o     = precoMap[r.ingrediente_id] ?? null                                // R$/g online
+    const linkM = ing.preco_manual_link ?? null
+    if (ing.custo_fixo != null)         { origem = 'fixo';   custo = Number(ing.custo_fixo) }
+    else if (mRec != null && o != null) { origem = 'misto';  preco_g = (mRec + o) / 2; custo = preco_g * qtd; link = linkM }
+    else if (mRec != null)              { origem = 'manual'; preco_g = mRec;           custo = preco_g * qtd; link = linkM }
+    else if (o != null)                 { origem = 'online'; preco_g = o;              custo = preco_g * qtd }        // manual antigo não conta
+    else if (mLast != null)             { origem = 'manual'; preco_g = mLast;          custo = preco_g * qtd; link = linkM } // nicho sem online
     return { ingrediente_id: r.ingrediente_id, nome: ing.nome, categoria: ing.categoria, qtd_g: qtd, preco_g, origem, custo, link }
   }).sort((a, b) => b.custo - a.custo)
 }
 
+// mediana simples (mesma regra do Python: média dos dois centrais quando par)
+function mediana(v: number[]): number {
+  const s = [...v].sort((a, b) => a - b), n = s.length, mid = Math.floor(n / 2)
+  return n % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+}
+
 // Carrega a composição de TODOS os pratos de uma vez (gaveta abre instantânea, sem rede no clique).
 export async function getAllDetalhes(snapshotId: number): Promise<Record<number, ItemDetalhe[]>> {
-  const [rec, { data: precos }] = await Promise.all([
+  const desde = new Date(Date.now() - 5 * 86400000).toISOString()
+  const [rec, { data: precos }, { data: manuais }] = await Promise.all([
     fetchAll(() => supabase.from('receitas').select('prato_id,qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual,preco_manual_link)').order('id')),
     supabase.from('precos').select('ingrediente_id,mediana_normalizada').eq('snapshot_id', snapshotId),
+    supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual').gte('criado_em', desde).not('preco_manual', 'is', null),
   ])
   const precoMap: Record<number, number> = {}
   ;(precos || []).forEach((p: any) => { if (p.mediana_normalizada != null) precoMap[p.ingrediente_id] = Number(p.mediana_normalizada) })
+  // manual recente (5 dias): mediana das leituras por ingrediente → R$/g. Só ele conta como manual atual.
+  const manAgg: Record<number, number[]> = {}
+  ;((manuais || []) as any[]).forEach(m => { (manAgg[m.ingrediente_id] ||= []).push(Number(m.preco_manual)) })
+  const manRecMap: Record<number, number> = {}
+  for (const k of Object.keys(manAgg)) manRecMap[+k] = mediana(manAgg[+k]) / 1000
 
   const porPrato: Record<number, any[]> = {}
   ;((rec || []) as any[]).forEach(r => { (porPrato[r.prato_id] ||= []).push(r) })
   const out: Record<number, ItemDetalhe[]> = {}
-  for (const pid of Object.keys(porPrato)) out[+pid] = montarItens(porPrato[+pid], precoMap)
+  for (const pid of Object.keys(porPrato)) out[+pid] = montarItens(porPrato[+pid], precoMap, manRecMap)
   return out
 }
 
@@ -98,15 +114,23 @@ export async function getAllFontes(snapshotId: number): Promise<Record<number, F
 
 export type FonteManual = { preco_manual: number | null; loja: string | null; link: string | null; criado_em: string; origem: string | null }
 
-// Leituras (campo + manuais) dos últimos 5 dias (as que alimentam a mediana), agrupadas por ingrediente.
+// Leituras manuais por ingrediente: as dos últimos 5 dias (as que alimentam a
+// mediana atual); se não houver nenhuma recente, mostra a última leitura conhecida
+// (que é o fallback usado nos itens de nicho sem cotação online).
 export async function getAllFontesManuais(): Promise<Record<number, FonteManual[]>> {
-  const desde = new Date(Date.now() - 5 * 86400000).toISOString()
+  const desde = Date.now() - 5 * 86400000
   const { data } = await supabase.from('precos_manuais_hist')
     .select('ingrediente_id,preco_manual,loja,link,criado_em,origem')
-    .gte('criado_em', desde).not('preco_manual', 'is', null)
+    .not('preco_manual', 'is', null)
     .order('criado_em', { ascending: false })
+  const todas: Record<number, FonteManual[]> = {}
+  ;((data || []) as any[]).forEach(f => { (todas[f.ingrediente_id] ||= []).push(f) })
   const out: Record<number, FonteManual[]> = {}
-  ;((data || []) as any[]).forEach(f => { (out[f.ingrediente_id] ||= []).push(f) })
+  for (const k of Object.keys(todas)) {
+    const arr = todas[+k]
+    const recentes = arr.filter(f => new Date(f.criado_em).getTime() >= desde)
+    out[+k] = recentes.length ? recentes : [arr[0]]   // 5 dias, ou a última leitura conhecida
+  }
   return out
 }
 

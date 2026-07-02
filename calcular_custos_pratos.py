@@ -23,6 +23,7 @@ Requer env: SUPABASE_URL, SUPABASE_KEY.
 """
 import os, sys, statistics
 from collections import defaultdict
+from datetime import datetime, timedelta
 import requests
 
 try:
@@ -103,6 +104,20 @@ def main():
         h = sorted(hist.get(ing_id, []), reverse=True)
         return h[0][1] if h else None
 
+    # manual RECENTE (leituras dos últimos 5 dias) por ingrediente → R$/g.
+    # Só o manual recente conta como "manual atual" (entra no blend / tag). Manual
+    # antigo NÃO é misturado quando há online; serve apenas de fallback p/ itens
+    # de nicho sem cotação online (via ingredientes.preco_manual).
+    corte5 = (datetime.utcnow() - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    man_rec = defaultdict(list)
+    for h in get_all("precos_manuais_hist", "ingrediente_id,preco_manual,criado_em",
+                     f"&preco_manual=not.is.null&ingrediente_id=not.is.null&criado_em=gte.{corte5}"):
+        man_rec[h["ingrediente_id"]].append(float(h["preco_manual"]))
+
+    def manual_recente(ing_id):
+        vals = man_rec.get(ing_id)
+        return statistics.median(vals) / 1000 if vals else None   # R$/g
+
     # ── custo por prato ──────────────────────────────────────────────────────
     por_prato = defaultdict(list)
     for r in receitas:
@@ -115,20 +130,23 @@ def main():
             ing = ingredientes.get(ing_id, {})
             cfixo = ing.get("custo_fixo")
             pman  = ing.get("preco_manual")
-            m_g   = float(pman) / 1000 if pman is not None else None  # R$/g manual
-            o_now = preco_atual.get(ing_id)                           # R$/g online desta coleta
-            o_g   = o_now if o_now is not None else ultimo_online(ing_id)  # senão, último conhecido
+            m_rec  = manual_recente(ing_id)                          # manual recente (5 dias), R$/g
+            m_last = float(pman) / 1000 if pman is not None else None # último manual conhecido (fallback)
+            o_now = preco_atual.get(ing_id)                          # R$/g online desta coleta
+            o_g   = o_now if o_now is not None else ultimo_online(ing_id)  # senão, último online conhecido
             o_fresco = o_now is not None
             if cfixo is not None:
                 custo += float(cfixo); cobertos += 1                  # R$ flat por prato
-            elif m_g is not None and o_g is not None:
-                custo += (m_g + o_g) / 2 * qtd; cobertos += 1         # média manual × online (fresco ou último)
-            elif m_g is not None:
-                custo += m_g * qtd; cobertos += 1
+            elif m_rec is not None and o_g is not None:
+                custo += (m_rec + o_g) / 2 * qtd; cobertos += 1       # blend manual recente × online
+            elif m_rec is not None:
+                custo += m_rec * qtd; cobertos += 1                   # só manual recente
             elif o_g is not None:
-                custo += o_g * qtd
+                custo += o_g * qtd                                    # online (manual antigo não conta)
                 cobertos += 1 if o_fresco else 0
                 estimados += 0 if o_fresco else 1                     # online carregado da última coleta
+            elif m_last is not None:
+                custo += m_last * qtd; estimados += 1                 # último manual (nicho sem online)
             # sem preço algum: não contribui (parcial)
         linhas.append({
             "snapshot_id": snap_id, "prato_id": prato_id,
