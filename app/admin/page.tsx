@@ -16,6 +16,7 @@ import type { ContribuicaoFull, Ing } from '@/lib/types'
 import Painel from './Painel'
 import Auditoria from './Auditoria'
 import SuperAcoes from './SuperAcoes'
+import StatusColeta from './StatusColeta'
 
 type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; pago_em?: string | null; nome: string | null; telefone: string | null; aprovador?: string | null; pago_dispositivo?: string | null }
 const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
@@ -26,7 +27,7 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'auditoria' | 'super'>('mod')
+  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'auditoria' | 'coleta' | 'super'>('mod')
   const [souSuper, setSouSuper] = useState(false)
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
@@ -265,7 +266,8 @@ export default function AdminPage() {
   const abas: [typeof aba, string][] = [
     ['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`],
     ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`],
-    ['precos', `Preços manuais (${manuais.length})`], ...(souSuper ? [['super', 'Ações do super'] as [typeof aba, string]] : []),
+    ['precos', `Preços manuais (${manuais.length})`],
+    ...(souSuper ? [['coleta', 'Coleta'] as [typeof aba, string], ['super', 'Ações do super'] as [typeof aba, string]] : []),
   ]
 
   return (
@@ -572,6 +574,10 @@ export default function AdminPage() {
               </div>
             )}
         </div>
+      </div>
+      ) : aba === 'coleta' ? (
+      <div className="max-w-3xl mx-auto px-6 py-8" key="coleta">
+        <StatusColeta />
       </div>
       ) : aba === 'super' ? (
       <div className="max-w-3xl mx-auto px-6 py-8" key="super">

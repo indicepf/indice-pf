@@ -2,7 +2,7 @@ import requests
 import re
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 try:
     from dotenv import load_dotenv
@@ -38,11 +38,31 @@ LIMITE_RAZAO_MEDIANA = 4.0   # mantém só preços entre mediana/4 e mediana*4
 #     'maco'      → folhas/verduras por maço: divide por peso_ref_g → R$/g
 # A normalização sempre resulta em R$/g (ml tratado como ≈g) para o custo por
 # prato = preço × quantidade da receita.
+def _ids_coletados_recentes(dias=6):
+    """ingrediente_ids com coleta bem-sucedida (qtd_resultados>0) em algum
+    snapshot dos últimos `dias` dias. Usado para pular a reraspagem: um rerun
+    pega só o que faltou (manuais/não-encontrados). Desligado por FORCE_RESCRAPE=1."""
+    corte = (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/snapshots?select=id&data=gte.{corte}",
+                     headers=SUPA_HEADERS, timeout=30)
+    r.raise_for_status()
+    ids = [s["id"] for s in r.json()]
+    if not ids:
+        return set()
+    ids_csv = ",".join(str(i) for i in ids)
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/precos"
+                     f"?select=ingrediente_id&snapshot_id=in.({ids_csv})&qtd_resultados=gt.0",
+                     headers=SUPA_HEADERS, timeout=30)
+    r.raise_for_status()
+    return {p["ingrediente_id"] for p in r.json() if p["ingrediente_id"] is not None}
+
+
 def carregar_catalogo():
-    # ignora itens não-scrapeáveis: preço fixo (custo_fixo) e preço manual.
+    # ignora só itens de preço fixo (custo_fixo). Itens com preço manual TAMBÉM
+    # são raspados: precisamos do preço online para o blend manual×online.
     url = (f"{SUPABASE_URL}/rest/v1/ingredientes"
            "?select=id,nome,busca,unidade,peso_ref_g,palavras_ok,palavras_nao"
-           "&ativo=eq.true&unidade=neq.fixo&preco_manual=is.null&order=id")
+           "&ativo=eq.true&unidade=neq.fixo&order=id")
     resp = requests.get(url, headers=SUPA_HEADERS, timeout=30)
     resp.raise_for_status()
     cat = resp.json()
@@ -53,6 +73,15 @@ def carregar_catalogo():
         faltando = set(apenas) - {i["nome"] for i in cat}
         if faltando:
             print(f"⚠️  SCRAPE_ONLY não encontrou no catálogo: {sorted(faltando)}")
+    # pula itens já coletados com sucesso nos últimos 6 dias — assim um rerun pega
+    # só o que faltou (manuais/não-encontrados). FORCE_RESCRAPE=1 força o full run.
+    if os.getenv("FORCE_RESCRAPE") != "1":
+        recentes = _ids_coletados_recentes(6)
+        antes = len(cat)
+        cat = [i for i in cat if i["id"] not in recentes]
+        if antes != len(cat):
+            print(f"⏭️  Pulando {antes - len(cat)} item(ns) com coleta nos últimos 6 dias "
+                  f"(use FORCE_RESCRAPE=1 para raspar tudo)")
     for ing in cat:
         ing["palavras_ok"]  = [p for p in (ing.get("palavras_ok") or "").split("|") if p]
         ing["palavras_nao"] = [p for p in (ing.get("palavras_nao") or "").split("|") if p]

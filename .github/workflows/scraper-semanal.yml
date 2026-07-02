@@ -3,9 +3,20 @@ name: Scraper Semanal — Índice PF
 on:
   schedule:
     # Dias 1 e 15 às 8h (Brasília = 11h UTC) = 2 coletas/mês.
-    # 99 ingredientes × 2 = 198 chamadas/mês, dentro do plano gratuito da SerpAPI (250).
+    # 115 ingredientes × 2 = 230 chamadas/mês (2 contas SerpAPI = 500 grátis/mês).
     - cron: '0 11 1,15 * *'
   workflow_dispatch:  # permite rodar manualmente pelo GitHub
+    inputs:
+      modo:
+        description: 'faltantes = pega só o que não veio nos últimos 6 dias e soma ao último snapshot (barato); completo = raspa os 115'
+        type: choice
+        default: faltantes   # default seguro: clique acidental não gasta os 115
+        options: [faltantes, completo]
+
+# nunca deixa dois runs do scraper rodarem ao mesmo tempo (gasto dobrado + corrida no snapshot)
+concurrency:
+  group: scraper-indice-pf
+  cancel-in-progress: false
 
 jobs:
   scraper:
@@ -31,7 +42,13 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           SERPAPI_KEY_2: ${{ secrets.SERPAPI_KEY_2 }}
+          # modo 'completo' (cron ou dispatch default) = full run dos 115.
+          # modo 'faltantes' (dispatch) = skip de 6 dias liga + merge no último snapshot,
+          #   raspando só os que não vieram (manuais/não-encontrados).
+          FORCE_RESCRAPE: ${{ (github.event_name == 'schedule' || github.event.inputs.modo == 'completo') && '1' || '' }}
+          SCRAPE_MERGE:   ${{ github.event.inputs.modo == 'faltantes' && '1' || '' }}
         run: |
+          echo "Modo: ${{ github.event.inputs.modo || 'completo (agendado)' }} | FORCE_RESCRAPE='${FORCE_RESCRAPE}' SCRAPE_MERGE='${SCRAPE_MERGE}'"
           python scraper_pf.py
           python salvar_supabase.py
           python calcular_custos_pratos.py

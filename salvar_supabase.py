@@ -72,6 +72,14 @@ def main():
     print(f"📅 Salvando snapshot de {data} no Supabase...")
     print(f"   {len(resumo)} ingredientes | {len(resultados)} resultados brutos")
 
+    # guarda anti-sobrescrita: se a coleta veio TODA vazia (chave morta / sem rede),
+    # aborta antes de apagar — não troca dados bons por nada.
+    com_preco = sum(1 for r in resumo if r.get("mediana_normalizada") is not None)
+    if resumo and com_preco == 0:
+        print("🛑 Abortado: nenhum ingrediente veio com preço (falha de API/rede?). "
+              "Nada foi apagado nem gravado.")
+        return
+
     # modo merge: atualiza só os ingredientes raspados no ÚLTIMO snapshot,
     # sem apagar os demais preços (usado com SCRAPE_ONLY para correções pontuais).
     MERGE = os.getenv("SCRAPE_MERGE") == "1"
