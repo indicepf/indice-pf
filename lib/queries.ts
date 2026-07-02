@@ -223,6 +223,49 @@ export async function getEvolucao(): Promise<Evolucao> {
   return { serie, pratos, porPrato }
 }
 
+// Snapshots do modelo novo (com custos_pratos), mais recente primeiro.
+export async function getSnapshotsNovos(): Promise<{ id: number; data: string }[]> {
+  const [cp, snaps] = await Promise.all([
+    supabase.from('custos_pratos').select('snapshot_id'),
+    supabase.from('snapshots').select('id,data').order('data', { ascending: false }),
+  ])
+  const novos = new Set(((cp.data || []) as any[]).map(r => r.snapshot_id))
+  return ((snaps.data || []) as any[]).filter(s => novos.has(s.id)).map(s => ({ id: s.id, data: s.data }))
+}
+
+export type LinhaIngrediente = {
+  id: number; nome: string; categoria: string | null; label: string
+  mediana: number | null; media: number | null; min: number | null; max: number | null; dp: number | null
+  n: number; inflacao: number | null   // inflacao = variação da mediana vs coleta anterior
+}
+
+// Detalhamento por ingrediente de um snapshot: estatísticas (já gravadas em `precos`)
+// + categoria + inflação vs a coleta anterior.
+export async function getDetalheIngredientes(snapshotId: number): Promise<LinhaIngrediente[]> {
+  const novos = await getSnapshotsNovos()
+  const idx = novos.findIndex(s => s.id === snapshotId)
+  const prevId = idx >= 0 && idx + 1 < novos.length ? novos[idx + 1].id : null
+  const [cur, prev, ings] = await Promise.all([
+    supabase.from('precos').select('ingrediente_id,nome_ingrediente,mediana_exibicao,media_exibicao,minimo_exibicao,maximo_exibicao,desvio_padrao,qtd_resultados,label').eq('snapshot_id', snapshotId),
+    prevId ? supabase.from('precos').select('ingrediente_id,mediana_exibicao').eq('snapshot_id', prevId) : Promise.resolve({ data: [] as any[] }),
+    supabase.from('ingredientes').select('id,categoria'),
+  ])
+  const catMap = new Map<number, string | null>(); ((ings.data || []) as any[]).forEach(i => catMap.set(i.id, i.categoria))
+  const prevMap = new Map<number, number>(); ((prev.data || []) as any[]).forEach(p => { if (p.mediana_exibicao != null) prevMap.set(p.ingrediente_id, Number(p.mediana_exibicao)) })
+  const num = (v: any) => v != null ? Number(v) : null
+  return ((cur.data || []) as any[]).map(p => {
+    const med = num(p.mediana_exibicao)
+    const pm = prevMap.get(p.ingrediente_id)
+    return {
+      id: p.ingrediente_id, nome: p.nome_ingrediente,
+      categoria: p.ingrediente_id != null ? (catMap.get(p.ingrediente_id) ?? null) : null, label: p.label,
+      mediana: med, media: num(p.media_exibicao), min: num(p.minimo_exibicao), max: num(p.maximo_exibicao),
+      dp: num(p.desvio_padrao), n: p.qtd_resultados || 0,
+      inflacao: (med != null && pm != null && pm > 0) ? (med - pm) / pm : null,
+    }
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+}
+
 // Contribuições de campo aprovadas com coordenada, p/ o mapa.
 export async function getContribuicoesMapa(): Promise<{ lat: number; lng: number; label: string }[]> {
   const { data } = await supabase.from('contribuicoes')

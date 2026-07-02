@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { getEvolucao, type Evolucao, type FonteKey } from '@/lib/queries'
+import TabelaIngredientes from './TabelaIngredientes'
 
 const COR = { paprika: '#c0492b', olive: '#6b7a3f', ink: '#1a1a1a', muted: '#9a9a9a', azul: '#3d6b8e' }
 const FONTES: [FonteKey, string][] = [['blend', 'Blend (índice)'], ['online', 'Online'], ['manual', 'Manual']]
@@ -16,6 +17,7 @@ const numPrato = (nome: string) => parseInt(nome, 10) || 999   // prefixo "12. �
 
 export default function EvolucaoPage() {
   const router = useRouter()
+  const [aba, setAba] = useState<'indice' | 'ingredientes'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
@@ -34,9 +36,7 @@ export default function EvolucaoPage() {
     return (ev.porPrato[pratoId] || []).map(p => ({ ts: ts(p.data), blend: r2(p.blend), online: r2(p.online), manual: r2(p.manual) }))
   }, [ev, fonte, pratoId, nacional])
 
-  if (!ev) return <main className="min-h-screen grid place-items-center text-muted text-sm">Carregando…</main>
-
-  const poucos = ev.serie.length < 2
+  const poucos = !ev || ev.serie.length < 2
   const ticks = dados.map(d => d.ts)
 
   return (
@@ -48,6 +48,23 @@ export default function EvolucaoPage() {
         </div>
       </header>
 
+      <div className="max-w-5xl mx-auto px-6">
+        {/* abas */}
+        <div className="flex gap-5 border-b border-line pt-2">
+          {([['indice', 'Índice'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setAba(k)}
+              className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {aba === 'ingredientes' ? (
+        <div className="max-w-5xl mx-auto px-6 py-8"><TabelaIngredientes /></div>
+      ) : !ev ? (
+        <p className="max-w-5xl mx-auto px-6 py-10 text-sm text-muted">Carregando…</p>
+      ) : (
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         {/* controles */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
@@ -123,6 +140,7 @@ export default function EvolucaoPage() {
           </div>
         </div>
       </div>
+      )}
     </main>
   )
 }
