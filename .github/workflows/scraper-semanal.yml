@@ -42,6 +42,7 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           SERPAPI_KEY_2: ${{ secrets.SERPAPI_KEY_2 }}
+          SERPAPI_KEY_3: ${{ secrets.SERPAPI_KEY_3 }}
           # modo 'completo' (cron ou dispatch default) = full run dos 115.
           # modo 'faltantes' (dispatch) = skip de 6 dias liga + merge no último snapshot,
           #   raspando só os que não vieram (manuais/não-encontrados).
