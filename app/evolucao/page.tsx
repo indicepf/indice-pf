@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
-import { getEvolucao, getAllDetalhes, getSnapshotsNovos, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
+import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getSerieCVLojas, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
 import { brl } from '@/lib/format'
 import type { ItemDetalhe } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
@@ -24,11 +24,14 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 const numPrato = (nome: string) => parseInt(nome, 10) || 999   // prefixo "12. …"
 const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
 const mediana = (v: number[]) => { if (!v.length) return 0; const s = [...v].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
+const desvio = (v: number[]) => { if (v.length < 2) return 0; const m = v.reduce((a, b) => a + b, 0) / v.length; return Math.sqrt(v.reduce((s, x) => s + (x - m) ** 2, 0) / v.length) }
+const coefVar = (v: number[]) => { const m = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; return m > 0 ? desvio(v) / m : 0 }
 
 export default function EvolucaoPage() {
   const router = useRouter()
-  const [aba, setAba] = useState<'indice' | 'ingredientes'>('indice')
+  const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
+  const [cvLojas, setCvLojas] = useState<{ data: string; cv: number }[]>([])
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
   const [regiao, setRegiao] = useState('')           // '' = todas as regiões
@@ -55,6 +58,7 @@ export default function EvolucaoPage() {
   useEffect(() => {
     getEvolucao().then(setEv)
     getSnapshotsNovos().then(s => { if (s[0]) getAllDetalhes(s[0].id, s[0].data).then(setDetalhes) })
+    getSerieCVLojas().then(setCvLojas)
   }, [])
   useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
 
@@ -76,6 +80,19 @@ export default function EvolucaoPage() {
       return { ts: ts(p.data), mediana: r2(mediana(vals)), media, min, max, faixa: [min, max] as [number, number] }
     })
   }, [ev, fonte, pratoId, nacional, regiao])
+
+  const cvData = useMemo(() => {
+    if (!ev) return []
+    const mapa = new Map(cvLojas.map(x => [x.data, x.cv]))
+    return ev.serie.map((p, i) => {
+      const custos = ev.pratos.map(pr => ev.porPrato[pr.id]?.[i]?.blend).filter((v): v is number => v != null && v > 0)
+      const porReg: Record<string, number[]> = {}
+      ev.pratos.forEach(pr => { const c = ev.porPrato[pr.id]?.[i]?.blend; if (c != null && c > 0) (porReg[pr.regiao] ||= []).push(c) })
+      const medReg = Object.values(porReg).map(arr => mediana(arr))
+      return { ts: ts(p.data), data: p.data, pratos: r2(coefVar(custos) * 100), regioes: r2(coefVar(medReg) * 100), lojas: r2((mapa.get(p.data) ?? 0) * 100) }
+    }).filter(d => noPeriodo(d.data))
+  }, [ev, cvLojas, ini, fim])
+  const cvIndiceTemporal = ev && ev.serie.length > 1 ? r2(coefVar(ev.serie.map(s => s.blend.mediana)) * 100) : null
 
   const poucos = !ev || ev.serie.length < 2
   const dadosP = dados.filter(d => noPeriodo(new Date(d.ts).toISOString().slice(0, 10)))
@@ -101,7 +118,7 @@ export default function EvolucaoPage() {
       <div className="max-w-5xl mx-auto px-6">
         {/* abas */}
         <div className="flex gap-5 border-b border-line pt-2">
-          {([['indice', 'Índice'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
+          {([['indice', 'Índice'], ['variacao', 'Variação'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -114,6 +131,35 @@ export default function EvolucaoPage() {
         <div className="max-w-5xl mx-auto px-6 py-8"><TabelaIngredientes /></div>
       ) : !ev ? (
         <p className="max-w-5xl mx-auto px-6 py-10 text-sm text-muted">Carregando…</p>
+      ) : aba === 'variacao' ? (
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-5">
+        <div>
+          <p className="text-sm font-medium">Coeficiente de variação (CV = desvio ÷ média)</p>
+          <p className="text-xs text-muted">
+            Quanto maior, mais dispersos os preços. <strong>Entre pratos</strong> = dispersão dos 100 pratos;{' '}
+            <strong>entre regiões</strong> = dispersão das 5 regiões; <strong>entre lojas</strong> = variação média do preço de cada ingrediente entre lojas.
+            {cvIndiceTemporal != null && <> · <strong>CV do índice entre coletas: {cvIndiceTemporal}%</strong></>}
+          </p>
+        </div>
+        <div className="border border-line rounded-lg bg-panel p-4">
+          <div style={{ width: '100%', height: 360 }}>
+            <ResponsiveContainer>
+              <ComposedChart data={cvData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
+                <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                  ticks={cvData.map(d => d.ts)} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
+                  tick={{ fontSize: 13, fill: COR.muted }} />
+                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={44} tickFormatter={v => `${v}%`} />
+                <Tooltip formatter={(v: any) => `${Number(v).toFixed(1)}%`} labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
+                <Legend wrapperStyle={{ fontSize: 13 }} />
+                <Line type="monotone" dataKey="pratos" name="Entre pratos" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="regioes" name="Entre regiões" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="lojas" name="Entre lojas" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
       ) : (
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         {/* controles */}

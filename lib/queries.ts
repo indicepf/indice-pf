@@ -298,6 +298,25 @@ export async function getDetalheIngredientes(snapshotId: number): Promise<LinhaI
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
 }
 
+// CV médio "entre lojas" por coleta = média, entre os ingredientes, de (±DP / média)
+// das cotações online — o quanto o preço de um ingrediente varia entre as lojas.
+export async function getSerieCVLojas(): Promise<{ data: string; cv: number }[]> {
+  const novos = await getSnapshotsNovos()
+  const ids = novos.map(s => s.id)
+  if (!ids.length) return []
+  const precos = await fetchAll(() => supabase.from('precos').select('snapshot_id,desvio_padrao,media_exibicao').in('snapshot_id', ids))
+  const bySnap: Record<number, number[]> = {}
+  ;(precos as any[]).forEach(p => {
+    if (p.desvio_padrao != null && p.media_exibicao != null && Number(p.media_exibicao) > 0)
+      (bySnap[p.snapshot_id] ||= []).push(Number(p.desvio_padrao) / Number(p.media_exibicao))
+  })
+  const byId = new Map(novos.map(s => [s.id, s.data]))
+  return ids.map(id => {
+    const v = bySnap[id] || []
+    return { data: byId.get(id)!, cv: v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0 }
+  }).sort((a, b) => a.data.localeCompare(b.data))
+}
+
 // Detalhamento por ingrediente AGREGADO num intervalo de coletas: mediana/média =
 // média das coletas do período; mín/máx = extremos; n/±DP = média; variação = da
 // mediana entre a 1ª e a última coleta do período.
