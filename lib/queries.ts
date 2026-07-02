@@ -142,11 +142,25 @@ export type FonteKey = 'blend' | 'online' | 'manual'
 export type FonteSerie = { mediana: number; media: number; min: number; max: number }
 export type EvolucaoPonto = { data: string } & Record<FonteKey, FonteSerie>
 export type PratoSerie = { data: string } & Record<FonteKey, number>
+export type CompPonto = { data: string } & Record<string, number>   // média por prato de cada grupo
 export type Evolucao = {
   serie: EvolucaoPonto[]                       // distribuição dos 100 pratos por coleta e fonte
   pratos: { id: number; nome: string; regiao: string }[]
   porPrato: Record<number, PratoSerie[]>       // custo de cada prato por coleta e fonte
+  composicao: CompPonto[]                       // composição do custo por grupo de alimento (blend)
 }
+
+// 17 categorias de ingrediente → 7 grupos amplos, para a composição empilhada.
+export const GRUPOS_CAT = ['Proteína', 'Base', 'Guarnição', 'Verdura/Fruta', 'Temperos', 'Gordura/Laticínio', 'Outro'] as const
+const CAT_GRUPO: Record<string, string> = {
+  'Proteína bovina': 'Proteína', 'Proteína pescado': 'Proteína', 'Proteína suína': 'Proteína', 'Proteína aves': 'Proteína', 'Pescado': 'Proteína', 'Ovos': 'Proteína',
+  'Grão/Cereal': 'Base', 'Leguminosa': 'Base',
+  'Tubérculo/Raiz': 'Guarnição',
+  'Legume/Verdura': 'Verdura/Fruta', 'Fruta': 'Verdura/Fruta',
+  'Tempero/Erva': 'Temperos', 'Condimento/Molho': 'Temperos', 'Líquido regional': 'Temperos',
+  'Gordura/Óleo': 'Gordura/Laticínio', 'Laticínio': 'Gordura/Laticínio',
+}
+const grupoDe = (cat: string | null | undefined) => (cat && CAT_GRUPO[cat]) || 'Outro'
 
 // Série do índice ao longo das coletas, por fonte (blend / online / manual). Recalcula
 // o custo de cada prato em cada snapshot do modelo novo, sob cada premissa de fonte:
@@ -158,7 +172,7 @@ export async function getEvolucao(): Promise<Evolucao> {
     supabase.from('custos_pratos').select('snapshot_id'),
     supabase.from('snapshots').select('id,data').order('data', { ascending: true }),
     fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
-    supabase.from('ingredientes').select('id,custo_fixo,preco_manual'),
+    supabase.from('ingredientes').select('id,custo_fixo,preco_manual,categoria'),
     fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada').order('id')),
     fetchAll(() => supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual,criado_em').order('id')),
     supabase.from('pratos').select('id,nome,regiao'),
@@ -176,7 +190,9 @@ export async function getEvolucao(): Promise<Evolucao> {
   const lastOnline: Record<number, number> = {}
   const serie: EvolucaoPonto[] = []
   const porPrato: Record<number, PratoSerie[]> = {}
+  const composicao: CompPonto[] = []
   const FONTES: FonteKey[] = ['blend', 'online', 'manual']
+  const nPratos = Object.keys(recPorPrato).length || 1
 
   for (const snap of snapList) {
     const online = precoPorSnap[snap.id] || {}
@@ -218,9 +234,19 @@ export async function getEvolucao(): Promise<Evolucao> {
       for (const f of FONTES) ponto[f] = custoPrato(recPorPrato[pid], f)
       ;(porPrato[pid] ||= []).push(ponto)
     }
+    // composição por grupo (blend), média por prato
+    const grupos: Record<string, number> = {}
+    for (const itens of Object.values(recPorPrato)) for (const it of itens) {
+      const p = precoIng(it.ing, 'blend')
+      const custo = p.fixo != null ? p.fixo : (p.g != null ? p.g * it.qtd : 0)
+      if (custo) { const gr = grupoDe(ing.get(it.ing)?.categoria); grupos[gr] = (grupos[gr] || 0) + custo }
+    }
+    const comp: CompPonto = { data: snap.data }
+    for (const g of GRUPOS_CAT) comp[g] = (grupos[g] || 0) / nPratos
+    composicao.push(comp)
   }
   const pratos = ((pratosRows.data || []) as any[]).map(p => ({ id: p.id, nome: p.nome, regiao: p.regiao }))
-  return { serie, pratos, porPrato }
+  return { serie, pratos, porPrato, composicao }
 }
 
 // Snapshots do modelo novo (com custos_pratos), mais recente primeiro.
