@@ -149,6 +149,8 @@ export type Evolucao = {
   porPrato: Record<number, PratoSerie[]>       // custo de cada prato por coleta e fonte
   composicao: CompPonto[]                       // composição do custo por grupo (blend) — média nacional por prato
   porPratoComp: Record<number, CompPonto[]>    // composição por grupo de cada prato, por coleta
+  cvLojas: { data: string; cv: number }[]      // CV médio entre lojas (nacional) por coleta
+  porPratoCV: Record<number, { data: string; cv: number }[]>   // CV entre lojas dos ingredientes de cada prato
 }
 
 // 17 categorias de ingrediente → 7 grupos amplos, para a composição empilhada.
@@ -174,7 +176,7 @@ export async function getEvolucao(): Promise<Evolucao> {
     supabase.from('snapshots').select('id,data').order('data', { ascending: true }),
     fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
     supabase.from('ingredientes').select('id,custo_fixo,preco_manual,categoria'),
-    fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada').order('id')),
+    fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada,media_exibicao,desvio_padrao').order('id')),
     fetchAll(() => supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual,criado_em').order('id')),
     supabase.from('pratos').select('id,nome,regiao'),
   ])
@@ -184,7 +186,12 @@ export async function getEvolucao(): Promise<Evolucao> {
   const recPorPrato: Record<number, { ing: number; qtd: number }[]> = {}
   ;(receitas as any[]).forEach(r => { (recPorPrato[r.prato_id] ||= []).push({ ing: r.ingrediente_id, qtd: Number(r.qtd_g) }) })
   const precoPorSnap: Record<number, Record<number, number>> = {}
-  ;(precosRows as any[]).forEach(p => { if (p.mediana_normalizada != null) (precoPorSnap[p.snapshot_id] ||= {})[p.ingrediente_id] = Number(p.mediana_normalizada) })
+  const cvIngPorSnap: Record<number, Record<number, number>> = {}   // CV (±DP/média) por ingrediente por coleta
+  ;(precosRows as any[]).forEach(p => {
+    if (p.mediana_normalizada != null) (precoPorSnap[p.snapshot_id] ||= {})[p.ingrediente_id] = Number(p.mediana_normalizada)
+    if (p.desvio_padrao != null && p.media_exibicao != null && Number(p.media_exibicao) > 0)
+      (cvIngPorSnap[p.snapshot_id] ||= {})[p.ingrediente_id] = Number(p.desvio_padrao) / Number(p.media_exibicao)
+  })
   const manPorIng: Record<number, { t: number; v: number }[]> = {}
   ;(manRows as any[]).forEach(m => { if (m.preco_manual != null) (manPorIng[m.ingrediente_id] ||= []).push({ t: new Date(m.criado_em).getTime(), v: Number(m.preco_manual) }) })
 
@@ -193,11 +200,14 @@ export async function getEvolucao(): Promise<Evolucao> {
   const porPrato: Record<number, PratoSerie[]> = {}
   const composicao: CompPonto[] = []
   const porPratoComp: Record<number, CompPonto[]> = {}
+  const cvLojas: { data: string; cv: number }[] = []              // CV médio entre lojas (nacional) por coleta
+  const porPratoCV: Record<number, { data: string; cv: number }[]> = {}   // CV entre lojas dos ingredientes de cada prato
   const FONTES: FonteKey[] = ['blend', 'online', 'manual']
   const nPratos = Object.keys(recPorPrato).length || 1
 
   for (const snap of snapList) {
     const online = precoPorSnap[snap.id] || {}
+    const cvIngThis = cvIngPorSnap[snap.id] || {}
     for (const k in online) lastOnline[+k] = online[+k]        // carry-forward do último online
     const base = new Date(snap.data + 'T00:00:00Z').getTime()
     const ini = base - 10 * 86400000, fim = base + 11 * 86400000 - 1000
@@ -246,13 +256,19 @@ export async function getEvolucao(): Promise<Evolucao> {
       const cp: CompPonto = { data: snap.data }
       for (const g of GRUPOS_CAT) cp[g] = gp[g] || 0
       ;(porPratoComp[pid] ||= []).push(cp)
+      // CV entre lojas dos ingredientes do prato (média dos CV por ingrediente)
+      const cvs: number[] = []
+      for (const it of recPorPrato[pid]) { const c = cvIngThis[it.ing]; if (c != null) cvs.push(c) }
+      ;(porPratoCV[pid] ||= []).push({ data: snap.data, cv: cvs.length ? cvs.reduce((a, b) => a + b, 0) / cvs.length : 0 })
     }
     const comp: CompPonto = { data: snap.data }
     for (const g of GRUPOS_CAT) comp[g] = (gruposNac[g] || 0) / nPratos    // média por prato
     composicao.push(comp)
+    const cvVals = Object.values(cvIngThis)
+    cvLojas.push({ data: snap.data, cv: cvVals.length ? cvVals.reduce((a, b) => a + b, 0) / cvVals.length : 0 })
   }
   const pratos = ((pratosRows.data || []) as any[]).map(p => ({ id: p.id, nome: p.nome, regiao: p.regiao }))
-  return { serie, pratos, porPrato, composicao, porPratoComp }
+  return { serie, pratos, porPrato, composicao, porPratoComp, cvLojas, porPratoCV }
 }
 
 // Snapshots do modelo novo (com custos_pratos), mais recente primeiro.
@@ -296,25 +312,6 @@ export async function getDetalheIngredientes(snapshotId: number): Promise<LinhaI
       inflacao: (med != null && pm != null && pm > 0) ? (med - pm) / pm : null,
     }
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
-}
-
-// CV médio "entre lojas" por coleta = média, entre os ingredientes, de (±DP / média)
-// das cotações online — o quanto o preço de um ingrediente varia entre as lojas.
-export async function getSerieCVLojas(): Promise<{ data: string; cv: number }[]> {
-  const novos = await getSnapshotsNovos()
-  const ids = novos.map(s => s.id)
-  if (!ids.length) return []
-  const precos = await fetchAll(() => supabase.from('precos').select('snapshot_id,desvio_padrao,media_exibicao').in('snapshot_id', ids))
-  const bySnap: Record<number, number[]> = {}
-  ;(precos as any[]).forEach(p => {
-    if (p.desvio_padrao != null && p.media_exibicao != null && Number(p.media_exibicao) > 0)
-      (bySnap[p.snapshot_id] ||= []).push(Number(p.desvio_padrao) / Number(p.media_exibicao))
-  })
-  const byId = new Map(novos.map(s => [s.id, s.data]))
-  return ids.map(id => {
-    const v = bySnap[id] || []
-    return { data: byId.get(id)!, cv: v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0 }
-  }).sort((a, b) => a.data.localeCompare(b.data))
 }
 
 // Detalhamento por ingrediente AGREGADO num intervalo de coletas: mediana/média =
