@@ -8,6 +8,7 @@ import {
 import type { Fonte } from '@/lib/types'
 import ModalFontes from '../ModalFontes'
 import InfoTip from '../InfoTip'
+import BotaoExportar from './BotaoExportar'
 import { brl } from '@/lib/format'
 
 type ColKey = keyof Pick<LinhaIngrediente, 'nome' | 'categoria' | 'mediana' | 'media' | 'min' | 'max' | 'dp' | 'n' | 'inflacao'>
@@ -92,6 +93,21 @@ export default function TabelaIngredientes() {
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="ingrediente ou categoria…" className={inputCls} />
         </label>
         {nColetas > 1 && <p className="text-xs text-muted self-end pb-2">Média de {nColetas} coletas no período</p>}
+        <div className="sm:ml-auto self-end pb-1">
+          <BotaoExportar nome="indice-pf-ingredientes" abas={() => {
+            const compilado = vis.map(l => ({
+              Ingrediente: l.nome, Unidade: l.label, Categoria: l.categoria,
+              Mediana: l.mediana, Média: l.media, Mínimo: l.min, Máximo: l.max, DesvioPadrão: l.dp,
+              N: l.n, VariacaoPct: l.inflacao != null ? Math.round(l.inflacao * 1000) / 10 : null,
+            }))
+            const fontes: Record<string, any>[] = []
+            for (const l of vis) {
+              for (const f of (fontesMap[l.id] || [])) fontes.push({ Ingrediente: l.nome, Fonte: 'online', Titulo: f.titulo, Loja: f.loja, Preco: f.preco_bruto, Normalizado: f.exibicao, Link: f.link })
+              for (const m of (manuaisMap[l.id] || [])) fontes.push({ Ingrediente: l.nome, Fonte: m.origem || 'manual', Titulo: 'leitura manual', Loja: m.loja, Preco: m.preco_manual, Data: m.criado_em, Link: m.link })
+            }
+            return [{ nome: 'Ingredientes', linhas: compilado }, { nome: 'Fontes', linhas: fontes }]
+          }} />
+        </div>
       </div>
 
       {loading ? <p className="text-sm text-muted py-6">Carregando…</p> : (

@@ -9,6 +9,7 @@ import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getContribuicoesMapa, G
 import { brl } from '@/lib/format'
 import type { ItemDetalhe } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
+import BotaoExportar from './BotaoExportar'
 import InfoTip from '../InfoTip'
 import AuthControls from '../Auth'
 
@@ -220,7 +221,10 @@ export default function EvolucaoPage() {
             </select>
           </label>
         </div>
-        <p className="text-xs text-muted">{pontosFiltrados.length} de {pontos.length} contribuição(ões)</p>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-muted">{pontosFiltrados.length} de {pontos.length} contribuição(ões)</p>
+          {pontosFiltrados.length > 0 && <BotaoExportar nome="indice-pf-contribuicoes" abas={() => [{ nome: 'Contribuições', linhas: pontosFiltrados.map(p => ({ Data: p.criado_em, Ingrediente: p.nome, Preco: p.preco, Cidade: p.cidade, Regiao: p.regiao, UF: p.uf, TipoLoja: p.tipo_loja, Lat: p.lat, Lng: p.lng })) }]} />}
+        </div>
         {pontosFiltrados.length ? (
           <MapaLocal points={pontosFiltrados.map(p => ({
             lat: p.lat, lng: p.lng,
@@ -301,13 +305,16 @@ export default function EvolucaoPage() {
           </div>
         )}
 
-        <div>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
           <p className="text-sm font-medium">Variação % acumulada do custo
             <InfoTip w="w-72" texto="Quanto o custo mudou em relação à 1ª coleta do período (a base = 0%). Linha subindo = mais caro; descendo = mais barato. Escolha o prato (ou Todos), a fonte e — em Todos — quais linhas mostrar. Explicação completa abaixo do gráfico." /></p>
           <p className="text-xs text-muted">
             {nacional ? 'Nacional e as regiões que você marcar.' : 'Só o prato selecionado.'} · Fonte: {fonte === 'online' ? 'online (raspado)' : fonte === 'manual' ? 'campo (leituras manuais)' : 'blend (média online × campo)'}
             {variacao.base && ` · base: coleta de ${fmt(variacao.base)} (0%)`}.
           </p>
+          </div>
+          <BotaoExportar nome="indice-pf-variacao" abas={() => [{ nome: 'Variação', linhas: variacao.rows.map((r: any) => { const o: any = { Data: r.data }; variacao.series.forEach(s => { o[s.label] = r[s.key] }); return o }) }]} />
         </div>
 
         <div className="border border-line rounded-lg bg-panel p-4">
@@ -405,12 +412,15 @@ export default function EvolucaoPage() {
 
         {/* gráfico */}
         <div className="border border-line rounded-lg bg-panel p-4">
+          <div className="flex items-start justify-between gap-3">
           <p className="text-sm font-medium mb-1">
             {nacional ? 'Custo do prato feito (R$) — distribuição dos 100 pratos' : 'Custo do prato (R$) — por fonte'}
             <InfoTip texto={nacional
               ? 'Cada coleta reúne o custo dos 100 pratos. A mediana é o índice nacional; a faixa mostra o prato mais barato e o mais caro. Escolha a fonte (blend/online/manual), a região e o período.'
               : 'Custo deste prato ao longo do tempo, em cada fonte: blend (o índice real), online (só cotação online) e manual (só leituras manuais).'} />
           </p>
+          <BotaoExportar nome="indice-pf-serie" abas={() => [{ nome: 'Série', linhas: dadosP.map((d: any) => ({ Data: new Date(d.ts).toISOString().slice(0, 10), ...(nacional ? { Mediana: d.mediana, Média: d.media, Minimo: d.min, Maximo: d.max } : { Blend: d.blend, Online: d.online, Manual: d.manual }) })) }]} />
+          </div>
           <p className="text-xs text-muted mb-4">
             {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}` : 'blend × online × manual'}
             {poucos && ' · série curta (poucas coletas) — cresce a cada coleta.'}
