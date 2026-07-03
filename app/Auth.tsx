@@ -99,7 +99,7 @@ export default function AuthControls() {
   return (
     <>
       <div className="flex items-center gap-2">
-        <button onClick={() => setModal('cta')}
+        <button onClick={() => { if (user && perfilCompleto(profile)) router.push('/contribuir'); else setModal('cta') }}
           className="text-sm border border-paprika text-paprika px-3 py-1.5 rounded-md hover:bg-paprika hover:text-white transition-colors">
           Contribuir
         </button>
