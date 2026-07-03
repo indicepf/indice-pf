@@ -107,6 +107,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3 flex-wrap justify-end">
             <a href="/evolucao" className="text-sm text-muted hover:text-ink">Histórico</a>
+            <a href="/contribuidores" className="text-sm text-muted hover:text-ink">Ranking</a>
             <ToggleModo modo={modo} setModo={setModo} />
             <AuthControls />
           </div>
