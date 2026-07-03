@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import AuthControls from './Auth'
 import DetalhePrato from './DetalhePrato'
-import { getLatestSnapshot, getDishCosts, getAllDetalhes, getAllFontes, getAllFontesManuais, type FonteManual } from '@/lib/queries'
+import { getDishCostsRange, getSnapshotsNovos, getAllDetalhes, getAllFontes, getAllFontesManuais, type FonteManual } from '@/lib/queries'
 import { MODOS, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
 import type { ModoKey, OrdemKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
@@ -18,6 +18,8 @@ export default function Dashboard() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [custos, setCustos]     = useState<DishCost[]>([])
   const [loading, setLoading]   = useState(true)
+  const [snapsNovos, setSnapsNovos] = useState<{ id: number; data: string }[]>([])
+  const [ini, setIni] = useState(''); const [fim, setFim] = useState('')   // período (vazio = última coleta)
 
   const [modo, setModo]         = useState<ModoKey>('online')
   const [regioes, setRegioes]   = useState<Set<string>>(new Set())   // vazio = todas
@@ -28,19 +30,28 @@ export default function Dashboard() {
   const [fontes, setFontes]     = useState<Record<number, Fonte[]>>({})
   const [fontesManuais, setFontesManuais] = useState<Record<number, FonteManual[]>>({})
 
+  useEffect(() => { getSnapshotsNovos().then(setSnapsNovos) }, [])
   useEffect(() => {
-    (async () => {
-      const snap = await getLatestSnapshot()
-      if (!snap) { setLoading(false); return }
-      setSnapshot(snap)
-      setCustos(await getDishCosts(snap.id))
+    if (!snapsNovos.length) return
+    ;(async () => {
+      const range = snapsNovos.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim))
+      const ref = range[0] || snapsNovos[0]   // desc → coleta mais recente do intervalo
+      setSnapshot({ id: ref.id, data: ref.data, custo_total_pf: 0 } as Snapshot)
+      setCustos(await getDishCostsRange(ini, fim))
       setLoading(false)
-      // pré-carrega composição e fontes em segundo plano → gaveta abre instantânea
-      getAllDetalhes(snap.id, snap.data).then(setDetalhes)
-      getAllFontes(snap.id).then(setFontes)
-      getAllFontesManuais(snap.data).then(setFontesManuais)
+      // composição/fontes da gaveta usam a coleta de referência
+      getAllDetalhes(ref.id, ref.data).then(setDetalhes)
+      getAllFontes(ref.id).then(setFontes)
+      getAllFontesManuais(ref.data).then(setFontesManuais)
     })()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapsNovos, ini, fim])
+  const nColetasHome = (!ini && !fim) ? 1 : snapsNovos.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim)).length
+  function presetHome(dias: number) {
+    if (!snapsNovos.length) return
+    if (dias === 0) { setIni(snapsNovos[snapsNovos.length - 1].data); setFim(snapsNovos[0].data) }   // Tudo = da 1ª à última
+    else { setFim(snapsNovos[0].data); const d = new Date(snapsNovos[0].data + 'T00:00:00Z'); d.setDate(d.getDate() - dias); setIni(d.toISOString().slice(0, 10)) }
+  }
 
   const fator = 1 - MODOS.find(m => m.key === modo)!.desc
 
@@ -115,6 +126,20 @@ export default function Dashboard() {
                 A cor de cada região indica o custo médio do prato feito ali. Clique numa região para destacá-la
                 e filtrar os pratos; clique de novo ou use o filtro da lista para voltar.
               </p>
+              <div className="mt-5 text-xs text-muted">
+                <p className="mb-1.5">Período do cálculo</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+                    {([['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
+                      <button key={label} onClick={() => presetHome(d)} className="px-2.5 py-1.5 text-muted hover:text-ink transition-colors">{label}</button>
+                    ))}
+                  </div>
+                  <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+                  <span>até</span>
+                  <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+                </div>
+                {nColetasHome > 1 && <p className="mt-1.5">Índice = média de {nColetasHome} coletas do período.</p>}
+              </div>
             </div>
             <MapaBrasil regionais={regionais} sel={regioes}
               onSel={(r) => setRegioes(prev => { const n = new Set(prev); n.has(r) ? n.delete(r) : n.add(r); return n })}

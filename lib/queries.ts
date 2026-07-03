@@ -53,6 +53,22 @@ export async function getDishCosts(snapshotId: number): Promise<DishCost[]> {
   return (data as unknown as DishCost[]) || []
 }
 
+// Custos dos pratos AGREGADOS num intervalo de coletas: custo_total = média das
+// coletas do período por prato. Usado no filtro de data da home.
+export async function getDishCostsRange(ini: string, fim: string): Promise<DishCost[]> {
+  const novos = await getSnapshotsNovos()
+  if (!ini && !fim) return novos[0] ? getDishCosts(novos[0].id) : []   // default: última coleta
+  const range = novos.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim))
+  if (range.length <= 1) return getDishCosts(range[0]?.id ?? novos[0]?.id)
+  const ids = range.map(s => s.id)
+  const rows = await fetchAll(() => supabase.from('custos_pratos')
+    .select('prato_id,custo_total,ingredientes_cobertos,ingredientes_estimados,ingredientes_total,pratos(id,regiao,nome)')
+    .in('snapshot_id', ids))
+  const byPrato: Record<number, any[]> = {}
+  ;(rows as any[]).forEach(r => { (byPrato[r.prato_id] ||= []).push(r) })
+  return Object.values(byPrato).map(arr => ({ ...arr[0], custo_total: arr.reduce((s, r) => s + Number(r.custo_total), 0) / arr.length })) as unknown as DishCost[]
+}
+
 function montarItens(rec: any[], precoMap: Record<number, number>, manRecMap: Record<number, number>): ItemDetalhe[] {
   return rec.map((r): ItemDetalhe => {
     const ing = r.ingredientes
