@@ -108,30 +108,29 @@ export default function EvolucaoPage() {
     })
   }, [ev, fonte, pratoId, nacional, regiao])
 
-  // séries de variação % entre coletas, por segmento (definidas dinamicamente)
+  // Variação % entre coletas, dirigida pelos filtros (prato, fonte, regiões).
+  // Δ% da coleta i = (custo_i − custo_{i-1}) / custo_{i-1} × 100, na fonte escolhida.
   const variacao = useMemo(() => {
-    if (!ev) return { rows: [] as any[], series: [] as { key: string; label: string; cor: string; grupo: string }[] }
-    const regs = [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b))
-    const regMed = (reg: string, i: number) => mediana(ev.pratos.filter(p => p.regiao === reg).map(p => ev.porPrato[p.id]?.[i]?.blend).filter((v): v is number => v != null && v > 0))
-    const defs: { key: string; label: string; cor: string; grupo: string; val: (i: number) => number }[] = [
-      { key: 'nacional', label: 'PF nacional', cor: '#c0492b', grupo: 'Índice', val: i => ev.serie[i].blend.mediana },
-      { key: 'online', label: 'Online', cor: '#3d6b8e', grupo: 'Tipo de loja', val: i => ev.serie[i].online.mediana },
-      { key: 'mercado', label: 'Mercado (−10%)', cor: '#6b7a3f', grupo: 'Tipo de loja', val: i => ev.serie[i].online.mediana * 0.9 },
-      { key: 'atacarejo', label: 'Atacarejo (−22%)', cor: '#7a4fb0', grupo: 'Tipo de loja', val: i => ev.serie[i].online.mediana * 0.78 },
-      ...regs.map((r, idx) => ({ key: 'reg:' + r, label: r, cor: CORES_REG[idx % CORES_REG.length], grupo: 'Região', val: (i: number) => regMed(r, i) })),
-    ]
-    if (pratoId !== 0) defs.push({ key: 'prato', label: ev.pratos.find(p => p.id === pratoId)?.nome || 'prato', cor: '#1a1a1a', grupo: 'Prato', val: i => ev.porPrato[pratoId]?.[i]?.blend ?? 0 })
-    const rows = ev.serie.map((p, i) => {
-      const row: any = { ts: ts(p.data), data: p.data }
-      for (const s of defs) {
-        if (i === 0) { row[s.key] = null; continue }
-        const prev = s.val(i - 1), cur = s.val(i)
-        row[s.key] = prev > 0 ? r2((cur - prev) / prev * 100) : null
-      }
-      return row
-    }).filter(r => noPeriodo(r.data))
-    return { rows, series: defs.map(({ key, label, cor, grupo }) => ({ key, label, cor, grupo })) }
-  }, [ev, pratoId, ini, fim])
+    if (!ev) return { rows: [] as any[], series: [] as { key: string; label: string; cor: string }[] }
+    const dpct = (getter: (i: number) => number) => ev.serie.map((_, i) => {
+      if (i === 0) return null
+      const prev = getter(i - 1), cur = getter(i)
+      return prev > 0 ? r2((cur - prev) / prev * 100) : null
+    })
+    let defs: { key: string; label: string; cor: string; serie: (number | null)[] }[]
+    if (pratoId !== 0) {
+      defs = [{ key: 'prato', label: ev.pratos.find(p => p.id === pratoId)?.nome || 'prato', cor: '#c0492b', serie: dpct(i => ev.porPrato[pratoId]?.[i]?.[fonte] ?? 0) }]
+    } else {
+      const regs = [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b))
+      const regMed = (reg: string, i: number) => mediana(ev.pratos.filter(p => p.regiao === reg).map(p => ev.porPrato[p.id]?.[i]?.[fonte]).filter((v): v is number => v != null && v > 0))
+      defs = [
+        { key: 'nacional', label: 'Nacional', cor: '#c0492b', serie: dpct(i => ev.serie[i][fonte].mediana) },
+        ...regs.map((r, idx) => ({ key: 'reg:' + r, label: r, cor: CORES_REG[idx % CORES_REG.length], serie: dpct(i => regMed(r, i)) })),
+      ]
+    }
+    const rows = ev.serie.map((p, i) => { const row: any = { ts: ts(p.data), data: p.data }; for (const d of defs) row[d.key] = d.serie[i]; return row }).filter(r => noPeriodo(r.data))
+    return { rows, series: defs.map(({ key, label, cor }) => ({ key, label, cor })) }
+  }, [ev, pratoId, fonte, ini, fim])
 
   const poucos = !ev || ev.serie.length < 2
   const dadosP = dados.filter(d => noPeriodo(new Date(d.ts).toISOString().slice(0, 10)))
@@ -245,29 +244,31 @@ export default function EvolucaoPage() {
           <span className="text-muted">até</span>
           <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
         </div>
-        <div>
-          <p className="text-sm font-medium">Variação % do custo entre coletas
-            <InfoTip w="w-72" texto="Cada ponto é a variação percentual de uma coleta para a seguinte (ex.: +5% = ficou 5% mais caro; −3% = mais barato). Ligue/desligue séries nos checkboxes: PF nacional, tipo de loja, regiões e o prato selecionado." /></p>
-          <p className="text-xs text-muted">Marque as séries que quer comparar. Mercado e Atacarejo são estimativas fixas do online (−10% / −22%), então variam junto com ele.</p>
+        <div className="text-xs text-muted">Fonte do dado
+          <div className="flex w-fit border border-line rounded-md overflow-hidden bg-panel text-sm mt-1">
+            {([['online', 'Online'], ['manual', 'Campo'], ['blend', 'Blend']] as [FonteKey, string][]).map(([k, label]) => (
+              <button key={k} onClick={() => setFonte(k)} className={`px-3 py-1.5 transition-colors ${fonte === k ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>{label}</button>
+            ))}
+          </div>
         </div>
 
-        <div className="border border-line rounded-lg bg-panel p-3 flex flex-col gap-2 text-xs">
-          {['Índice', 'Tipo de loja', 'Região', 'Prato'].map(grupo => {
-            const doGrupo = variacao.series.filter(s => s.grupo === grupo)
-            if (!doGrupo.length) return null
-            return (
-              <div key={grupo} className="flex items-center gap-4 flex-wrap">
-                <span className="text-muted uppercase tracking-wide text-[0.6rem] w-20 shrink-0">{grupo}</span>
-                {doGrupo.map(s => (
-                  <label key={s.key} className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" checked={ativos.has(s.key)} onChange={() => setAtivos(a => { const n = new Set(a); n.has(s.key) ? n.delete(s.key) : n.add(s.key); return n })} />
-                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: s.cor }} />
-                    {s.label}
-                  </label>
-                ))}
-              </div>
-            )
-          })}
+        {nacional && (
+          <div className="flex items-center gap-4 flex-wrap text-xs">
+            <span className="text-muted">Linhas:</span>
+            {variacao.series.map(s => (
+              <label key={s.key} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={ativos.has(s.key)} onChange={() => setAtivos(a => { const n = new Set(a); n.has(s.key) ? n.delete(s.key) : n.add(s.key); return n })} />
+                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: s.cor }} />
+                {s.label}
+              </label>
+            ))}
+          </div>
+        )}
+
+        <div>
+          <p className="text-sm font-medium">Variação % do custo entre coletas
+            <InfoTip w="w-72" texto="Quanto o custo mudou de uma coleta para a seguinte, em %. Escolha o prato (ou Todos), a fonte do preço, e — em Todos — quais linhas mostrar (Nacional e regiões). Explicação completa abaixo do gráfico." /></p>
+          <p className="text-xs text-muted">{nacional ? 'Nacional e as regiões que você marcar.' : 'Só o prato selecionado.'} · Fonte: {fonte === 'online' ? 'online (raspado)' : fonte === 'manual' ? 'campo (leituras manuais)' : 'blend (média online × campo)'}.</p>
         </div>
 
         <div className="border border-line rounded-lg bg-panel p-4">
@@ -282,13 +283,22 @@ export default function EvolucaoPage() {
                 <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => `${v > 0 ? '+' : ''}${v}%`} />
                 <Tooltip formatter={(v: any) => `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(1)}%`} labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
                 <Legend wrapperStyle={{ fontSize: 13 }} />
-                {variacao.series.filter(s => ativos.has(s.key)).map(s => (
+                {(nacional ? variacao.series.filter(s => ativos.has(s.key)) : variacao.series).map(s => (
                   <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.cor} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                 ))}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           {poucos && <p className="text-xs text-muted mt-2">Série curta — a variação aparece a partir da 2ª coleta e cresce a cada nova.</p>}
+        </div>
+
+        <div className="border border-line rounded-lg bg-panel p-4 text-xs text-muted leading-relaxed space-y-2">
+          <p className="text-sm font-medium text-ink">Como ler este gráfico</p>
+          <p>Cada ponto é a <strong>variação percentual do custo de uma coleta para a anterior</strong>. A fórmula:</p>
+          <p className="text-ink"><code>Δ% = (custo desta coleta − custo da coleta anterior) ÷ custo da coleta anterior × 100</code></p>
+          <p><strong>Exemplo:</strong> se o Nacional foi R$ 11,25 em 21/06 e R$ 11,93 em 01/07, o ponto de 01/07 é (11,93 − 11,25) ÷ 11,25 = <strong>+6,0%</strong> — ficou 6% mais caro. A primeira coleta não tem ponto (não há anterior para comparar).</p>
+          <p><strong>+X%</strong> = mais caro · <strong>−X%</strong> = mais barato · <strong>0%</strong> = sem mudança (linha cinza).</p>
+          <p>O <strong>custo</strong> de cada linha: <strong>Nacional</strong> = mediana dos 100 pratos; <strong>uma região</strong> = mediana dos pratos daquela região; <strong>um prato</strong> = o custo dele. A <strong>fonte</strong> define o preço de cada ingrediente: <strong>Online</strong> (raspado no varejo), <strong>Campo</strong> (leituras manuais/contribuições) ou <strong>Blend</strong> (média dos dois — o índice oficial).</p>
         </div>
       </div>
       ) : (
