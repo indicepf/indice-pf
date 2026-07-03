@@ -4,12 +4,15 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
-import { getEvolucao, getAllDetalhes, getSnapshotsNovos, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
+import dynamic from 'next/dynamic'
+import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getContribuicoesMapa, GRUPOS_CAT, type Evolucao, type FonteKey, type PontoContrib } from '@/lib/queries'
 import { brl } from '@/lib/format'
 import type { ItemDetalhe } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
 import InfoTip from '../InfoTip'
 import AuthControls from '../Auth'
+
+const MapaLocal = dynamic(() => import('../MapaLocal'), { ssr: false, loading: () => <div className="h-[440px] grid place-items-center text-muted text-sm">Carregando mapa…</div> })
 
 // paleta categórica validada (dataviz validate_palette — todos os checks PASS em superfície branca)
 const CORES_GRUPO: Record<string, string> = {
@@ -26,9 +29,10 @@ const numPrato = (nome: string) => parseInt(nome, 10) || 999   // prefixo "12. �
 const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
 const mediana = (v: number[]) => { if (!v.length) return 0; const s = [...v].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
 const CORES_REG = ['#c98500', '#008f7a', '#9c5a1e', '#b0567f', '#4e8b2f']
+const selCls = 'block bg-cream border border-line rounded-md px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
 
 export default function EvolucaoPage() {
-  const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes'>('indice')
+  const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes' | 'mapa'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
@@ -41,6 +45,8 @@ export default function EvolucaoPage() {
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]>>({})
   const [off, setOff] = useState<Set<number>>(new Set())   // ingredientes desmarcados no "e se"
   const [ativos, setAtivos] = useState<Set<string>>(new Set(['nacional']))   // séries ativas na Variação
+  const [pontos, setPontos] = useState<PontoContrib[]>([])
+  const [fReg, setFReg] = useState(''); const [fTipo, setFTipo] = useState(''); const [fIng, setFIng] = useState(0)
 
   const noPeriodo = (d: string) => (!ini || d >= ini) && (!fim || d <= fim)
   const compData = useMemo(() => {
@@ -69,6 +75,7 @@ export default function EvolucaoPage() {
   useEffect(() => {
     getEvolucao().then(setEv)
     getSnapshotsNovos().then(s => { if (s[0]) getAllDetalhes(s[0].id, s[0].data).then(setDetalhes) })
+    getContribuicoesMapa().then(setPontos)
   }, [])
   useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
 
@@ -121,6 +128,11 @@ export default function EvolucaoPage() {
   const ticks = dadosP.map(d => d.ts)
   const mediaIndice = nacional && dadosP.length ? dadosP.reduce((s, d) => s + ((d as any).mediana || 0), 0) / dadosP.length : null
   const regioes = ev ? [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b)) : []
+  // opções e filtro do mapa
+  const regContrib = [...new Set(pontos.map(p => p.regiao).filter(Boolean))] as string[]
+  const tiposContrib = [...new Set(pontos.map(p => p.tipo_loja).filter(Boolean))] as string[]
+  const ingsContrib = Array.from(new Map(pontos.filter(p => p.ingrediente_id).map(p => [p.ingrediente_id!, p.nome])).entries()).sort((a, b) => a[1].localeCompare(b[1]))
+  const pontosFiltrados = pontos.filter(p => (!fReg || p.regiao === fReg) && (!fTipo || p.tipo_loja === fTipo) && (!fIng || p.ingrediente_id === fIng) && noPeriodo(p.data))
   function preset(dias: number) {
     if (!ev || !ev.serie.length) return
     const ultima = ev.serie[ev.serie.length - 1].data
@@ -147,7 +159,7 @@ export default function EvolucaoPage() {
       <div className="max-w-5xl mx-auto px-6">
         {/* abas */}
         <div className="flex gap-5 border-b border-line pt-2">
-          {([['indice', 'Índice'], ['variacao', 'Variação'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
+          {([['indice', 'Índice'], ['variacao', 'Variação'], ['ingredientes', 'Ingredientes'], ['mapa', 'Mapa']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -158,6 +170,51 @@ export default function EvolucaoPage() {
 
       {aba === 'ingredientes' ? (
         <div className="max-w-5xl mx-auto px-6 py-8"><TabelaIngredientes /></div>
+      ) : aba === 'mapa' ? (
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
+        <p className="text-sm text-muted">
+          Contribuições de campo aprovadas com localização. Filtre por período, região, tipo de mercado e ingrediente.
+          <InfoTip texto="Cada ponto é uma foto aprovada de preço enviada por um usuário, na coordenada onde foi coletada. Os filtros combinam entre si." />
+        </p>
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-muted">Período:</span>
+          <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+            {([['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
+              <button key={label} onClick={() => preset(d)} className="px-3 py-1.5 text-muted hover:text-ink transition-colors">{label}</button>
+            ))}
+          </div>
+          <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+          <span className="text-muted">até</span>
+          <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+          <label className="text-xs text-muted">Região
+            <select value={fReg} onChange={e => setFReg(e.target.value)} className={selCls}>
+              <option value="">Todas</option>
+              {regContrib.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+          <label className="text-xs text-muted">Tipo de mercado
+            <select value={fTipo} onChange={e => setFTipo(e.target.value)} className={selCls}>
+              <option value="">Todos</option>
+              {tiposContrib.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="text-xs text-muted flex-1 min-w-[12rem]">Ingrediente
+            <select value={fIng} onChange={e => setFIng(Number(e.target.value))} className={selCls}>
+              <option value={0}>Todos</option>
+              {ingsContrib.map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
+            </select>
+          </label>
+        </div>
+        <p className="text-xs text-muted">{pontosFiltrados.length} de {pontos.length} contribuição(ões)</p>
+        {pontosFiltrados.length ? (
+          <MapaLocal points={pontosFiltrados.map(p => ({
+            lat: p.lat, lng: p.lng,
+            label: `${p.nome}${p.preco != null ? ` — R$ ${p.preco.toFixed(2)}` : ''}${p.cidade ? ` · ${p.cidade}` : ''}${p.data ? ` · ${fmt(p.data)}` : ''}`,
+          }))} height="440px" />
+        ) : <p className="text-sm text-muted py-6">Nenhuma contribuição para os filtros.</p>}
+      </div>
       ) : !ev ? (
         <p className="max-w-5xl mx-auto px-6 py-10 text-sm text-muted">Carregando…</p>
       ) : aba === 'variacao' ? (
