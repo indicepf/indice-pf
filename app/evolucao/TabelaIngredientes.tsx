@@ -7,6 +7,7 @@ import {
 } from '@/lib/queries'
 import type { Fonte } from '@/lib/types'
 import ModalFontes from '../ModalFontes'
+import InfoTip from '../InfoTip'
 import { brl } from '@/lib/format'
 
 type ColKey = keyof Pick<LinhaIngrediente, 'nome' | 'categoria' | 'mediana' | 'media' | 'min' | 'max' | 'dp' | 'n' | 'inflacao'>
@@ -33,6 +34,7 @@ export default function TabelaIngredientes() {
   const [fontesMap, setFontesMap] = useState<Record<number, Fonte[]>>({})
   const [manuaisMap, setManuaisMap] = useState<Record<number, FonteManual[]>>({})
   const [modal, setModal] = useState<{ id: number; nome: string } | null>(null)
+  const [dataFontes, setDataFontes] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { getSnapshotsNovos().then(s => { setSnaps(s); if (s[0]) { setIni(s[0].data); setFim(s[0].data) } }) }, [])
@@ -40,6 +42,7 @@ export default function TabelaIngredientes() {
     if (!snaps.length || !fim) return
     const range = snaps.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim))
     const latest = range[0] || snaps[0]
+    setDataFontes(latest.data)
     setLoading(true)
     Promise.all([getDetalheIngredientesRange(ini, fim), getAllFontes(latest.id), getAllFontesManuais(latest.data)])
       .then(([l, f, m]) => { setLinhas(l); setFontesMap(f); setManuaisMap(m); setLoading(false) })
@@ -89,7 +92,8 @@ export default function TabelaIngredientes() {
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="ingrediente ou categoria…" className={inputCls} />
         </label>
         <p className="text-xs text-muted self-end pb-2">
-          {nColetas > 1 ? `Média de ${nColetas} coletas · ` : ''}Clique num cabeçalho para ordenar · passe o mouse nas colunas.
+          {nColetas > 1 ? `Média de ${nColetas} coletas · ` : ''}Clique num cabeçalho para ordenar
+          <InfoTip w="w-72" texto="Estatísticas das cotações online de cada ingrediente (R$ por kg/L) na coleta ou período. Passe o mouse em cada cabeçalho para ver o que a coluna significa. Num intervalo com várias coletas, os valores são a média do período." />
         </p>
       </div>
 
@@ -140,7 +144,7 @@ export default function TabelaIngredientes() {
       )}
 
       {modal && (
-        <ModalFontes nome={modal.nome} fontes={fontesMap[modal.id] || []} manuais={manuaisMap[modal.id] || []} onClose={() => setModal(null)} />
+        <ModalFontes nome={modal.nome} fontes={fontesMap[modal.id] || []} manuais={manuaisMap[modal.id] || []} dataColeta={dataFontes} onClose={() => setModal(null)} />
       )}
     </div>
   )
