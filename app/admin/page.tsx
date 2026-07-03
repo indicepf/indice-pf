@@ -17,6 +17,7 @@ import Painel from './Painel'
 import Auditoria from './Auditoria'
 import SuperAcoes from './SuperAcoes'
 import StatusColeta from './StatusColeta'
+import AuditoriaDados from './AuditoriaDados'
 
 type Saque = { id: number; user_id: string; valor: number; cpf: string | null; chave_pix: string | null; status: string; criado_em: string; pago_em?: string | null; nome: string | null; telefone: string | null; aprovador?: string | null; pago_dispositivo?: string | null }
 const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
@@ -27,7 +28,7 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'auditoria' | 'coleta' | 'super'>('mod')
+  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'auditoria' | 'coleta' | 'dados' | 'super'>('mod')
   const [souSuper, setSouSuper] = useState(false)
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
@@ -268,7 +269,7 @@ export default function AdminPage() {
     ['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`],
     ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`],
     ['precos', `Preços manuais (${manuais.length})`],
-    ...(souSuper ? [['coleta', 'Coleta'] as [typeof aba, string], ['super', 'Ações do super'] as [typeof aba, string]] : []),
+    ...(souSuper ? [['coleta', 'Coleta'] as [typeof aba, string], ['dados', 'Dados'] as [typeof aba, string], ['super', 'Ações do super'] as [typeof aba, string]] : []),
   ]
 
   return (
@@ -579,6 +580,10 @@ export default function AdminPage() {
       ) : aba === 'coleta' ? (
       <div className="max-w-3xl mx-auto px-6 py-8" key="coleta">
         <StatusColeta />
+      </div>
+      ) : aba === 'dados' ? (
+      <div className="max-w-3xl mx-auto px-6 py-8" key="dados">
+        <AuditoriaDados ings={ings} />
       </div>
       ) : aba === 'super' ? (
       <div className="max-w-3xl mx-auto px-6 py-8" key="super">

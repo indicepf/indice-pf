@@ -682,6 +682,60 @@ export async function recalcularCustos() {
   return supabase.rpc('recalcular_custos_ultimo_snapshot')
 }
 
+// ---- Auditoria (super) ----
+export type VariacaoForte = { id: number; nome: string; medAnt: number; medAtual: number; delta: number; label: string }
+// Ingredientes com |Δ%| >= limiar na mediana entre as duas coletas mais recentes.
+export async function getVariacoesFortes(limiar = 0.3): Promise<VariacaoForte[]> {
+  const novos = await getSnapshotsNovos()
+  if (novos.length < 2) return []
+  const [c, p] = await Promise.all([
+    supabase.from('precos').select('ingrediente_id,nome_ingrediente,mediana_exibicao,label').eq('snapshot_id', novos[0].id),
+    supabase.from('precos').select('ingrediente_id,mediana_exibicao').eq('snapshot_id', novos[1].id),
+  ])
+  const prevMap = new Map<number, number>(); ((p.data || []) as any[]).forEach(r => { if (r.mediana_exibicao != null) prevMap.set(r.ingrediente_id, Number(r.mediana_exibicao)) })
+  const out: VariacaoForte[] = []
+  ;((c.data || []) as any[]).forEach(r => {
+    const cur = r.mediana_exibicao != null ? Number(r.mediana_exibicao) : null
+    const pv = prevMap.get(r.ingrediente_id)
+    if (cur != null && pv != null && pv > 0) { const d = (cur - pv) / pv; if (Math.abs(d) >= limiar) out.push({ id: r.ingrediente_id, nome: r.nome_ingrediente, medAnt: pv, medAtual: cur, delta: d, label: r.label }) }
+  })
+  return out.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+}
+
+export type EntradaBruta = { id: number; titulo: string; loja: string; preco_bruto: number | null; preco_normalizado: number | null; exibicao: string; link: string }
+// Entradas brutas (resultados_brutos) de um ingrediente na coleta mais recente.
+export async function getEntradasIngrediente(ingredienteId: number): Promise<{ snapshotId: number; entradas: EntradaBruta[] }> {
+  const novos = await getSnapshotsNovos()
+  const snapId = novos[0]?.id
+  if (!snapId) return { snapshotId: 0, entradas: [] }
+  const { data } = await supabase.from('resultados_brutos')
+    .select('id,titulo,loja,preco_bruto,preco_normalizado,exibicao,link')
+    .eq('snapshot_id', snapId).eq('ingrediente_id', ingredienteId).order('preco_bruto')
+  return { snapshotId: snapId, entradas: (data || []) as EntradaBruta[] }
+}
+
+// Exclui uma entrada bruta e recomputa a estatística do ingrediente (precos) + o índice.
+export async function excluirEntradaERecalcular(id: number, snapshotId: number, ingredienteId: number) {
+  await supabase.from('resultados_brutos').delete().eq('id', id)
+  const { data } = await supabase.from('resultados_brutos').select('preco_normalizado').eq('snapshot_id', snapshotId).eq('ingrediente_id', ingredienteId)
+  const vals = ((data || []) as any[]).map(r => Number(r.preco_normalizado)).filter(v => !isNaN(v)).sort((a, b) => a - b)
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  if (vals.length) {
+    const n = vals.length, mid = Math.floor(n / 2)
+    const med = n % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2
+    const media = vals.reduce((a, b) => a + b, 0) / n
+    const dp = Math.sqrt(vals.reduce((s, x) => s + (x - media) ** 2, 0) / n)
+    await supabase.from('precos').update({
+      mediana_normalizada: med, mediana_exibicao: r2(med * 1000), media_exibicao: r2(media * 1000),
+      minimo_exibicao: r2(vals[0] * 1000), maximo_exibicao: r2(vals[n - 1] * 1000), desvio_padrao: r2(dp * 1000), qtd_resultados: n,
+    }).eq('snapshot_id', snapshotId).eq('ingrediente_id', ingredienteId)
+  } else {
+    await supabase.from('precos').update({ mediana_normalizada: null, mediana_exibicao: null, media_exibicao: null, minimo_exibicao: null, maximo_exibicao: null, desvio_padrao: null, qtd_resultados: 0 })
+      .eq('snapshot_id', snapshotId).eq('ingrediente_id', ingredienteId)
+  }
+  return recalcularCustos()
+}
+
 // ---- Painel de controle (admin) ----
 export type PainelContrib = {
   id: number; user_id: string; ingrediente_id: number | null
