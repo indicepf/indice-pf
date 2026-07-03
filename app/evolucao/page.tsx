@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
-import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getSerieCVLojas, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
+import { getEvolucao, getAllDetalhes, getSnapshotsNovos, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
 import { brl } from '@/lib/format'
 import type { ItemDetalhe } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
@@ -31,7 +31,6 @@ export default function EvolucaoPage() {
   const router = useRouter()
   const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
-  const [cvLojas, setCvLojas] = useState<{ data: string; cv: number }[]>([])
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
   const [regiao, setRegiao] = useState('')           // '' = todas as regiões
@@ -50,7 +49,7 @@ export default function EvolucaoPage() {
     return src.map(p => {
       const tot = GRUPOS_CAT.reduce((s, g) => s + (p[g] || 0), 0) || 1
       const row: any = { data: fmt(p.data) }
-      for (const g of GRUPOS_CAT) row[g] = percentual ? r2((p[g] || 0) / tot * 100) : r2(p[g] || 0)
+      for (const g of GRUPOS_CAT) row[g] = percentual ? (p[g] || 0) / tot * 100 : r2(p[g] || 0)   // % sem arredondar → soma exata 100
       return row
     })
   }, [ev, percentual, pratoId, ini, fim])
@@ -58,7 +57,6 @@ export default function EvolucaoPage() {
   useEffect(() => {
     getEvolucao().then(setEv)
     getSnapshotsNovos().then(s => { if (s[0]) getAllDetalhes(s[0].id, s[0].data).then(setDetalhes) })
-    getSerieCVLojas().then(setCvLojas)
   }, [])
   useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
 
@@ -83,16 +81,32 @@ export default function EvolucaoPage() {
 
   const cvData = useMemo(() => {
     if (!ev) return []
-    const mapa = new Map(cvLojas.map(x => [x.data, x.cv]))
+    const mapa = new Map(ev.cvLojas.map(x => [x.data, x.cv]))
     return ev.serie.map((p, i) => {
-      const custos = ev.pratos.map(pr => ev.porPrato[pr.id]?.[i]?.blend).filter((v): v is number => v != null && v > 0)
-      const porReg: Record<string, number[]> = {}
-      ev.pratos.forEach(pr => { const c = ev.porPrato[pr.id]?.[i]?.blend; if (c != null && c > 0) (porReg[pr.regiao] ||= []).push(c) })
-      const medReg = Object.values(porReg).map(arr => mediana(arr))
-      return { ts: ts(p.data), data: p.data, pratos: r2(coefVar(custos) * 100), regioes: r2(coefVar(medReg) * 100), lojas: r2((mapa.get(p.data) ?? 0) * 100) }
+      const row: any = { ts: ts(p.data), data: p.data }
+      if (pratoId !== 0) {
+        row.prato = r2((ev.porPratoCV[pratoId]?.[i]?.cv ?? 0) * 100)      // CV entre lojas dos ingredientes do prato
+      } else {
+        const ids = ev.pratos.filter(pr => !regiao || pr.regiao === regiao).map(pr => pr.id)
+        const custos = ids.map(id => ev.porPrato[id]?.[i]?.blend).filter((v): v is number => v != null && v > 0)
+        row.pratos = r2(coefVar(custos) * 100)
+        if (!regiao) {
+          const porReg: Record<string, number[]> = {}
+          ev.pratos.forEach(pr => { const c = ev.porPrato[pr.id]?.[i]?.blend; if (c != null && c > 0) (porReg[pr.regiao] ||= []).push(c) })
+          row.regioes = r2(coefVar(Object.values(porReg).map(a => mediana(a))) * 100)
+        }
+        row.lojas = r2((mapa.get(p.data) ?? 0) * 100)
+      }
+      return row
     }).filter(d => noPeriodo(d.data))
-  }, [ev, cvLojas, ini, fim])
-  const cvIndiceTemporal = ev && ev.serie.length > 1 ? r2(coefVar(ev.serie.map(s => s.blend.mediana)) * 100) : null
+  }, [ev, regiao, pratoId, ini, fim])
+  const cvTemporal = useMemo(() => {
+    if (!ev || ev.serie.length < 2) return null
+    if (pratoId !== 0) return r2(coefVar((ev.porPrato[pratoId] || []).map(p => p.blend)) * 100)
+    const ids = ev.pratos.filter(pr => !regiao || pr.regiao === regiao).map(pr => pr.id)
+    const idx = ev.serie.map((_, i) => mediana(ids.map(id => ev.porPrato[id]?.[i]?.blend).filter((v): v is number => v != null && v > 0)))
+    return r2(coefVar(idx) * 100)
+  }, [ev, regiao, pratoId])
 
   const poucos = !ev || ev.serie.length < 2
   const dadosP = dados.filter(d => noPeriodo(new Date(d.ts).toISOString().slice(0, 10)))
@@ -133,12 +147,41 @@ export default function EvolucaoPage() {
         <p className="max-w-5xl mx-auto px-6 py-10 text-sm text-muted">Carregando…</p>
       ) : aba === 'variacao' ? (
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
+          <div className="text-xs text-muted">Prato
+            <SeletorPrato pratos={ev.pratos} value={pratoId} onChange={setPratoId} />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-muted">Período:</span>
+          <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+            {([['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
+              <button key={label} onClick={() => preset(d)} className="px-3 py-1.5 text-muted hover:text-ink transition-colors">{label}</button>
+            ))}
+          </div>
+          <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+          <span className="text-muted">até</span>
+          <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+        </div>
+        {nacional && (
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            <span className="text-muted">Região:</span>
+            <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+              <button onClick={() => setRegiao('')} className={`px-3 py-1.5 transition-colors ${regiao === '' ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>Todas</button>
+              {regioes.map(r => (
+                <button key={r} onClick={() => setRegiao(r)} className={`px-3 py-1.5 transition-colors border-l border-line ${regiao === r ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>{r}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div>
           <p className="text-sm font-medium">Coeficiente de variação (CV = desvio ÷ média)</p>
           <p className="text-xs text-muted">
-            Quanto maior, mais dispersos os preços. <strong>Entre pratos</strong> = dispersão dos 100 pratos;{' '}
-            <strong>entre regiões</strong> = dispersão das 5 regiões; <strong>entre lojas</strong> = variação média do preço de cada ingrediente entre lojas.
-            {cvIndiceTemporal != null && <> · <strong>CV do índice entre coletas: {cvIndiceTemporal}%</strong></>}
+            {nacional
+              ? <>Quanto maior, mais dispersos os preços. <strong>Entre pratos</strong> = dispersão dos custos dos pratos{regiao ? ` (${regiao})` : ''}; {!regiao && <><strong>entre regiões</strong> = dispersão das 5 regiões; </>}<strong>entre lojas</strong> = variação média do preço de cada ingrediente entre lojas.</>
+              : <>CV entre lojas dos ingredientes do prato selecionado (o quanto o preço de cada item varia entre lojas).</>}
+            {cvTemporal != null && <> · <strong>CV {pratoId !== 0 ? 'deste prato' : (regiao ? 'do índice da região' : 'do índice')} entre coletas: {cvTemporal}%</strong></>}
           </p>
         </div>
         <div className="border border-line rounded-lg bg-panel p-4">
@@ -152,9 +195,13 @@ export default function EvolucaoPage() {
                 <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={44} tickFormatter={v => `${v}%`} />
                 <Tooltip formatter={(v: any) => `${Number(v).toFixed(1)}%`} labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
                 <Legend wrapperStyle={{ fontSize: 13 }} />
-                <Line type="monotone" dataKey="pratos" name="Entre pratos" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="regioes" name="Entre regiões" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="lojas" name="Entre lojas" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
+                {pratoId !== 0 ? (
+                  <Line type="monotone" dataKey="prato" name="CV entre lojas do prato" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
+                ) : (<>
+                  <Line type="monotone" dataKey="pratos" name="Entre pratos" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
+                  {!regiao && <Line type="monotone" dataKey="regioes" name="Entre regiões" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />}
+                  <Line type="monotone" dataKey="lojas" name="Entre lojas" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
+                </>)}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -282,8 +329,9 @@ export default function EvolucaoPage() {
               <BarChart data={compData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" vertical={false} />
                 <XAxis dataKey="data" tick={{ fontSize: 13, fill: COR.muted }} />
-                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48}
-                  domain={percentual ? [0, 100] : ['auto', 'auto']} tickFormatter={v => percentual ? `${v}%` : `R$${v}`} />
+                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={52} allowDataOverflow
+                  domain={percentual ? [0, 100] : ['auto', 'auto']} ticks={percentual ? [0, 25, 50, 75, 100] : undefined}
+                  tickFormatter={v => percentual ? `${Math.round(v)}%` : `R$${v}`} />
                 <Tooltip formatter={(v: any, n: any) => [percentual ? `${Number(v).toFixed(1)}%` : `R$ ${Number(v).toFixed(2)}`, n]} />
                 <Legend wrapperStyle={{ fontSize: 13 }} />
                 {GRUPOS_CAT.map(g => <Bar key={g} dataKey={g} stackId="a" fill={CORES_GRUPO[g]} stroke="#fff" strokeWidth={1} />)}
