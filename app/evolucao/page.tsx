@@ -46,7 +46,7 @@ export default function EvolucaoPage() {
   const [off, setOff] = useState<Set<number>>(new Set())   // ingredientes desmarcados no "e se"
   const [ativos, setAtivos] = useState<Set<string>>(new Set(['nacional']))   // séries ativas na Variação
   const [pontos, setPontos] = useState<PontoContrib[]>([])
-  const [fReg, setFReg] = useState(''); const [fTipo, setFTipo] = useState(''); const [fIng, setFIng] = useState(0)
+  const [fRegs, setFRegs] = useState<Set<string>>(new Set()); const [fTipo, setFTipo] = useState(''); const [fIng, setFIng] = useState(0)
   const [snapsNovos, setSnapsNovos] = useState<{ id: number; data: string }[]>([])
   const [dataDetalhes, setDataDetalhes] = useState('')   // coleta usada no "Simular"
 
@@ -108,28 +108,27 @@ export default function EvolucaoPage() {
     })
   }, [ev, fonte, pratoId, nacional, regiao])
 
-  // Variação % entre coletas, dirigida pelos filtros (prato, fonte, regiões).
-  // Δ% da coleta i = (custo_i − custo_{i-1}) / custo_{i-1} × 100, na fonte escolhida.
+  // Variação ACUMULADA em relação à 1ª coleta do período (base = 0%).
+  // Δ% da coleta i = (custo_i − custo_base) / custo_base × 100. Linha subindo = mais caro.
   const variacao = useMemo(() => {
-    if (!ev) return { rows: [] as any[], series: [] as { key: string; label: string; cor: string }[] }
-    const dpct = (getter: (i: number) => number) => ev.serie.map((_, i) => {
-      if (i === 0) return null
-      const prev = getter(i - 1), cur = getter(i)
-      return prev > 0 ? r2((cur - prev) / prev * 100) : null
-    })
-    let defs: { key: string; label: string; cor: string; serie: (number | null)[] }[]
+    if (!ev) return { rows: [] as any[], series: [] as { key: string; label: string; cor: string }[], base: '' }
+    const idxs = ev.serie.map((_, i) => i).filter(i => noPeriodo(ev.serie[i].data))
+    if (!idxs.length) return { rows: [] as any[], series: [] as { key: string; label: string; cor: string }[], base: '' }
+    const base = idxs[0]
+    const cumul = (getter: (i: number) => number) => { const b = getter(base); return idxs.map(i => b > 0 ? r2((getter(i) - b) / b * 100) : 0) }
+    let defs: { key: string; label: string; cor: string; serie: number[] }[]
     if (pratoId !== 0) {
-      defs = [{ key: 'prato', label: ev.pratos.find(p => p.id === pratoId)?.nome || 'prato', cor: '#c0492b', serie: dpct(i => ev.porPrato[pratoId]?.[i]?.[fonte] ?? 0) }]
+      defs = [{ key: 'prato', label: ev.pratos.find(p => p.id === pratoId)?.nome || 'prato', cor: '#c0492b', serie: cumul(i => ev.porPrato[pratoId]?.[i]?.[fonte] ?? 0) }]
     } else {
       const regs = [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b))
       const regMed = (reg: string, i: number) => mediana(ev.pratos.filter(p => p.regiao === reg).map(p => ev.porPrato[p.id]?.[i]?.[fonte]).filter((v): v is number => v != null && v > 0))
       defs = [
-        { key: 'nacional', label: 'Nacional', cor: '#c0492b', serie: dpct(i => ev.serie[i][fonte].mediana) },
-        ...regs.map((r, idx) => ({ key: 'reg:' + r, label: r, cor: CORES_REG[idx % CORES_REG.length], serie: dpct(i => regMed(r, i)) })),
+        { key: 'nacional', label: 'Nacional', cor: '#c0492b', serie: cumul(i => ev.serie[i][fonte].mediana) },
+        ...regs.map((r, idx) => ({ key: 'reg:' + r, label: r, cor: CORES_REG[idx % CORES_REG.length], serie: cumul(i => regMed(r, i)) })),
       ]
     }
-    const rows = ev.serie.map((p, i) => { const row: any = { ts: ts(p.data), data: p.data }; for (const d of defs) row[d.key] = d.serie[i]; return row }).filter(r => noPeriodo(r.data))
-    return { rows, series: defs.map(({ key, label, cor }) => ({ key, label, cor })) }
+    const rows = idxs.map((i, k) => { const row: any = { ts: ts(ev.serie[i].data), data: ev.serie[i].data }; for (const d of defs) row[d.key] = d.serie[k]; return row })
+    return { rows, series: defs.map(({ key, label, cor }) => ({ key, label, cor })), base: ev.serie[base].data }
   }, [ev, pratoId, fonte, ini, fim])
 
   const poucos = !ev || ev.serie.length < 2
@@ -141,7 +140,7 @@ export default function EvolucaoPage() {
   const regContrib = [...new Set(pontos.map(p => p.regiao).filter(Boolean))] as string[]
   const tiposContrib = [...new Set(pontos.map(p => p.tipo_loja).filter(Boolean))] as string[]
   const ingsContrib = Array.from(new Map(pontos.filter(p => p.ingrediente_id).map(p => [p.ingrediente_id!, p.nome])).entries()).sort((a, b) => a[1].localeCompare(b[1]))
-  const pontosFiltrados = pontos.filter(p => (!fReg || p.regiao === fReg) && (!fTipo || p.tipo_loja === fTipo) && (!fIng || p.ingrediente_id === fIng) && noPeriodo(p.data))
+  const pontosFiltrados = pontos.filter(p => (!fRegs.size || (p.regiao != null && fRegs.has(p.regiao))) && (!fTipo || p.tipo_loja === fTipo) && (!fIng || p.ingrediente_id === fIng) && noPeriodo(p.data))
   function preset(dias: number) {
     if (!ev || !ev.serie.length) return
     const ultima = ev.serie[ev.serie.length - 1].data
@@ -196,13 +195,18 @@ export default function EvolucaoPage() {
           <span className="text-muted">até</span>
           <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
         </div>
+        <div className="text-xs text-muted">Região
+          <div className="flex items-center gap-4 flex-wrap mt-1">
+            {regContrib.length ? regContrib.map(r => (
+              <label key={r} className="flex items-center gap-1.5 cursor-pointer text-ink">
+                <input type="checkbox" checked={fRegs.has(r)} onChange={() => setFRegs(s => { const n = new Set(s); n.has(r) ? n.delete(r) : n.add(r); return n })} />
+                {r}
+              </label>
+            )) : <span className="text-muted">—</span>}
+            {fRegs.size > 0 && <button onClick={() => setFRegs(new Set())} className="text-paprika hover:underline">limpar</button>}
+          </div>
+        </div>
         <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
-          <label className="text-xs text-muted">Região
-            <select value={fReg} onChange={e => setFReg(e.target.value)} className={selCls}>
-              <option value="">Todas</option>
-              {regContrib.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </label>
           <label className="text-xs text-muted">Tipo de mercado
             <select value={fTipo} onChange={e => setFTipo(e.target.value)} className={selCls}>
               <option value="">Todos</option>
@@ -266,9 +270,12 @@ export default function EvolucaoPage() {
         )}
 
         <div>
-          <p className="text-sm font-medium">Variação % do custo entre coletas
-            <InfoTip w="w-72" texto="Quanto o custo mudou de uma coleta para a seguinte, em %. Escolha o prato (ou Todos), a fonte do preço, e — em Todos — quais linhas mostrar (Nacional e regiões). Explicação completa abaixo do gráfico." /></p>
-          <p className="text-xs text-muted">{nacional ? 'Nacional e as regiões que você marcar.' : 'Só o prato selecionado.'} · Fonte: {fonte === 'online' ? 'online (raspado)' : fonte === 'manual' ? 'campo (leituras manuais)' : 'blend (média online × campo)'}.</p>
+          <p className="text-sm font-medium">Variação % acumulada do custo
+            <InfoTip w="w-72" texto="Quanto o custo mudou em relação à 1ª coleta do período (a base = 0%). Linha subindo = mais caro; descendo = mais barato. Escolha o prato (ou Todos), a fonte e — em Todos — quais linhas mostrar. Explicação completa abaixo do gráfico." /></p>
+          <p className="text-xs text-muted">
+            {nacional ? 'Nacional e as regiões que você marcar.' : 'Só o prato selecionado.'} · Fonte: {fonte === 'online' ? 'online (raspado)' : fonte === 'manual' ? 'campo (leituras manuais)' : 'blend (média online × campo)'}
+            {variacao.base && ` · base: coleta de ${fmt(variacao.base)} (0%)`}.
+          </p>
         </div>
 
         <div className="border border-line rounded-lg bg-panel p-4">
@@ -289,15 +296,15 @@ export default function EvolucaoPage() {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          {poucos && <p className="text-xs text-muted mt-2">Série curta — a variação aparece a partir da 2ª coleta e cresce a cada nova.</p>}
+          {poucos && <p className="text-xs text-muted mt-2">Série curta — a 1ª coleta é a base (0%); a variação aparece a partir da 2ª.</p>}
         </div>
 
         <div className="border border-line rounded-lg bg-panel p-4 text-xs text-muted leading-relaxed space-y-2">
           <p className="text-sm font-medium text-ink">Como ler este gráfico</p>
-          <p>Cada ponto é a <strong>variação percentual do custo de uma coleta para a anterior</strong>. A fórmula:</p>
-          <p className="text-ink"><code>Δ% = (custo desta coleta − custo da coleta anterior) ÷ custo da coleta anterior × 100</code></p>
-          <p><strong>Exemplo:</strong> se o Nacional foi R$ 11,25 em 21/06 e R$ 11,93 em 01/07, o ponto de 01/07 é (11,93 − 11,25) ÷ 11,25 = <strong>+6,0%</strong> — ficou 6% mais caro. A primeira coleta não tem ponto (não há anterior para comparar).</p>
-          <p><strong>+X%</strong> = mais caro · <strong>−X%</strong> = mais barato · <strong>0%</strong> = sem mudança (linha cinza).</p>
+          <p>Cada ponto é a <strong>variação acumulada do custo em relação à 1ª coleta do período</strong> (a base). A base começa em <strong>0%</strong> e cada coleta seguinte mostra o quanto ficou mais caro (+) ou mais barato (−) desde ela. A fórmula:</p>
+          <p className="text-ink"><code>Δ% = (custo desta coleta − custo da 1ª coleta) ÷ custo da 1ª coleta × 100</code></p>
+          <p><strong>Exemplo:</strong> se o Nacional foi R$ 11,63 na 1ª coleta (base = 0%) e R$ 11,93 depois, esse ponto é (11,93 − 11,63) ÷ 11,63 = <strong>+2,6%</strong> — 2,6% mais caro que no começo.</p>
+          <p><strong>Linha subindo</strong> = ficando mais caro · <strong>descendo</strong> = mais barato · acima de 0% = mais caro que a base; abaixo = mais barato.</p>
           <p>O <strong>custo</strong> de cada linha: <strong>Nacional</strong> = mediana dos 100 pratos; <strong>uma região</strong> = mediana dos pratos daquela região; <strong>um prato</strong> = o custo dele. A <strong>fonte</strong> define o preço de cada ingrediente: <strong>Online</strong> (raspado no varejo), <strong>Campo</strong> (leituras manuais/contribuições) ou <strong>Blend</strong> (média dos dois — o índice oficial).</p>
         </div>
       </div>
