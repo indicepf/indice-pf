@@ -156,7 +156,7 @@ export type Evolucao = {
 // 17 categorias de ingrediente → 7 grupos amplos, para a composição empilhada.
 export const GRUPOS_CAT = ['Proteína', 'Base', 'Guarnição', 'Verdura/Fruta', 'Temperos', 'Gordura/Laticínio', 'Outro'] as const
 const CAT_GRUPO: Record<string, string> = {
-  'Proteína bovina': 'Proteína', 'Proteína pescado': 'Proteína', 'Proteína suína': 'Proteína', 'Proteína aves': 'Proteína', 'Pescado': 'Proteína', 'Ovos': 'Proteína',
+  'Proteína bovina': 'Proteína', 'Proteína ovina': 'Proteína', 'Proteína pescado': 'Proteína', 'Proteína suína': 'Proteína', 'Proteína aves': 'Proteína', 'Pescado': 'Proteína', 'Ovos': 'Proteína',
   'Grão/Cereal': 'Base', 'Leguminosa': 'Base',
   'Tubérculo/Raiz': 'Guarnição',
   'Legume/Verdura': 'Verdura/Fruta', 'Fruta': 'Verdura/Fruta',
