@@ -34,10 +34,11 @@ const REGIOES_FC = (() => {
   }
 })()
 
-export default function MapaBrasil({ regionais, sel, onSel }: {
+export default function MapaBrasil({ regionais, sel, onSel, onLimpar }: {
   regionais: { regiao: string; media: number; n: number }[]
-  sel: string
+  sel: Set<string>
   onSel: (r: string) => void
+  onLimpar: () => void
 }) {
   // cor por RANK → discrimina regiões de custo próximo (Sul/Sudeste)
   const corPorRegiao = useMemo(() => {
@@ -64,8 +65,8 @@ export default function MapaBrasil({ regionais, sel, onSel }: {
             {({ geographies }: { geographies: any[] }) =>
               geographies.map((geo) => {
                 const regiao = geo.properties.regiao as string
-                const ativo = sel === regiao
-                const ofusca = sel !== 'Todas' && !ativo
+                const ativo = sel.has(regiao)
+                const ofusca = sel.size > 0 && !ativo
                 return (
                   <Geography key={regiao} geography={geo}
                     onClick={() => onSel(regiao)}
@@ -82,7 +83,7 @@ export default function MapaBrasil({ regionais, sel, onSel }: {
           </Geographies>
 
           {regionais.filter(r => r.media > 0 && REGIAO_CENTRO[r.regiao]).map(r => {
-            const ofusca = sel !== 'Todas' && sel !== r.regiao
+            const ofusca = sel.size > 0 && !sel.has(r.regiao)
             return (
               <Marker key={r.regiao} coordinates={REGIAO_CENTRO[r.regiao]}
                 style={{ default: { pointerEvents: 'none' } }} opacity={ofusca ? 0.3 : 1}>
@@ -109,8 +110,8 @@ export default function MapaBrasil({ regionais, sel, onSel }: {
             style={{ background: 'linear-gradient(to right, rgb(245,227,216), rgb(192,73,43))' }} />
           <span>maior custo</span>
         </div>
-        {sel !== 'Todas' && (
-          <button onClick={() => onSel(sel)} className="text-xs text-paprika hover:underline">
+        {sel.size > 0 && (
+          <button onClick={onLimpar} className="text-xs text-paprika hover:underline">
             ver Brasil todo ×
           </button>
         )}

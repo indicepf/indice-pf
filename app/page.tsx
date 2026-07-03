@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [loading, setLoading]   = useState(true)
 
   const [modo, setModo]         = useState<ModoKey>('online')
-  const [regiao, setRegiao]     = useState<string>('Todas')
+  const [regioes, setRegioes]   = useState<Set<string>>(new Set())   // vazio = todas
   const [busca, setBusca]       = useState('')
   const [ordem, setOrdem]       = useState<OrdemKey>('custo')
   const [selecionado, setSelecionado] = useState<DishCost | null>(null)
@@ -64,7 +64,7 @@ export default function Dashboard() {
 
   const lista = useMemo(() => {
     let l = custos
-    if (regiao !== 'Todas') l = l.filter(c => c.pratos.regiao === regiao)
+    if (regioes.size) l = l.filter(c => regioes.has(c.pratos.regiao))
     if (busca.trim()) {
       const q = busca.toLowerCase()
       l = l.filter(c => c.pratos.nome.toLowerCase().includes(q))
@@ -74,7 +74,7 @@ export default function Dashboard() {
       if (ordem === 'nome')  return a.pratos.nome.localeCompare(b.pratos.nome)
       return a.pratos.regiao.localeCompare(b.pratos.regiao) || a.custo_total - b.custo_total
     })
-  }, [custos, regiao, busca, ordem])
+  }, [custos, regioes, busca, ordem])
 
   if (loading) {
     return (
@@ -116,8 +116,9 @@ export default function Dashboard() {
                 e filtrar os pratos; clique de novo ou use o filtro da lista para voltar.
               </p>
             </div>
-            <MapaBrasil regionais={regionais} sel={regiao}
-              onSel={(r) => setRegiao(prev => (prev === r ? 'Todas' : r))} />
+            <MapaBrasil regionais={regionais} sel={regioes}
+              onSel={(r) => setRegioes(prev => { const n = new Set(prev); n.has(r) ? n.delete(r) : n.add(r); return n })}
+              onLimpar={() => setRegioes(new Set())} />
           </div>
         </section>
 
@@ -126,9 +127,9 @@ export default function Dashboard() {
             <h2 className="font-[family-name:var(--font-serif)] text-xl mr-auto">Pratos</h2>
             <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar prato…"
               className="bg-panel border border-line rounded-md px-3 py-1.5 text-sm w-full sm:w-48 focus:outline-none focus:border-paprika" />
-            <select value={regiao} onChange={e => setRegiao(e.target.value)}
+            <select value={regioes.size === 1 ? [...regioes][0] : ''} onChange={e => setRegioes(e.target.value ? new Set([e.target.value]) : new Set())}
               className="bg-panel border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none cursor-pointer">
-              <option value="Todas">Todas as regiões</option>
+              <option value="">{regioes.size > 1 ? `${regioes.size} regiões` : 'Todas as regiões'}</option>
               {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
             <select value={ordem} onChange={e => setOrdem(e.target.value as OrdemKey)}
