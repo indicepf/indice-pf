@@ -113,15 +113,16 @@ export default function AdminPage() {
   // R$/kg que a leitura terá — o índice usa R$/kg, então é aqui que o "799" aparece
   function rsPorKg(c: ContribuicaoFull): number | null {
     const ing = ings.find(i => i.id === c.ingrediente_id)
-    if (!ing || !c.preco || !c.peso_g || c.preco <= 0 || c.peso_g <= 0) return null
-    const gramas = (ing.unidade === 'unidade' || ing.unidade === 'maco') ? c.peso_g * (ing.peso_ref_g || 0) : c.peso_g
+    const preco = parseNum(c.preco), peso = parseNum(c.peso_g)
+    if (!ing || !preco || !peso) return null
+    const gramas = (ing.unidade === 'unidade' || ing.unidade === 'maco') ? peso * (ing.peso_ref_g || 0) : peso
     if (!gramas || gramas <= 0) return null
-    return c.preco / gramas * 1000
+    return preco / gramas * 1000
   }
   async function salvarAprovada(c: ContribuicaoFull) {
     setSalvandoId(c.id); setAprMsg('')
     const { error } = await editarContribuicaoAprovada(c.id, {
-      ingrediente_id: c.ingrediente_id, preco: c.preco, peso_g: c.peso_g,
+      ingrediente_id: c.ingrediente_id, preco: parseNum(c.preco), peso_g: parseNum(c.peso_g),
       marca: c.marca, mercado: c.mercado, tipo_loja: c.tipo_loja, produto: c.produto,
     })
     setSalvandoId(null)
@@ -230,7 +231,7 @@ export default function AdminPage() {
     if (status === 'aprovada') {
       // aprova + registra a leitura de campo (calibra o índice) + recalcula
       const ctx = await capturarContexto()
-      await aprovarContribuicao(c.id, c.ingrediente_id, c.preco, c.peso_g, c.marca, ctx)
+      await aprovarContribuicao(c.id, c.ingrediente_id, parseNum(c.preco), parseNum(c.peso_g), c.marca, ctx)
       await recalcularCustos()
     } else {
       await moderarContribuicao(c.id, { status: 'rejeitada' })
@@ -320,11 +321,11 @@ export default function AdminPage() {
                   </select>
                 </label>
                 <label>Preço (R$)
-                  <input value={c.preco ?? ''} onChange={e => patch(c.id, 'preco', Number(e.target.value.replace(',', '.')) || 0)}
+                  <input value={c.preco ?? ''} onChange={e => patch(c.id, 'preco', e.target.value.replace(/[^\d.,]/g, ''))}
                     inputMode="decimal" className={inputCls} />
                 </label>
                 <label>Qtd ({unidadeCurta(ings.find(i => i.id === c.ingrediente_id)?.unidade)})
-                  <input value={c.peso_g ?? ''} onChange={e => patch(c.id, 'peso_g', e.target.value ? Number(e.target.value) : null)}
+                  <input value={c.peso_g ?? ''} onChange={e => patch(c.id, 'peso_g', e.target.value.replace(/[^\d.,]/g, ''))}
                     inputMode="decimal" className={inputCls} />
                 </label>
                 <label className="col-span-3">Marca (opcional — deixe vazio p/ itens sem marca)
@@ -408,10 +409,10 @@ export default function AdminPage() {
                   </select>
                 </label>
                 <label>Preço (R$)
-                  <input value={c.preco ?? ''} onChange={e => patchApr(c.id, 'preco', e.target.value ? Number(e.target.value.replace(',', '.')) : null)} inputMode="decimal" className={inputCls} />
+                  <input value={c.preco ?? ''} onChange={e => patchApr(c.id, 'preco', e.target.value.replace(/[^\d.,]/g, ''))} inputMode="decimal" className={inputCls} />
                 </label>
                 <label>Qtd ({unidadeCurta(ings.find(i => i.id === c.ingrediente_id)?.unidade)})
-                  <input value={c.peso_g ?? ''} onChange={e => patchApr(c.id, 'peso_g', e.target.value ? Number(e.target.value.replace(',', '.')) : null)} inputMode="decimal" className={inputCls} />
+                  <input value={c.peso_g ?? ''} onChange={e => patchApr(c.id, 'peso_g', e.target.value.replace(/[^\d.,]/g, ''))} inputMode="decimal" className={inputCls} />
                 </label>
                 <label>Marca
                   <input value={c.marca ?? ''} onChange={e => patchApr(c.id, 'marca', e.target.value || null)} placeholder="opcional" className={inputCls} />
