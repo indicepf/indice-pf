@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
@@ -10,6 +9,7 @@ import { brl } from '@/lib/format'
 import type { ItemDetalhe } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
 import InfoTip from '../InfoTip'
+import AuthControls from '../Auth'
 
 // paleta categórica validada (dataviz validate_palette — todos os checks PASS em superfície branca)
 const CORES_GRUPO: Record<string, string> = {
@@ -29,7 +29,6 @@ const desvio = (v: number[]) => { if (v.length < 2) return 0; const m = v.reduce
 const coefVar = (v: number[]) => { const m = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; return m > 0 ? desvio(v) / m : 0 }
 
 export default function EvolucaoPage() {
-  const router = useRouter()
   const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')
@@ -46,14 +45,26 @@ export default function EvolucaoPage() {
   const noPeriodo = (d: string) => (!ini || d >= ini) && (!fim || d <= fim)
   const compData = useMemo(() => {
     if (!ev) return []
-    const src = (pratoId === 0 ? ev.composicao : (ev.porPratoComp[pratoId] || [])).filter(p => noPeriodo(p.data))
-    return src.map(p => {
+    let src: any[]
+    if (pratoId !== 0) src = ev.porPratoComp[pratoId] || []
+    else if (!regiao) src = ev.composicao
+    else {
+      // composição média dos pratos da região, por coleta
+      const ids = ev.pratos.filter(pr => pr.regiao === regiao).map(pr => pr.id)
+      const n = ids.length || 1
+      src = ev.composicao.map((cp, i) => {
+        const row: any = { data: cp.data }
+        for (const g of GRUPOS_CAT) { let s = 0; for (const id of ids) s += ev.porPratoComp[id]?.[i]?.[g] || 0; row[g] = s / n }
+        return row
+      })
+    }
+    return src.filter(p => noPeriodo(p.data)).map(p => {
       const tot = GRUPOS_CAT.reduce((s, g) => s + (p[g] || 0), 0) || 1
       const row: any = { data: fmt(p.data) }
       for (const g of GRUPOS_CAT) row[g] = percentual ? (p[g] || 0) / tot * 100 : r2(p[g] || 0)   // % sem arredondar → soma exata 100
       return row
     })
-  }, [ev, percentual, pratoId, ini, fim])
+  }, [ev, percentual, pratoId, regiao, ini, fim])
 
   useEffect(() => {
     getEvolucao().then(setEv)
@@ -124,9 +135,16 @@ export default function EvolucaoPage() {
   return (
     <main className="min-h-screen">
       <header className="border-b border-line bg-cream/80 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
-          <button onClick={() => router.push('/')} className="text-sm text-muted hover:text-ink">← voltar</button>
-          <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Evolução temporal</h1>
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
+          <div>
+            <a href="/" className="font-[family-name:var(--font-serif)] text-2xl leading-none hover:text-paprika transition-colors">Índice PF</a>
+            <p className="text-xs text-muted mt-1">evolução temporal do custo do prato feito</p>
+          </div>
+          <div className="flex items-center gap-4 flex-wrap justify-end">
+            <a href="/" className="text-sm text-muted hover:text-ink">Índice</a>
+            <span className="text-sm text-paprika border-b-2 border-paprika pb-0.5">Evolução</span>
+            <AuthControls />
+          </div>
         </div>
       </header>
 
@@ -321,7 +339,7 @@ export default function EvolucaoPage() {
             <div>
               <p className="text-sm font-medium">{nacional ? 'Composição do custo por grupo de alimento' : 'Composição do prato por grupo'}
                 <InfoTip texto="Quanto cada grupo de alimento pesa no custo (blend). Média por prato quando é o índice; do prato quando um está selecionado. As 17 categorias viram 7 grupos. Alterne R$ e % do total." /></p>
-              <p className="text-xs text-muted">{nacional ? 'Média por prato · blend' : 'blend'}{poucos && ' · série curta, cresce a cada coleta.'}</p>
+              <p className="text-xs text-muted">{nacional ? (regiao ? `Média por prato · ${regiao} · blend` : 'Média por prato · blend') : 'blend'}{poucos && ' · série curta, cresce a cada coleta.'}</p>
             </div>
             <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm">
               {([['abs', 'R$'], ['pct', '% do total']] as const).map(([k, label]) => (
