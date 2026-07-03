@@ -227,6 +227,38 @@ export default function EvolucaoPage() {
             label: `${p.nome}${p.preco != null ? ` — R$ ${p.preco.toFixed(2)}` : ''}${p.cidade ? ` · ${p.cidade}` : ''}${p.data ? ` · ${fmt(p.data)}` : ''}`,
           }))} height="440px" />
         ) : <p className="text-sm text-muted py-6">Nenhuma contribuição para os filtros.</p>}
+
+        {pontosFiltrados.length > 0 && (
+          <div className="border border-line rounded-lg bg-panel overflow-x-auto">
+            <table className="w-full text-xs min-w-[38rem]">
+              <thead>
+                <tr className="text-left text-[0.62rem] uppercase tracking-wide text-muted border-b border-line">
+                  <th className="font-medium px-3 py-2">Data</th>
+                  <th className="font-medium px-3 py-2">Hora</th>
+                  <th className="font-medium px-3 py-2">Ingrediente</th>
+                  <th className="font-medium px-3 py-2 text-right">Preço</th>
+                  <th className="font-medium px-3 py-2">Local</th>
+                  <th className="font-medium px-3 py-2">Região</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pontosFiltrados.map((p, i) => {
+                  const d = p.criado_em ? new Date(p.criado_em) : null
+                  return (
+                    <tr key={i} className="border-t border-line/60">
+                      <td className="px-3 py-1.5 text-muted">{d ? d.toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-1.5 text-muted tnum">{d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                      <td className="px-3 py-1.5">{p.nome}</td>
+                      <td className="px-3 py-1.5 text-right tnum text-paprika font-medium">{p.preco != null ? brl(p.preco) : '—'}</td>
+                      <td className="px-3 py-1.5 text-muted">{[p.cidade, p.tipo_loja].filter(Boolean).join(' · ') || '—'}</td>
+                      <td className="px-3 py-1.5 text-muted">{p.regiao || '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       ) : !ev ? (
         <p className="max-w-5xl mx-auto px-6 py-10 text-sm text-muted">Carregando…</p>

@@ -353,17 +353,18 @@ export async function getDetalheIngredientesRange(ini: string, fim: string): Pro
 // Contribuições de campo aprovadas com coordenada, p/ o mapa — com campos filtráveis.
 export type PontoContrib = {
   lat: number; lng: number; nome: string; ingrediente_id: number | null
-  tipo_loja: string | null; regiao: string | null; uf: string | null; data: string
+  tipo_loja: string | null; regiao: string | null; uf: string | null; data: string; criado_em: string
   preco: number | null; cidade: string | null
 }
 export async function getContribuicoesMapa(): Promise<PontoContrib[]> {
   const { data } = await supabase.from('contribuicoes')
     .select('lat,lng,cidade,preco,criado_em,tipo_loja,uf,regiao,ingrediente_id,ingredientes(nome)')
     .eq('status', 'aprovada').not('lat', 'is', null).not('lng', 'is', null)
+    .order('criado_em', { ascending: false })
   return ((data || []) as any[]).map(c => ({
     lat: Number(c.lat), lng: Number(c.lng), nome: c.ingredientes?.nome || 'contribuição',
     ingrediente_id: c.ingrediente_id, tipo_loja: c.tipo_loja, regiao: c.regiao, uf: c.uf,
-    data: (c.criado_em || '').slice(0, 10), preco: c.preco != null ? Number(c.preco) : null, cidade: c.cidade,
+    data: (c.criado_em || '').slice(0, 10), criado_em: c.criado_em || '', preco: c.preco != null ? Number(c.preco) : null, cidade: c.cidade,
   }))
 }
 
