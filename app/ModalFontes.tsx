@@ -5,8 +5,10 @@ import { brl } from '@/lib/format'
 import type { Fonte } from '@/lib/types'
 import type { FonteManual } from '@/lib/queries'
 
-export default function ModalFontes({ nome, fontes, manuais, onClose }: {
-  nome: string; fontes: Fonte[]; manuais: FonteManual[]; onClose: () => void
+const fmtBr = (d: string) => { const [a, m, dia] = d.split('-'); return `${dia}/${m}/${a}` }
+
+export default function ModalFontes({ nome, fontes, manuais, dataColeta, onClose }: {
+  nome: string; fontes: Fonte[]; manuais: FonteManual[]; dataColeta?: string; onClose: () => void
 }) {
   const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
   useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
@@ -45,7 +47,7 @@ export default function ModalFontes({ nome, fontes, manuais, onClose }: {
           )}
           {fontes.length > 0 && (
             <div className="space-y-2">
-              {manuais.length > 0 && <p className="text-[0.65rem] uppercase tracking-wide text-muted">Fontes online</p>}
+              <p className="text-[0.65rem] uppercase tracking-wide text-muted">Fontes online{dataColeta ? ` · coleta de ${fmtBr(dataColeta)}` : ''}</p>
               {fontes.map((f, i) => (
                 <a key={i} href={f.link || undefined} target="_blank" rel="noopener noreferrer"
                   className="block border border-line rounded-md px-3 py-2.5 hover:border-paprika transition-colors">

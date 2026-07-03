@@ -6,12 +6,13 @@ import ModalFontes from './ModalFontes'
 import type { DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 import type { FonteManual } from '@/lib/queries'
 
-export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuaisPorIngrediente, fator, onClose }: {
+export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuaisPorIngrediente, fator, dataColeta, onClose }: {
   dish: DishCost
   itens: ItemDetalhe[] | null
   fontesPorIngrediente: Record<number, Fonte[]>
   manuaisPorIngrediente: Record<number, FonteManual[]>
   fator: number
+  dataColeta?: string
   onClose: () => void
 }) {
   const [fonteAberta, setFonteAberta] = useState<{ nome: string; id: number; origem: ItemDetalhe['origem'] } | null>(null)
@@ -79,6 +80,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
         <ModalFontes nome={fonteAberta.nome}
           fontes={fontesPorIngrediente[fonteAberta.id] || []}
           manuais={(fonteAberta.origem === 'manual' || fonteAberta.origem === 'misto') ? (manuaisPorIngrediente[fonteAberta.id] || []) : []}
+          dataColeta={dataColeta}
           onClose={() => setFonteAberta(null)} />
       )}
     </div>

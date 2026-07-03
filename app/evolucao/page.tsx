@@ -9,6 +9,7 @@ import { getEvolucao, getAllDetalhes, getSnapshotsNovos, GRUPOS_CAT, type Evoluc
 import { brl } from '@/lib/format'
 import type { ItemDetalhe } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
+import InfoTip from '../InfoTip'
 
 // paleta categórica validada (dataviz validate_palette — todos os checks PASS em superfície branca)
 const CORES_GRUPO: Record<string, string> = {
@@ -176,7 +177,8 @@ export default function EvolucaoPage() {
         )}
 
         <div>
-          <p className="text-sm font-medium">Coeficiente de variação (CV = desvio ÷ média)</p>
+          <p className="text-sm font-medium">Coeficiente de variação (CV = desvio ÷ média)
+            <InfoTip w="w-72" texto="CV = desvio padrão ÷ média (em %). Mede dispersão relativa: baixo = valores parecidos, alto = espalhados. Entre pratos = desigualdade entre os pratos; entre regiões = entre as 5 regiões; entre lojas = variação do preço de cada ingrediente entre lojas; do prato = os ingredientes daquele prato; entre coletas = variação do índice no tempo." /></p>
           <p className="text-xs text-muted">
             {nacional
               ? <>Quanto maior, mais dispersos os preços. <strong>Entre pratos</strong> = dispersão dos custos dos pratos{regiao ? ` (${regiao})` : ''}; {!regiao && <><strong>entre regiões</strong> = dispersão das 5 regiões; </>}<strong>entre lojas</strong> = variação média do preço de cada ingrediente entre lojas.</>
@@ -274,6 +276,9 @@ export default function EvolucaoPage() {
         <div className="border border-line rounded-lg bg-panel p-4">
           <p className="text-sm font-medium mb-1">
             {nacional ? 'Custo do prato feito (R$) — distribuição dos 100 pratos' : 'Custo do prato (R$) — por fonte'}
+            <InfoTip texto={nacional
+              ? 'Cada coleta reúne o custo dos 100 pratos. A mediana é o índice nacional; a faixa mostra o prato mais barato e o mais caro. Escolha a fonte (blend/online/manual), a região e o período.'
+              : 'Custo deste prato ao longo do tempo, em cada fonte: blend (o índice real), online (só cotação online) e manual (só leituras manuais).'} />
           </p>
           <p className="text-xs text-muted mb-4">
             {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}` : 'blend × online × manual'}
@@ -314,7 +319,8 @@ export default function EvolucaoPage() {
         <div className="border border-line rounded-lg bg-panel p-4">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div>
-              <p className="text-sm font-medium">{nacional ? 'Composição do custo por grupo de alimento' : 'Composição do prato por grupo'}</p>
+              <p className="text-sm font-medium">{nacional ? 'Composição do custo por grupo de alimento' : 'Composição do prato por grupo'}
+                <InfoTip texto="Quanto cada grupo de alimento pesa no custo (blend). Média por prato quando é o índice; do prato quando um está selecionado. As 17 categorias viram 7 grupos. Alterne R$ e % do total." /></p>
               <p className="text-xs text-muted">{nacional ? 'Média por prato · blend' : 'blend'}{poucos && ' · série curta, cresce a cada coleta.'}</p>
             </div>
             <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm">
@@ -346,7 +352,8 @@ export default function EvolucaoPage() {
           const atual = its.reduce((s, it) => s + (off.has(it.ingrediente_id) ? 0 : it.custo), 0)
           return (
             <div className="border border-line rounded-lg bg-panel p-4">
-              <p className="text-sm font-medium mb-1">Simular sem ingredientes</p>
+              <p className="text-sm font-medium mb-1">Simular sem ingredientes
+                <InfoTip texto="Desmarque ingredientes para ver o custo do prato sem eles (última coleta, blend). O R$ de cada item é o custo da quantidade da receita (em gramas)." /></p>
               <p className="text-xs text-muted mb-3">
                 Custo do prato = soma dos ingredientes marcados (última coleta · blend). O R$ ao lado de cada item é
                 o custo da <strong>quantidade da receita</strong> (em gramas). Desmarque para ver o prato sem ele.

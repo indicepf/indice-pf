@@ -177,6 +177,7 @@ export default function Dashboard() {
         <DetalhePrato dish={selecionado}
           itens={detalhes ? (detalhes[selecionado.pratos.id] ?? []) : null}
           fontesPorIngrediente={fontes} manuaisPorIngrediente={fontesManuais} fator={fator}
+          dataColeta={snapshot.data}
           onClose={() => setSelecionado(null)} />
       )}
 
