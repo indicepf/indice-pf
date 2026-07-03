@@ -11,7 +11,7 @@ const TIPOS_LOJA = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência']
 const MAX_FOTOS = 10
 
 type Modo = 'single' | 'lote'
-type FotoItem = { file: File; preview: string; ingredienteId: string; preco: string; pesoG: string; marca: string }
+type FotoItem = { file: File; preview: string }
 
 // hash do conteúdo da imagem — impede reenvio da MESMA foto pelo mesmo usuário
 async function hashArquivo(f: File) {
@@ -172,12 +172,9 @@ export default function ContribuirPage() {
     if (files.length > espaco) setErro(`Limite de ${MAX_FOTOS} por lote — ${files.length - espaco} não adicionada(s).`)
     const novas = await Promise.all(aceitar.map(async f => {
       const c = await comprimirImagem(f)
-      return { file: c, preview: URL.createObjectURL(c), ingredienteId: '', preco: '', pesoG: '', marca: '' } as FotoItem
+      return { file: c, preview: URL.createObjectURL(c) } as FotoItem
     }))
     setFotos(prev => [...prev, ...novas])
-  }
-  function patchFoto(idx: number, campo: keyof FotoItem, valor: string) {
-    setFotos(prev => prev.map((f, i) => i === idx ? { ...f, [campo]: valor } : f))
   }
   function removerFoto(idx: number) {
     setFotos(prev => { const f = prev[idx]; if (f) URL.revokeObjectURL(f.preview); return prev.filter((_, i) => i !== idx) })
@@ -187,17 +184,15 @@ export default function ContribuirPage() {
     setErro('')
     if (!fotos.length) { setErro('Adicione ao menos uma foto.'); return }
     if (!coord) { setErro('Registre sua localização — ela é obrigatória para validar onde o preço foi coletado.'); return }
-    for (const f of fotos) {
-      if (f.preco && isNaN(Number(f.preco.replace(',', '.')))) { setErro('Há um preço inválido em alguma foto — corrija ou deixe em branco.'); return }
-    }
     setBusy(true)
     let enviadas = 0, dups = 0, falhas = 0
     const vistos = new Set<string>()
+    const vazio = { ingredienteId: '', preco: '', pesoG: '', marca: '' }   // detalhes vão para a moderação
     try {
       for (let idx = 0; idx < fotos.length; idx++) {
         setProgresso(`Enviando ${idx + 1} de ${fotos.length}…`)
         const f = fotos[idx]
-        const r = await gravarUma(f.file, f, `produto-${idx}`, vistos)
+        const r = await gravarUma(f.file, vazio, `produto-${idx}`, vistos)
         if (r === 'ok') enviadas++; else if (r === 'dup') dups++; else falhas++
       }
       fotos.forEach(f => URL.revokeObjectURL(f.preview)); setFotos([])
@@ -308,43 +303,27 @@ export default function ContribuirPage() {
             ) : (
               <>
                 <p className="text-sm text-muted mb-4">
-                  Fotografe os produtos com a etiqueta visível. Registre a localização e a loja <strong>uma vez</strong> —
-                  valem para todas as fotos. Ingrediente e preço de cada foto são opcionais (a moderação completa depois).
+                  Anexe <strong>todas as fotos de uma vez</strong> (como no WhatsApp). Registre a localização, o mercado e o
+                  tipo <strong>uma vez</strong> — valem para todas. Ingrediente e preço ficam para a moderação. Cada foto vira uma contribuição.
                 </p>
 
-                <div className="space-y-3">
-                  {fotos.map((f, idx) => {
-                    const unid = ings.find(i => String(i.id) === f.ingredienteId)?.unidade ?? null
-                    return (
-                      <div key={idx} className="border border-line rounded-lg bg-panel overflow-hidden flex">
-                        <img src={f.preview} alt={`foto ${idx + 1}`} className="w-24 h-full min-h-[7rem] object-cover shrink-0" />
-                        <div className="p-3 flex-1 grid grid-cols-2 gap-2">
-                          <label className="text-[0.7rem] text-muted col-span-2">Ingrediente (opcional)
-                            <select value={f.ingredienteId} onChange={e => patchFoto(idx, 'ingredienteId', e.target.value)} className={inputCls}>
-                              <option value="">Selecione…</option>
-                              {ings.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
-                            </select>
-                          </label>
-                          <label className="text-[0.7rem] text-muted">Preço (R$)
-                            <input value={f.preco} onChange={e => patchFoto(idx, 'preco', e.target.value)} inputMode="decimal" placeholder="0,00" className={inputCls} />
-                          </label>
-                          <label className="text-[0.7rem] text-muted">{rotuloQtd(unid)}
-                            <input value={f.pesoG} onChange={e => patchFoto(idx, 'pesoG', e.target.value)} inputMode="decimal" placeholder={exemploQtd(unid)} className={inputCls} />
-                          </label>
-                          <div className="col-span-2 flex justify-end">
-                            <button onClick={() => removerFoto(idx)} className="text-xs text-red-600 hover:underline">remover foto</button>
-                          </div>
-                        </div>
+                {fotos.length > 0 && (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3">
+                    {fotos.map((f, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-md overflow-hidden border border-line">
+                        <img src={f.preview} alt={`foto ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button onClick={() => removerFoto(idx)}
+                          className="absolute top-1 right-1 bg-ink/70 text-white w-5 h-5 rounded-full text-xs leading-none grid place-items-center hover:bg-ink">×</button>
                       </div>
-                    )
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
 
                 {fotos.length < MAX_FOTOS && (
-                  <label className="block mt-3">
+                  <label className="block">
                     <div className="rounded-lg border-2 border-dashed border-line bg-panel py-6 grid place-items-center cursor-pointer hover:border-paprika transition-colors text-center">
-                      <p className="font-medium text-ink text-sm">+ Adicionar fotos</p>
-                      <p className="text-xs text-muted mt-1">Câmera ou galeria — até {MAX_FOTOS} por lote ({fotos.length}/{MAX_FOTOS})</p>
+                      <p className="font-medium text-ink text-sm">+ Anexar fotos</p>
+                      <p className="text-xs text-muted mt-1">Selecione várias de uma vez — até {MAX_FOTOS} por lote ({fotos.length}/{MAX_FOTOS})</p>
                     </div>
                     <input type="file" accept="image/*" multiple className="hidden" onChange={adicionarFotos} />
                   </label>
