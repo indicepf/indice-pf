@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import { getEvolucao, getAllDetalhes, getSnapshotsNovos, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
 import { brl } from '@/lib/format'
@@ -25,8 +25,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 const numPrato = (nome: string) => parseInt(nome, 10) || 999   // prefixo "12. …"
 const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
 const mediana = (v: number[]) => { if (!v.length) return 0; const s = [...v].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
-const desvio = (v: number[]) => { if (v.length < 2) return 0; const m = v.reduce((a, b) => a + b, 0) / v.length; return Math.sqrt(v.reduce((s, x) => s + (x - m) ** 2, 0) / v.length) }
-const coefVar = (v: number[]) => { const m = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; return m > 0 ? desvio(v) / m : 0 }
+const CORES_REG = ['#c98500', '#008f7a', '#9c5a1e', '#b0567f', '#4e8b2f']
 
 export default function EvolucaoPage() {
   const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes'>('indice')
@@ -41,6 +40,7 @@ export default function EvolucaoPage() {
   const [fim, setFim] = useState('')   // período: fim ('' = até a última coleta)
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]>>({})
   const [off, setOff] = useState<Set<number>>(new Set())   // ingredientes desmarcados no "e se"
+  const [ativos, setAtivos] = useState<Set<string>>(new Set(['nacional']))   // séries ativas na Variação
 
   const noPeriodo = (d: string) => (!ini || d >= ini) && (!fim || d <= fim)
   const compData = useMemo(() => {
@@ -91,34 +91,30 @@ export default function EvolucaoPage() {
     })
   }, [ev, fonte, pratoId, nacional, regiao])
 
-  const cvData = useMemo(() => {
-    if (!ev) return []
-    const mapa = new Map(ev.cvLojas.map(x => [x.data, x.cv]))
-    return ev.serie.map((p, i) => {
+  // séries de variação % entre coletas, por segmento (definidas dinamicamente)
+  const variacao = useMemo(() => {
+    if (!ev) return { rows: [] as any[], series: [] as { key: string; label: string; cor: string; grupo: string }[] }
+    const regs = [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b))
+    const regMed = (reg: string, i: number) => mediana(ev.pratos.filter(p => p.regiao === reg).map(p => ev.porPrato[p.id]?.[i]?.blend).filter((v): v is number => v != null && v > 0))
+    const defs: { key: string; label: string; cor: string; grupo: string; val: (i: number) => number }[] = [
+      { key: 'nacional', label: 'PF nacional', cor: '#c0492b', grupo: 'Índice', val: i => ev.serie[i].blend.mediana },
+      { key: 'online', label: 'Online', cor: '#3d6b8e', grupo: 'Tipo de loja', val: i => ev.serie[i].online.mediana },
+      { key: 'mercado', label: 'Mercado (−10%)', cor: '#6b7a3f', grupo: 'Tipo de loja', val: i => ev.serie[i].online.mediana * 0.9 },
+      { key: 'atacarejo', label: 'Atacarejo (−22%)', cor: '#7a4fb0', grupo: 'Tipo de loja', val: i => ev.serie[i].online.mediana * 0.78 },
+      ...regs.map((r, idx) => ({ key: 'reg:' + r, label: r, cor: CORES_REG[idx % CORES_REG.length], grupo: 'Região', val: (i: number) => regMed(r, i) })),
+    ]
+    if (pratoId !== 0) defs.push({ key: 'prato', label: ev.pratos.find(p => p.id === pratoId)?.nome || 'prato', cor: '#1a1a1a', grupo: 'Prato', val: i => ev.porPrato[pratoId]?.[i]?.blend ?? 0 })
+    const rows = ev.serie.map((p, i) => {
       const row: any = { ts: ts(p.data), data: p.data }
-      if (pratoId !== 0) {
-        row.prato = r2((ev.porPratoCV[pratoId]?.[i]?.cv ?? 0) * 100)      // CV entre lojas dos ingredientes do prato
-      } else {
-        const ids = ev.pratos.filter(pr => !regiao || pr.regiao === regiao).map(pr => pr.id)
-        const custos = ids.map(id => ev.porPrato[id]?.[i]?.blend).filter((v): v is number => v != null && v > 0)
-        row.pratos = r2(coefVar(custos) * 100)
-        if (!regiao) {
-          const porReg: Record<string, number[]> = {}
-          ev.pratos.forEach(pr => { const c = ev.porPrato[pr.id]?.[i]?.blend; if (c != null && c > 0) (porReg[pr.regiao] ||= []).push(c) })
-          row.regioes = r2(coefVar(Object.values(porReg).map(a => mediana(a))) * 100)
-        }
-        row.lojas = r2((mapa.get(p.data) ?? 0) * 100)
+      for (const s of defs) {
+        if (i === 0) { row[s.key] = null; continue }
+        const prev = s.val(i - 1), cur = s.val(i)
+        row[s.key] = prev > 0 ? r2((cur - prev) / prev * 100) : null
       }
       return row
-    }).filter(d => noPeriodo(d.data))
-  }, [ev, regiao, pratoId, ini, fim])
-  const cvTemporal = useMemo(() => {
-    if (!ev || ev.serie.length < 2) return null
-    if (pratoId !== 0) return r2(coefVar((ev.porPrato[pratoId] || []).map(p => p.blend)) * 100)
-    const ids = ev.pratos.filter(pr => !regiao || pr.regiao === regiao).map(pr => pr.id)
-    const idx = ev.serie.map((_, i) => mediana(ids.map(id => ev.porPrato[id]?.[i]?.blend).filter((v): v is number => v != null && v > 0)))
-    return r2(coefVar(idx) * 100)
-  }, [ev, regiao, pratoId])
+    }).filter(r => noPeriodo(r.data))
+    return { rows, series: defs.map(({ key, label, cor, grupo }) => ({ key, label, cor, grupo })) }
+  }, [ev, pratoId, ini, fim])
 
   const poucos = !ev || ev.serie.length < 2
   const dadosP = dados.filter(d => noPeriodo(new Date(d.ts).toISOString().slice(0, 10)))
@@ -182,49 +178,50 @@ export default function EvolucaoPage() {
           <span className="text-muted">até</span>
           <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-cream border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
         </div>
-        {nacional && (
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-muted">Região:</span>
-            <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
-              <button onClick={() => setRegiao('')} className={`px-3 py-1.5 transition-colors ${regiao === '' ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>Todas</button>
-              {regioes.map(r => (
-                <button key={r} onClick={() => setRegiao(r)} className={`px-3 py-1.5 transition-colors border-l border-line ${regiao === r ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>{r}</button>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div>
-          <p className="text-sm font-medium">Coeficiente de variação (CV = desvio ÷ média)
-            <InfoTip w="w-72" texto="CV = desvio padrão ÷ média (em %). Mede dispersão relativa: baixo = valores parecidos, alto = espalhados. Entre pratos = desigualdade entre os pratos; entre regiões = entre as 5 regiões; entre lojas = variação do preço de cada ingrediente entre lojas; do prato = os ingredientes daquele prato; entre coletas = variação do índice no tempo." /></p>
-          <p className="text-xs text-muted">
-            {nacional
-              ? <>Quanto maior, mais dispersos os preços. <strong>Entre pratos</strong> = dispersão dos custos dos pratos{regiao ? ` (${regiao})` : ''}; {!regiao && <><strong>entre regiões</strong> = dispersão das 5 regiões; </>}<strong>entre lojas</strong> = variação média do preço de cada ingrediente entre lojas.</>
-              : <>CV entre lojas dos ingredientes do prato selecionado (o quanto o preço de cada item varia entre lojas).</>}
-            {cvTemporal != null && <> · <strong>CV {pratoId !== 0 ? 'deste prato' : (regiao ? 'do índice da região' : 'do índice')} entre coletas: {cvTemporal}%</strong></>}
-          </p>
+          <p className="text-sm font-medium">Variação % do custo entre coletas
+            <InfoTip w="w-72" texto="Cada ponto é a variação percentual de uma coleta para a seguinte (ex.: +5% = ficou 5% mais caro; −3% = mais barato). Ligue/desligue séries nos checkboxes: PF nacional, tipo de loja, regiões e o prato selecionado." /></p>
+          <p className="text-xs text-muted">Marque as séries que quer comparar. Mercado e Atacarejo são estimativas fixas do online (−10% / −22%), então variam junto com ele.</p>
         </div>
+
+        <div className="border border-line rounded-lg bg-panel p-3 flex flex-col gap-2 text-xs">
+          {['Índice', 'Tipo de loja', 'Região', 'Prato'].map(grupo => {
+            const doGrupo = variacao.series.filter(s => s.grupo === grupo)
+            if (!doGrupo.length) return null
+            return (
+              <div key={grupo} className="flex items-center gap-4 flex-wrap">
+                <span className="text-muted uppercase tracking-wide text-[0.6rem] w-20 shrink-0">{grupo}</span>
+                {doGrupo.map(s => (
+                  <label key={s.key} className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={ativos.has(s.key)} onChange={() => setAtivos(a => { const n = new Set(a); n.has(s.key) ? n.delete(s.key) : n.add(s.key); return n })} />
+                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: s.cor }} />
+                    {s.label}
+                  </label>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+
         <div className="border border-line rounded-lg bg-panel p-4">
           <div style={{ width: '100%', height: 360 }}>
             <ResponsiveContainer>
-              <ComposedChart data={cvData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+              <ComposedChart data={variacao.rows} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
+                <ReferenceLine y={0} stroke="#c3c2b7" />
                 <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
-                  ticks={cvData.map(d => d.ts)} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
+                  ticks={variacao.rows.map(d => d.ts)} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
                   tick={{ fontSize: 13, fill: COR.muted }} />
-                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={44} tickFormatter={v => `${v}%`} />
-                <Tooltip formatter={(v: any) => `${Number(v).toFixed(1)}%`} labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
+                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => `${v > 0 ? '+' : ''}${v}%`} />
+                <Tooltip formatter={(v: any) => `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(1)}%`} labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
                 <Legend wrapperStyle={{ fontSize: 13 }} />
-                {pratoId !== 0 ? (
-                  <Line type="monotone" dataKey="prato" name="CV entre lojas do prato" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
-                ) : (<>
-                  <Line type="monotone" dataKey="pratos" name="Entre pratos" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
-                  {!regiao && <Line type="monotone" dataKey="regioes" name="Entre regiões" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />}
-                  <Line type="monotone" dataKey="lojas" name="Entre lojas" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
-                </>)}
+                {variacao.series.filter(s => ativos.has(s.key)).map(s => (
+                  <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.cor} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                ))}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+          {poucos && <p className="text-xs text-muted mt-2">Série curta — a variação aparece a partir da 2ª coleta e cresce a cada nova.</p>}
         </div>
       </div>
       ) : (
