@@ -21,7 +21,7 @@ const CORES_GRUPO: Record<string, string> = {
 }
 
 const COR = { paprika: '#c0492b', olive: '#6b7a3f', ink: '#1a1a1a', muted: '#9a9a9a', azul: '#3d6b8e' }
-const FONTES: [FonteKey, string][] = [['blend', 'Blend (índice)'], ['online', 'Online'], ['manual', 'Manual']]
+const FONTES: [FonteKey, string][] = [['blend', 'Blend'], ['online', 'Online'], ['manual', 'Manual']]
 const fmt = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
 const ts = (d: string) => new Date(d + 'T00:00:00Z').getTime()
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -47,6 +47,8 @@ export default function EvolucaoPage() {
   const [ativos, setAtivos] = useState<Set<string>>(new Set(['nacional']))   // séries ativas na Variação
   const [pontos, setPontos] = useState<PontoContrib[]>([])
   const [fReg, setFReg] = useState(''); const [fTipo, setFTipo] = useState(''); const [fIng, setFIng] = useState(0)
+  const [snapsNovos, setSnapsNovos] = useState<{ id: number; data: string }[]>([])
+  const [dataDetalhes, setDataDetalhes] = useState('')   // coleta usada no "Simular"
 
   const noPeriodo = (d: string) => (!ini || d >= ini) && (!fim || d <= fim)
   const compData = useMemo(() => {
@@ -74,9 +76,17 @@ export default function EvolucaoPage() {
 
   useEffect(() => {
     getEvolucao().then(setEv)
-    getSnapshotsNovos().then(s => { if (s[0]) getAllDetalhes(s[0].id, s[0].data).then(setDetalhes) })
+    getSnapshotsNovos().then(setSnapsNovos)
     getContribuicoesMapa().then(setPontos)
   }, [])
+  // detalhe do "Simular" segue o período: usa a coleta mais recente dentro do intervalo
+  useEffect(() => {
+    if (!snapsNovos.length) return
+    const ref = snapsNovos.filter(s => noPeriodo(s.data))[0] || snapsNovos[0]
+    setDataDetalhes(ref.data)
+    getAllDetalhes(ref.id, ref.data).then(setDetalhes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapsNovos, ini, fim])
   useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
 
   const nacional = pratoId === 0
@@ -149,7 +159,7 @@ export default function EvolucaoPage() {
             <p className="text-xs text-muted mt-1">evolução temporal do custo do prato feito</p>
           </div>
           <div className="flex items-center gap-4 flex-wrap justify-end">
-            <a href="/" className="text-sm text-muted hover:text-ink">Índice</a>
+            <a href="/" className="text-sm text-muted hover:text-ink">Início</a>
             <span className="text-sm text-paprika border-b-2 border-paprika pb-0.5">Evolução</span>
             <AuthControls />
           </div>
@@ -289,7 +299,7 @@ export default function EvolucaoPage() {
             <SeletorPrato pratos={ev.pratos} value={pratoId} onChange={setPratoId} />
           </div>
           <div className="text-xs text-muted">Fonte do preço
-            <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm mt-1">
+            <div className="flex w-fit border border-line rounded-md overflow-hidden bg-panel text-sm mt-1">
               {FONTES.map(([k, label]) => (
                 <button key={k} onClick={() => setFonte(k)}
                   className={`px-3 py-1.5 transition-colors ${fonte === k ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}
@@ -427,8 +437,8 @@ export default function EvolucaoPage() {
               <p className="text-sm font-medium mb-1">Simular sem ingredientes
                 <InfoTip texto="Desmarque ingredientes para ver o custo do prato sem eles (última coleta, blend). O R$ de cada item é o custo da quantidade da receita (em gramas)." /></p>
               <p className="text-xs text-muted mb-3">
-                Custo do prato = soma dos ingredientes marcados (última coleta · blend). O R$ ao lado de cada item é
-                o custo da <strong>quantidade da receita</strong> (em gramas). Desmarque para ver o prato sem ele.
+                Custo do prato = soma dos ingredientes marcados ({dataDetalhes ? `coleta de ${fmt(dataDetalhes)}` : 'última coleta'} · blend). O R$ ao lado de cada
+                item é o custo da <strong>quantidade da receita</strong> (em gramas). Desmarque para ver o prato sem ele.
               </p>
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="font-[family-name:var(--font-serif)] text-2xl text-paprika tnum">{brl(atual)}</span>
@@ -475,7 +485,7 @@ function SeletorPrato({ pratos, value, onChange }: {
 }) {
   const [aberto, setAberto] = useState(false)
   const [busca, setBusca] = useState('')
-  const sel = value === 0 ? 'Índice nacional (todos os pratos)'
+  const sel = value === 0 ? 'Todos os pratos'
     : (() => { const p = pratos.find(x => x.id === value); return p ? `${p.nome} · ${p.regiao}` : '—' })()
 
   const b = busca.trim().toLowerCase()
@@ -504,7 +514,7 @@ function SeletorPrato({ pratos, value, onChange }: {
             </div>
             <button onClick={() => escolher(0)}
               className={`block w-full text-left px-3 py-2 text-sm hover:bg-panel ${value === 0 ? 'text-paprika font-medium' : 'text-ink'}`}>
-              Índice nacional (todos os pratos)
+              Todos os pratos
             </button>
             {Object.keys(porRegiao).map(reg => (
               <div key={reg}>
