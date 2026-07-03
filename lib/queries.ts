@@ -366,6 +366,14 @@ export async function getDetalheIngredientesRange(ini: string, fim: string): Pro
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
 }
 
+// Ranking de contribuidores do mês (via RPC top_contribuidores — migration 24).
+export type Contribuidor = { user_id: string; nome: string; cidade: string | null; uf: string | null; entradas: number; ingredientes: number; ultima: string }
+export async function getTopContribuidores(mes: string): Promise<Contribuidor[]> {
+  const { data, error } = await supabase.rpc('top_contribuidores', { mes })
+  if (error) return []
+  return (data || []) as Contribuidor[]
+}
+
 // Contribuições de campo aprovadas com coordenada, p/ o mapa — com campos filtráveis.
 export type PontoContrib = {
   lat: number; lng: number; nome: string; ingrediente_id: number | null
