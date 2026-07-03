@@ -91,10 +91,7 @@ export default function TabelaIngredientes() {
         <label className="text-xs text-muted flex-1 min-w-[12rem]">Buscar
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="ingrediente ou categoria…" className={inputCls} />
         </label>
-        <p className="text-xs text-muted self-end pb-2">
-          {nColetas > 1 ? `Média de ${nColetas} coletas · ` : ''}Clique num cabeçalho para ordenar
-          <InfoTip w="w-72" texto="Estatísticas das cotações online de cada ingrediente (R$ por kg/L) na coleta ou período. Passe o mouse em cada cabeçalho para ver o que a coluna significa. Num intervalo com várias coletas, os valores são a média do período." />
-        </p>
+        {nColetas > 1 && <p className="text-xs text-muted self-end pb-2">Média de {nColetas} coletas no período</p>}
       </div>
 
       {loading ? <p className="text-sm text-muted py-6">Carregando…</p> : (
@@ -103,13 +100,14 @@ export default function TabelaIngredientes() {
             <thead>
               <tr className="text-left text-[0.62rem] uppercase tracking-wide text-muted border-b border-line">
                 {COLS.map(c => (
-                  <th key={c.key} title={c.tip}
-                    className={`font-medium px-2 py-2 cursor-pointer select-none hover:text-ink ${c.align === 'right' ? 'text-right' : ''}`}
-                    onClick={() => clicarCol(c.key)}>
-                    {c.label}{ordCol === c.key ? (ordDir === 1 ? ' ▲' : ' ▼') : ''}
+                  <th key={c.key} className={`font-medium px-2 py-2 whitespace-nowrap ${c.align === 'right' ? 'text-right' : ''}`}>
+                    <span className="cursor-pointer select-none hover:text-ink" onClick={() => clicarCol(c.key)}>
+                      {c.label}{ordCol === c.key ? (ordDir === 1 ? ' ▲' : ' ▼') : ''}
+                    </span>
+                    <InfoTip texto={c.tip} w="w-52" pos={c.align === 'right' ? 'right' : 'left'} />
                   </th>
                 ))}
-                <th className="px-2 py-2" title="Cotações que originaram os valores (online e leituras manuais)."></th>
+                <th className="px-2 py-2"></th>
               </tr>
             </thead>
             <tbody>
