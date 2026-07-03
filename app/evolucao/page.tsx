@@ -154,11 +154,11 @@ export default function EvolucaoPage() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
           <div>
             <a href="/" className="font-[family-name:var(--font-serif)] text-2xl leading-none hover:text-paprika transition-colors">Índice PF</a>
-            <p className="text-xs text-muted mt-1">evolução temporal do custo do prato feito</p>
+            <p className="text-xs text-muted mt-1">histórico do custo do prato feito</p>
           </div>
           <div className="flex items-center gap-4 flex-wrap justify-end">
             <a href="/" className="text-sm text-muted hover:text-ink">Início</a>
-            <span className="text-sm text-paprika border-b-2 border-paprika pb-0.5">Evolução</span>
+            <span className="text-sm text-paprika border-b-2 border-paprika pb-0.5">Histórico</span>
             <AuthControls />
           </div>
         </div>
