@@ -66,6 +66,7 @@
       <li><a href="#canonica">Tabela canônica de ingredientes (em curadoria)</a></li>
       <li><a href="#seguranca">Observações de segurança</a></li>
       <li><a href="#proximos">Estado atual e próximos passos</a></li>
+      <li><a href="#att-0702">Atualizações de 02/07/2026 — preço, coleta, admin e análise</a></li>
     </ol>
   </div>
 
@@ -478,6 +479,129 @@
     <em>mesmo ingrediente</em> não existe nos dados online (scraping é nacional, <code>location=Brazil</code>) — ela vem das
     contribuições de campo. <strong>Tratar <code>snapshots</code> e <code>resultados_brutos</code> como append-only (nunca deletar).</strong>
   </p>
+
+  <h2 id="att-0702">12. Atualizações de 02/07/2026 — preço, coleta, admin e análise</h2>
+  <p>
+    Rodada grande de mudanças no modelo de preço, na coleta, no <code>/admin</code>, na contribuição e uma nova
+    página de <strong>análise temporal</strong>. Esta seção detalha cada cálculo e organização.
+  </p>
+
+  <h3>12.1 Modelo de preço por ingrediente (blend manual × online)</h3>
+  <p>
+    O custo de um ingrediente num prato é <code>preço R$/g × quantidade da receita (g)</code>. O <strong>preço R$/g</strong>
+    de cada ingrediente numa coleta é decidido por precedência (em <code>calcular_custos_pratos.py</code> e replicado no
+    frontend em <code>lib/queries.ts → montarItens</code>):
+  </p>
+  <table>
+    <tr><th>Ordem</th><th>Condição</th><th>Preço usado (R$/g)</th><th>Origem / tag</th></tr>
+    <tr><td>1</td><td>tem <code>custo_fixo</code></td><td>valor fixo (flat por prato, não × qtd)</td><td><code>fixo</code></td></tr>
+    <tr><td>2</td><td>tem manual recente <em>e</em> online</td><td><strong>média das duas medianas</strong> (manual + online)/2</td><td><code>manual+online</code></td></tr>
+    <tr><td>3</td><td>só manual recente</td><td>mediana manual</td><td><code>manual</code></td></tr>
+    <tr><td>4</td><td>só online (desta coleta <em>ou</em> última conhecida)</td><td>mediana online</td><td><code>online</code></td></tr>
+    <tr><td>5</td><td>sem online e com manual antigo</td><td>último manual conhecido (fallback p/ itens de nicho)</td><td><code>manual</code></td></tr>
+  </table>
+  <p>
+    <strong>Janela do manual "recente":</strong> as leituras que contam como manual atual são as de
+    <code>[data do snapshot − 10 dias, data + 10 dias]</code> (antes era "últimos 5 dias"). O valor manual usado é a
+    <strong>mediana das leituras dessa janela</strong>. Fora da janela, a última leitura serve só de fallback para itens
+    sem cotação online. <strong>Fallback de online:</strong> se um ingrediente não teve cotação online na coleta, usa-se
+    o <strong>último preço online conhecido</strong> (coleta anterior mais recente), inclusive no blend com o manual.
+  </p>
+  <p>
+    <strong>Custo do prato</strong> = Σ (preço R$/g × qtd) + Σ custo_fixo. <strong>Índice nacional</strong> =
+    <strong>mediana</strong> dos custos dos 100 pratos daquela coleta.
+  </p>
+
+  <h3>12.2 Coleta (scraper) — o que mudou</h3>
+  <ul>
+    <li><strong>Itens com preço manual TAMBÉM são raspados</strong> (removido o filtro <code>preco_manual=is.null</code>
+      de <code>carregar_catalogo</code>). Só <code>unidade='fixo'</code> fica de fora. O catálogo scrapeável passou de
+      100 → <strong>115</strong>. É o que faz o blend manual×online existir de fato.</li>
+    <li><strong>Skip de 6 dias:</strong> ingredientes já coletados com sucesso (<code>qtd_resultados&gt;0</code>) numa
+      coleta dos últimos 6 dias são pulados. Assim um <em>rerun</em> pega só o que faltou (manuais/não-encontrados).
+      <code>FORCE_RESCRAPE=1</code> força a coleta completa.</li>
+    <li><strong>Workflow com dois modos</strong> (<code>.github/workflows/scraper-semanal.yml</code>, botão "Run workflow"):
+      <code>faltantes</code> (default seguro: skip de 6 dias + <code>SCRAPE_MERGE=1</code> somando ao último snapshot) e
+      <code>completo</code> (full run dos 115). O cron dos dias 1 e 15 roda sempre <code>completo</code>. Há
+      <code>concurrency</code> (nunca dois runs juntos).</li>
+    <li><strong>Guarda anti-sobrescrita</strong> em <code>salvar_supabase.py</code>: se a coleta vier 100% sem preço
+      (chave morta/sem rede), aborta antes de apagar — não troca dado bom por vazio.</li>
+    <li><strong>Três contas SerpAPI</strong> (<code>SERPAPI_KEY</code>, <code>_2</code>, <code>_3</code>) com rotação
+      automática quando uma esgota (750 chamadas grátis/mês no total). A chave saiu do código — só em Secrets/.env.local.</li>
+    <li><strong>"Sem resultados" não gasta 2ª conta:</strong> quando a SerpAPI responde <em>"Google hasn't returned any
+      results"</em> (HTTP 200 com erro), o scraper trata como busca vazia e <strong>não rotaciona</strong> a chave.</li>
+    <li><strong>Diagnóstico:</strong> quando um item retorna produtos mas nenhum passa no filtro, o log imprime os
+      títulos rejeitados e o motivo (ajuda a calibrar <code>palavras_ok/nao</code>).</li>
+  </ul>
+  <div class="note">
+    <p>Origem do estouro de API em 01/07 (diagnóstico): o pipeline rodou ~4× (cron + disparos manuais) sem reuso de
+      cache e sem dedupe, cada disparo custando ~100 chamadas; o skip de 6 dias + modo faltantes resolvem isso.
+      Itens básicos (arroz, cebola…) "sumiam" por terem preço manual, que os excluía do scrape — corrigido em 12.2.</p>
+  </div>
+
+  <h3>12.3 <code>/admin</code> — aba "Coleta" (superuser) e preço manual dinâmico</h3>
+  <ul>
+    <li>Nova aba <strong>Coleta</strong> (só <code>is_super</code>): data do último scrape, contagem encontrados ×
+      não-encontrados (popup com as listas) e cadastro de preço manual <strong>inline</strong> para os não-encontrados.</li>
+    <li>A tag "manual+online" e o modal de fontes ficaram <strong>dinâmicos</strong>: só contam leituras da janela
+      ±10 dias (antes uma leitura antiga mantinha a tag para sempre).</li>
+  </ul>
+
+  <h3>12.4 Contribuição — dois modos</h3>
+  <p>
+    <code>/contribuir</code> tem seletor no topo: <strong>Uma foto</strong> (formulário detalhado, um envio) e
+    <strong>Lote</strong> (até 10 fotos; local/loja/cidade preenchidos uma vez valem para todas; ingrediente/preço
+    opcionais por foto; um único envio com dedup por hash e resumo enviadas/já-enviadas/falhas).
+  </p>
+
+  <h3>12.5 Página de análise temporal (<code>/evolucao</code>)</h3>
+  <p>
+    Link "Evolução" no topo. Reconstrução do dashboard do v1 no modelo por prato, no visual sóbrio do v2. Só entram as
+    coletas do <strong>modelo novo</strong> (com <code>custos_pratos</code>). Toda a série é recomputada no cliente a
+    partir de <code>getEvolucao()</code> (<code>lib/queries.ts</code>), que carrega snapshots, receitas, preços online,
+    leituras manuais e ingredientes, e devolve: distribuição por fonte, custo por prato, composição por grupo e CV.
+  </p>
+  <h4 style="font-size:.98rem;margin-top:20px;">Aba Índice</h4>
+  <ul>
+    <li><strong>Fonte do preço:</strong> <code>blend</code> (índice real) · <code>online</code> (online preferido, cai
+      p/ manual onde não há) · <code>manual</code> (manual da janela ±10d preferido, cai p/ online).</li>
+    <li><strong>Distribuição dos 100 pratos</strong> por coleta: mediana (o índice), média, mínimo, máximo e faixa
+      mín–máx (checkboxes). Eixo X <strong>proporcional ao tempo</strong>.</li>
+    <li><strong>Filtro por região</strong> (recomputa a distribuição só com os pratos da região) e
+      <strong>seletor de prato</strong> com busca (mostra o custo do prato nas 3 fontes ao longo do tempo).</li>
+    <li><strong>Período</strong> (presets 30d/3m/6m/Tudo + calendário início/fim): filtra a série e mostra a
+      <strong>média do índice no período</strong>.</li>
+    <li><strong>Composição por grupo</strong> (barras empilhadas): total (média por prato) quando nacional, do prato
+      quando selecionado; toggle <strong>R$ / % do total</strong> (% soma exatamente 100). 17 categorias agrupadas em
+      7 grupos (Proteína, Base, Guarnição, Verdura/Fruta, Temperos, Gordura/Laticínio, Outro).</li>
+    <li><strong>"E se"</strong> (prato selecionado): ingredientes do prato agrupados por categoria, cada um com os
+      gramas da receita e o custo; desmarcar recalcula o custo do prato ao vivo.</li>
+  </ul>
+  <h4 style="font-size:.98rem;margin-top:20px;">Aba Variação (coeficiente de variação, CV = desvio ÷ média)</h4>
+  <ul>
+    <li><strong>Entre pratos</strong> — dispersão dos custos dos pratos na coleta (respeita a região).</li>
+    <li><strong>Entre regiões</strong> — dispersão das medianas das 5 regiões.</li>
+    <li><strong>Entre lojas</strong> — média, por ingrediente, de <code>±DP / média</code> das cotações online.</li>
+    <li><strong>Do prato</strong> (prato selecionado) — CV entre lojas dos ingredientes do prato; headline com o
+      <strong>CV do prato entre coletas</strong> (variação temporal do custo dele).</li>
+    <li>Headline geral: <strong>CV do índice entre coletas</strong> (nacional ou da região).</li>
+  </ul>
+  <h4 style="font-size:.98rem;margin-top:20px;">Aba Ingredientes</h4>
+  <ul>
+    <li>Detalhamento por <strong>período</strong> (presets + calendário): quando o intervalo pega várias coletas, as
+      estatísticas são agregadas (mediana/média = média das coletas; mín/máx = extremos; ±DP/n = média; variação = da
+      mediana entre a 1ª e a última coleta).</li>
+    <li>Colunas: mediana, média, mín, máx, ±DP, n, variação, fontes. <strong>Ordenável</strong> por clique no
+      cabeçalho e com <strong>tooltip</strong> explicando cada coluna. Cabe sem scroll lateral.</li>
+  </ul>
+  <p>
+    <strong>Cores:</strong> a paleta categórica da composição foi validada pelo método de dataviz (croma, contraste e
+    separação para daltonismo — todos os checks OK em superfície branca).
+  </p>
+  <div class="note">
+    <p>Hoje há <strong>3 coletas comparáveis</strong> (20/06, 21/06, 01/07) no modelo novo — os gráficos de série,
+      composição, período e CV mostram poucos pontos e crescem a cada coleta.</p>
+  </div>
 
   <footer>Documento técnico do projeto <code>indice-pf</code> — atualizado a cada fase.</footer>
 </div>
