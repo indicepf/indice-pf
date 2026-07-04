@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import AuthControls from './Auth'
 import DetalhePrato from './DetalhePrato'
+import { useAuth } from './useAuth'
 import { getDishCostsRange, getSnapshotsNovos, getAllDetalhes, getAllFontes, getAllFontesManuais, type FonteManual } from '@/lib/queries'
 import { MODOS, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
 import type { ModoKey, OrdemKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
@@ -15,6 +16,8 @@ const MapaBrasil = dynamic(() => import('./MapaBrasil'), {
 })
 
 export default function Dashboard() {
+  const { profile } = useAuth()
+  const isAdmin = !!profile?.is_admin
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [custos, setCustos]     = useState<DishCost[]>([])
   const [loading, setLoading]   = useState(true)
@@ -109,8 +112,8 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap justify-end">
-            <a href="/evolucao" className="text-sm text-muted hover:text-ink">Histórico</a>
-            <a href="/contribuidores" className="text-sm text-muted hover:text-ink">Ranking</a>
+            {isAdmin && <a href="/evolucao" className="text-sm text-muted hover:text-ink">Histórico</a>}
+            {isAdmin && <a href="/contribuidores" className="text-sm text-muted hover:text-ink">Ranking</a>}
             <ToggleModo modo={modo} setModo={setModo} />
             <AuthControls />
           </div>
@@ -130,20 +133,22 @@ export default function Dashboard() {
                 A cor de cada região indica o custo médio do prato feito ali. Clique numa região para destacá-la
                 e filtrar os pratos; clique de novo ou use o filtro da lista para voltar.
               </p>
-              <div className="mt-5 text-xs text-muted">
-                <p className="mb-1.5">Período do cálculo</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
-                    {([['7d', 7], ['15d', 15], ['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
-                      <button key={label} onClick={() => presetHome(d)} className="px-2.5 py-1.5 text-muted hover:text-ink transition-colors">{label}</button>
-                    ))}
+              {isAdmin && (
+                <div className="mt-5 text-xs text-muted">
+                  <p className="mb-1.5">Período do cálculo</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+                      {([['7d', 7], ['15d', 15], ['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
+                        <button key={label} onClick={() => presetHome(d)} className="px-2.5 py-1.5 text-muted hover:text-ink transition-colors">{label}</button>
+                      ))}
+                    </div>
+                    <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+                    <span>até</span>
+                    <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
                   </div>
-                  <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
-                  <span>até</span>
-                  <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+                  {nColetasHome > 1 && <p className="mt-1.5">Índice = média de {nColetasHome} coletas do período.</p>}
                 </div>
-                {nColetasHome > 1 && <p className="mt-1.5">Índice = média de {nColetasHome} coletas do período.</p>}
-              </div>
+              )}
             </div>
             <MapaBrasil regionais={regionais} sel={regioes}
               onSel={(r) => setRegioes(prev => { const n = new Set(prev); n.has(r) ? n.delete(r) : n.add(r); return n })}

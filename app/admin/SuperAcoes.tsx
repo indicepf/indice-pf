@@ -5,7 +5,7 @@ import { getSuperAcoes, type SuperAcaoRow } from '@/lib/queries'
 import { resumoDispositivo } from '@/lib/contexto'
 import { diffCampos, mapaLink, val } from './Auditoria'
 
-const TABELAS = ['contribuicoes', 'pagamentos', 'profiles', 'login_log', 'precos_manuais_hist', 'ingredientes']
+const TABELAS = ['contribuicoes', 'pagamentos', 'profiles', 'login_log', 'precos_manuais_hist', 'ingredientes', 'resultados_brutos']
 const ACAO_CLS: Record<string, string> = {
   UPDATE: 'text-muted border-line',
   DELETE: 'text-red-600 border-red-200 bg-red-50',
@@ -70,12 +70,12 @@ export default function SuperAcoes() {
               const link = mapaLink(r.lat, r.lng)
               return (
                 <div key={r.id} className="border border-line rounded-lg bg-panel">
-                  <button onClick={() => setAberto(ab ? null : r.id)} className="w-full flex items-center gap-2 p-3 text-left hover:bg-cream transition rounded-lg text-sm">
+                  <button onClick={() => setAberto(ab ? null : r.id)} className="w-full min-w-0 flex items-center gap-2 p-3 text-left hover:bg-cream transition rounded-lg text-sm">
                     <span className={`text-[0.6rem] uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${ACAO_CLS[r.acao] || ''}`}>{r.acao}</span>
-                    <span className="font-medium">{r.tabela}</span>
-                    <span className="text-muted">#{r.registro_id ?? '—'}</span>
-                    <span className="text-muted ml-auto shrink-0 text-xs">{r.ator_nome || 'super'} · {new Date(r.criado_em).toLocaleString('pt-BR')}</span>
-                    <span className="text-muted text-xs">{ab ? '−' : '+'}</span>
+                    <span className="font-medium shrink-0">{r.tabela}</span>
+                    <span className="text-muted shrink-0">#{r.registro_id ?? '—'}</span>
+                    <span className="text-muted ml-auto text-xs truncate min-w-0">{r.ator_nome || 'super'} · {new Date(r.criado_em).toLocaleString('pt-BR')}</span>
+                    <span className="text-muted text-xs shrink-0">{ab ? '−' : '+'}</span>
                   </button>
                   {ab && (
                     <div className="px-3 pb-3 border-t border-line/60 pt-2 space-y-2">

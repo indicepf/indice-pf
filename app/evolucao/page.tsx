@@ -12,6 +12,7 @@ import TabelaIngredientes from './TabelaIngredientes'
 import BotaoExportar from './BotaoExportar'
 import InfoTip from '../InfoTip'
 import AuthControls from '../Auth'
+import RequireAdmin from '../RequireAdmin'
 
 const MapaLocal = dynamic(() => import('../MapaLocal'), { ssr: false, loading: () => <div className="h-[440px] grid place-items-center text-muted text-sm">Carregando mapa…</div> })
 
@@ -33,6 +34,10 @@ const CORES_REG = ['#c98500', '#008f7a', '#9c5a1e', '#b0567f', '#4e8b2f']
 const selCls = 'block bg-cream border border-line rounded-md px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
 
 export default function EvolucaoPage() {
+  return <RequireAdmin><EvolucaoInner /></RequireAdmin>
+}
+
+function EvolucaoInner() {
   const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes' | 'mapa'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')

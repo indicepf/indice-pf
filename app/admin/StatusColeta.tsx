@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, type StatusColeta, type ItemColeta } from '@/lib/queries'
+import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, getHistoricoManual, type StatusColeta, type ItemColeta, type PrecoManualHist } from '@/lib/queries'
 import { brl } from '@/lib/format'
 
 export default function StatusColeta() {
   const [status, setStatus] = useState<StatusColeta | null | undefined>(undefined)
   const [modal, setModal] = useState(false)
   const [valores, setValores] = useState<Record<number, string>>({})
+  const [lojas, setLojas] = useState<Record<number, string>>({})
+  const [links, setLinks] = useState<Record<number, string>>({})
+  const [hist, setHist] = useState<Record<number, PrecoManualHist[]>>({})
   const [salvandoId, setSalvandoId] = useState<number | null>(null)
   const [msg, setMsg] = useState('')
 
@@ -18,13 +21,21 @@ export default function StatusColeta() {
     const preco = Number((valores[item.id] ?? '').replace(',', '.'))
     if (!(preco > 0)) { setMsg(`Informe um preço válido (R$/kg) para ${item.nome}.`); return }
     setSalvandoId(item.id); setMsg('')
-    const { error } = await setPrecoManual(item.id, { preco_manual: preco })
+    const { error } = await setPrecoManual(item.id, { preco_manual: preco, loja: lojas[item.id] || '', link: links[item.id] || '' })
     if (error) { setSalvandoId(null); setMsg(`Erro ao salvar ${item.nome}: ${error.message}`); return }
     await recalcularCustos()
     setSalvandoId(null)
-    setValores(v => ({ ...v, [item.id]: '' }))
-    setMsg(`Preço manual de ${item.nome} salvo e custos recalculados.`)
+    setValores(v => ({ ...v, [item.id]: '' })); setLojas(l => ({ ...l, [item.id]: '' })); setLinks(l => ({ ...l, [item.id]: '' }))
+    if (item.id in hist) { const d = await getHistoricoManual(item.id); setHist(h => ({ ...h, [item.id]: d })) }
+    setMsg(`Leitura de ${item.nome} registrada e custos recalculados.`)
     recarregar()
+  }
+
+  async function verHistorico(id: number) {
+    if (id in hist) { setHist(h => { const c = { ...h }; delete c[id]; return c }); return }  // fecha
+    setHist(h => ({ ...h, [id]: [] }))                  // abre (carregando)
+    const data = await getHistoricoManual(id)
+    setHist(h => ({ ...h, [id]: data }))
   }
 
   if (status === undefined) return <p className="text-sm text-muted">Carregando…</p>
@@ -53,23 +64,64 @@ export default function StatusColeta() {
       {/* não encontrados: define preço manual inline */}
       <div>
         <h3 className="text-sm font-medium mb-1 text-paprika">Não encontrados ({status.naoAchados.length})</h3>
-        <p className="text-xs text-muted mb-3">Sem cotação online neste snapshot. Defina um preço manual (R$/kg) para cobrir o custo até o scraper encontrá-los.</p>
+        <p className="text-xs text-muted mb-3">Sem cotação online neste snapshot. Registre uma leitura (R$/kg) com a fonte (loja/link) para cobrir o custo até o scraper encontrá-los. Cada leitura fica arquivada no histórico.</p>
         {msg && <p className="text-xs text-muted mb-3">{msg}</p>}
         {!status.naoAchados.length ? <p className="text-sm text-muted">Todos os itens foram encontrados nesta coleta.</p> : (
           <div className="space-y-2">
             {status.naoAchados.map(item => (
-              <div key={item.id} className="border border-line rounded-lg bg-panel p-3 flex items-center gap-3 flex-wrap">
-                <span className="text-sm flex-1 min-w-[8rem]">{item.nome}</span>
-                <span className="text-xs text-muted">
-                  {item.preco_manual != null ? `manual atual: ${brl(Number(item.preco_manual))}/kg` : 'sem manual'}
-                </span>
-                <input value={valores[item.id] ?? ''} inputMode="decimal" placeholder="R$/kg"
-                  onChange={e => setValores(v => ({ ...v, [item.id]: e.target.value }))}
-                  className="w-24 bg-cream border border-line rounded-md px-2 py-1.5 text-sm focus:outline-none focus:border-paprika" />
-                <button onClick={() => salvarManual(item)} disabled={salvandoId === item.id}
-                  className="text-sm bg-paprika text-white px-3 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
-                  {salvandoId === item.id ? 'Salvando…' : 'Salvar'}
-                </button>
+              <div key={item.id} className="border border-line rounded-lg bg-panel p-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-medium">{item.nome}</span>
+                  <span className="text-xs text-muted">
+                    {item.preco_manual != null ? `manual atual: ${brl(Number(item.preco_manual))}/kg` : 'sem manual'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 text-xs">
+                  <label>Nova leitura (R$/kg)
+                    <input value={valores[item.id] ?? ''} inputMode="decimal" placeholder="ex: 38,90"
+                      onChange={e => setValores(v => ({ ...v, [item.id]: e.target.value }))} className={inputCls} />
+                  </label>
+                  <label>Loja/fonte
+                    <input value={lojas[item.id] ?? ''} placeholder="ex: feira local"
+                      onChange={e => setLojas(l => ({ ...l, [item.id]: e.target.value }))} className={inputCls} />
+                  </label>
+                  <label>Link
+                    <input value={links[item.id] ?? ''} placeholder="https://…"
+                      onChange={e => setLinks(l => ({ ...l, [item.id]: e.target.value }))} className={inputCls} />
+                  </label>
+                </div>
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <button onClick={() => salvarManual(item)} disabled={salvandoId === item.id}
+                    className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+                    {salvandoId === item.id ? 'Salvando…' : 'Salvar'}
+                  </button>
+                  <button onClick={() => verHistorico(item.id)}
+                    className="text-xs text-paprika hover:underline">{item.id in hist ? 'ocultar histórico' : 'histórico'}</button>
+                </div>
+                {item.id in hist && (
+                  <div className="mt-3 border-t border-line pt-3">
+                    {!hist[item.id].length ? <p className="text-xs text-muted">Sem histórico ainda.</p> : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-muted">
+                            <th className="font-medium py-1">Data</th>
+                            <th className="font-medium py-1 text-right">R$/kg</th>
+                            <th className="font-medium py-1">Loja</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hist[item.id].map(h => (
+                            <tr key={h.id} className="border-t border-line/60">
+                              <td className="py-1 text-muted">{new Date(h.criado_em).toLocaleString('pt-BR')}</td>
+                              <td className="py-1 text-right tnum">{h.preco_manual != null ? brl(Number(h.preco_manual)) : '—'}</td>
+                              <td className="py-1">{h.loja || (h.link ? <a href={h.link} target="_blank" rel="noopener noreferrer" className="text-paprika hover:underline">fonte</a> : '—')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -94,6 +146,8 @@ export default function StatusColeta() {
     </div>
   )
 }
+
+const inputCls = 'w-full bg-cream border border-line rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
 
 function Card({ n, label, cls, onClick }: { n: number; label: string; cls: string; onClick: () => void }) {
   return (
