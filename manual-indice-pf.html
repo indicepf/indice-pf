@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Índice PF — Manual de Uso</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #1a1a1a;
+    margin: 0;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.7rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 36px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 {
+    font-size: 1.2rem; font-weight: bold; margin-top: 52px;
+    padding-bottom: 4px; border-bottom: 1px solid #ccc;
+  }
+  h3 { font-size: 1.02rem; font-weight: bold; margin-top: 28px; }
+  h4 { font-size: 0.95rem; font-weight: bold; margin-top: 22px; margin-bottom: 6px; font-family: Helvetica, Arial, sans-serif; }
+  p { margin: 12px 0; }
+  ul, ol { margin: 12px 0; padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: "Courier New", monospace;
+    background: #f2f2f2; border: 1px solid #ddd;
+    padding: 1px 5px; font-size: 0.88em;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  .tag {
+    display: inline-block; font-family: Helvetica, Arial, sans-serif; font-size: 0.68rem;
+    text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid #c0492b; color: #c0492b;
+    border-radius: 4px; padding: 1px 6px; vertical-align: middle; white-space: nowrap;
+  }
+  .tag.super { border-color: #7a4fb0; color: #7a4fb0; }
+  .tag.livre { border-color: #6b7a3f; color: #55632f; }
+  .note {
+    border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0; background: #fbfaf7;
+  }
+  .note p:first-child { margin-top: 0; }
+  .note p:last-child { margin-bottom: 0; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .toc li { margin: 3px 0; }
+  .path { font-family: "Courier New", monospace; font-size: 0.85em; color: #555; }
+  .btn {
+    display: inline-block; font-family: Helvetica, Arial, sans-serif; font-size: 0.82rem;
+    background: #efe9df; border: 1px solid #d8cdbb; border-radius: 4px; padding: 0px 6px;
+    white-space: nowrap;
+  }
+  footer { margin-top: 64px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+  .lead { font-size: 0.95rem; color: #444; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Índice PF — Manual de Uso</h1>
+  <p class="subtitle">Guia de todas as telas, abas e botões do aplicativo, e o que fazer em cada um.</p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#visao">Visão geral e tipos de usuário</a></li>
+      <li><a href="#home">Página inicial</a></li>
+      <li><a href="#conta">Entrar, criar conta e senha</a></li>
+      <li><a href="#contribuir">Contribuir com preços</a></li>
+      <li><a href="#perfil">Meu perfil</a></li>
+      <li><a href="#historico">Histórico <span class="tag">admin</span></a></li>
+      <li><a href="#ranking">Ranking <span class="tag">admin</span></a></li>
+      <li><a href="#admin">Administração</a></li>
+      <li><a href="#papeis">Papéis e permissões</a></li>
+      <li><a href="#glossario">Glossário</a></li>
+    </ol>
+  </div>
+
+  <p class="lead" style="margin-top:28px;">
+    As etiquetas indicam quem enxerga cada recurso: <span class="tag livre">público</span> qualquer visitante,
+    <span class="tag">admin</span> só administradores, <span class="tag super">super</span> só superusuários.
+    Sem etiqueta = qualquer usuário logado.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="visao">1. Visão geral e tipos de usuário</h2>
+  <p>
+    O <strong>Índice PF</strong> mostra quanto custa produzir uma porção de prato feito no Brasil, prato a prato e por
+    região. Os preços vêm de duas fontes: coleta automática no varejo online e contribuições de campo enviadas pelos
+    usuários (foto de preço no mercado). O manual abaixo cobre cada tela na ordem em que você as encontra.
+  </p>
+  <p>Há quatro níveis de acesso:</p>
+  <table>
+    <tr><th>Nível</th><th>Quem é</th><th>O que faz</th></tr>
+    <tr><td><strong>Visitante</strong> <span class="tag livre">público</span></td><td>Qualquer pessoa, sem login</td><td>Vê o índice, o mapa, a lista de pratos e o detalhe de cada prato.</td></tr>
+    <tr><td><strong>Usuário logado</strong></td><td>Criou conta e completou o perfil</td><td>Tudo do visitante + contribui com fotos de preço, acompanha suas contribuições e recebe recompensa.</td></tr>
+    <tr><td><strong>Administrador</strong> <span class="tag">admin</span></td><td>Perfil com <code>is_admin</code></td><td>Tudo do usuário + Histórico, Ranking, filtro de data na home e o painel <code>/admin</code> (moderação, saques, preços manuais etc.).</td></tr>
+    <tr><td><strong>Superusuário</strong> <span class="tag super">super</span></td><td>Perfil com <code>is_super</code> (é também admin)</td><td>Tudo do admin + excluir/editar registros, abas Coleta, Dados e Ações do super.</td></tr>
+  </table>
+  <div class="note">
+    <p>Administrador e superusuário são concedidos direto no banco (campos <code>is_admin</code> / <code>is_super</code> do
+    perfil). Não há tela para se auto-promover.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="home">2. Página inicial <span class="path">/</span> <span class="tag livre">público</span></h2>
+  <p>É a tela que todos veem primeiro. Divide-se em cabeçalho, índice + mapa e lista de pratos.</p>
+
+  <h3>2.1 Cabeçalho</h3>
+  <ul>
+    <li><strong>Índice PF</strong> — o título; mostra também a data da coleta atual.</li>
+    <li><span class="btn">Histórico</span> <span class="tag">admin</span> — abre a página de análise temporal. Só aparece para administradores.</li>
+    <li><span class="btn">Ranking</span> <span class="tag">admin</span> — abre o ranking de contribuidores. Só aparece para administradores.</li>
+    <li><strong>Online / Mercado / Atacarejo</strong> — alterna o tipo de preço exibido em toda a tela. <em>Online</em> é o preço raspado; <em>Mercado</em> aplica −10% e <em>Atacarejo</em> −22% sobre ele (estimativas, ainda em calibração).</li>
+    <li><span class="btn">Contribuir</span> — se você está logado com perfil completo, vai direto para a tela de contribuição; senão, abre um convite para criar conta.</li>
+    <li><span class="btn">Entrar</span> / <strong>seu nome ▾</strong> — abre o login ou, se logado, o menu com <em>Meu perfil</em>, <em>Administração</em> (só admin) e <em>Sair</em>.</li>
+  </ul>
+
+  <h3>2.2 Índice nacional e mapa</h3>
+  <ul>
+    <li><strong>Índice nacional</strong> — o valor grande em destaque. É a mediana do custo dos pratos. Abaixo dele aparece de quantos pratos é a mediana e qual tipo de preço está ativo.</li>
+    <li><strong>Mapa do Brasil</strong> — cada região é colorida pelo custo médio do prato ali. <strong>Clique numa região</strong> para destacá-la e filtrar os pratos daquela região; clique em várias para somar. Com região(ões) selecionada(s), o índice, a contagem de pratos e a lista passam a refletir só aquele recorte (o rótulo muda para "Índice — &lt;região&gt;"). Clique de novo na região para remover, ou use o filtro da lista para limpar.</li>
+    <li><strong>Período do cálculo</strong> <span class="tag">admin</span> — botões <span class="btn">7d</span> <span class="btn">15d</span> <span class="btn">30d</span> <span class="btn">3m</span> <span class="btn">6m</span> <span class="btn">Tudo</span> e dois campos de data (início/fim). Recalcula o índice para o intervalo; com 2+ coletas no período, usa a média por prato. Visível só para administradores; o visitante sempre vê a última coleta.</li>
+  </ul>
+
+  <h3>2.3 Lista de Pratos</h3>
+  <ul>
+    <li><strong>Buscar prato…</strong> — filtra a lista pelo nome.</li>
+    <li><strong>Todas as regiões ▾</strong> — filtra por uma região (mesmo efeito de clicar no mapa).</li>
+    <li><strong>Ordenação ▾</strong> — Por custo, Por nome ou Por região.</li>
+    <li><strong>Colunas</strong> — Prato, Região, Custo e Cobertura (quantos ingredientes do prato têm preço, ex.: <code>18/20</code>).</li>
+    <li><strong>Clicar numa linha</strong> abre o Detalhe do prato (2.4).</li>
+  </ul>
+
+  <h3>2.4 Detalhe do prato (gaveta lateral)</h3>
+  <p>Abre pela direita ao clicar num prato. Mostra:</p>
+  <ul>
+    <li><strong>Custo do prato</strong> no topo (no tipo de preço ativo).</li>
+    <li><strong>Tabela ingrediente × quantidade × custo</strong>. Cada ingrediente pode ter uma etiqueta de origem do preço: <span class="tag livre">manual</span> (só leitura manual/campo), <span class="tag livre">manual+online</span> (média das duas), <span class="tag livre">fixo</span> (custo simbólico) ou <span class="tag livre">sem preço</span>.</li>
+    <li><span class="btn">fontes</span> — em ingredientes com preço online ou manual, abre o Modal de Fontes (2.5).</li>
+    <li><span class="btn">×</span> ou clicar fora fecha a gaveta.</li>
+  </ul>
+
+  <h3>2.5 Modal de Fontes</h3>
+  <p>Lista de onde veio o preço daquele ingrediente:</p>
+  <ul>
+    <li><strong>Leituras de campo e manuais (janela ±10 dias)</strong> — cada leitura com loja, data, R$/kg, etiqueta <em>usuário</em> (contribuição de campo) ou <em>manual</em>, e link quando houver.</li>
+    <li><strong>Fontes online</strong> — cada produto coletado, com título, loja, preço e forma de exibição; clicável para abrir a origem.</li>
+    <li>Fecha com <span class="btn">×</span>, clique fora ou tecla Esc.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="conta">3. Entrar, criar conta e senha</h2>
+
+  <h3>3.1 Entrar / criar conta (modal do cabeçalho)</h3>
+  <p>Abre pelo botão <span class="btn">Entrar</span>. É um único modal com dois modos:</p>
+  <ul>
+    <li><strong>Entrar</strong> — e-mail e senha. <span class="btn">Entrar</span> confirma.</li>
+    <li><strong>Criar conta</strong> — link "Não tem conta? Criar conta". Pede e-mail e senha (mínimo 6 caracteres).</li>
+    <li><strong>Esqueci minha senha</strong> — no modo Entrar; envia um link de redefinição para o e-mail.</li>
+  </ul>
+
+  <h3>3.2 Completar perfil</h3>
+  <p>
+    Logo após o primeiro login (ou se o perfil estiver incompleto), o modal pede <strong>nome</strong>,
+    <strong>telefone com DDD</strong> (validado) e <strong>região</strong>. Sem esses três campos, o botão Contribuir
+    continua abrindo o convite em vez da tela de envio.
+  </p>
+
+  <h3>3.3 Redefinir senha <span class="path">/redefinir-senha</span></h3>
+  <p>
+    Aberta pelo link do e-mail de recuperação. Se o link é válido, mostra <strong>Nova senha</strong> e
+    <strong>Confirmar senha</strong> (mínimo 6 caracteres, iguais) e o botão <span class="btn">Salvar nova senha</span>;
+    depois redireciona para o início. Se o link expirou, oferece voltar ao início e pedir um novo.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="contribuir">4. Contribuir com preços <span class="path">/contribuir</span></h2>
+  <p>
+    Requer estar logado com perfil completo. Tem um seletor no topo com dois modos: <strong>Uma foto</strong> e
+    <strong>Lote (várias)</strong>. Em ambos, <strong>a foto e a localização são obrigatórias</strong>; o resto ajuda mas
+    é opcional. Toda contribuição entra como <em>pendente</em> e passa por moderação antes de afetar o índice.
+  </p>
+
+  <h4>Modo "Uma foto"</h4>
+  <ul>
+    <li><strong>Toque para fotografar</strong> — abre a câmera; enquadre o produto com a etiqueta de preço.</li>
+    <li>Campos opcionais: <strong>Ingrediente</strong>, <strong>Tipo de loja</strong> (Mercado, Atacarejo, Feira, Conveniência), <strong>Preço (R$)</strong>, <strong>Quantidade</strong>, <strong>Marca</strong>, <strong>Mercado/rede</strong>, <strong>Cidade</strong>.</li>
+    <li><span class="btn">+ registrar localização (obrigatório)</span> — pega o GPS e preenche cidade/bairro/UF. Vira <span class="btn">✓ local registrado</span> quando pronto.</li>
+    <li><span class="btn">Enviar contribuição</span> — envia. Fotos idênticas já enviadas por você são recusadas (dedup).</li>
+  </ul>
+
+  <h4>Modo "Lote (várias)"</h4>
+  <ul>
+    <li><span class="btn">+ Anexar fotos</span> — seleciona várias de uma vez (até 10 por lote); cada miniatura tem um <span class="btn">×</span> para remover.</li>
+    <li><strong>Vale para todas as fotos:</strong> localização (obrigatória), tipo de loja, cidade e mercado — preenchidos uma vez para o lote inteiro.</li>
+    <li>Ingrediente e preço de cada foto ficam para a moderação decidir.</li>
+    <li><span class="btn">Enviar N contribuições</span> — envia todas, mostrando o progresso. Cada foto vira uma contribuição.</li>
+  </ul>
+  <p>
+    Ao terminar, aparece a tela <strong>"Obrigado!"</strong> com quantas foram enviadas (e quantas eram duplicadas ou
+    falharam), e os botões <span class="btn">Enviar mais</span> e <span class="btn">Voltar ao índice</span>.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="perfil">5. Meu perfil <span class="path">/perfil</span></h2>
+  <p>Aberta pelo menu do usuário. Cabeçalho tem <span class="btn">← voltar</span> e <span class="btn">Sair</span>. Três abas:</p>
+
+  <h3>5.1 Aba Dados</h3>
+  <ul>
+    <li>E-mail (fixo), <strong>Nome</strong>, <strong>Telefone</strong>, <strong>Região</strong>, <strong>Sexo</strong>, <strong>Nascimento</strong> (mostra a idade).</li>
+    <li><span class="btn">Salvar</span> grava as alterações.</li>
+  </ul>
+
+  <h3>5.2 Aba Recompensas</h3>
+  <ul>
+    <li><strong>Saldo disponível</strong> — o valor a sacar; abaixo, quantas contribuições aprovadas e o total acumulado. Cada foto aprovada vale um valor fixo pequeno.</li>
+    <li><strong>CPF</strong> e <strong>Chave PIX</strong> — dados de pagamento; exigem marcar o consentimento <strong>LGPD</strong>.</li>
+    <li><span class="btn">Salvar dados</span> grava CPF/PIX.</li>
+    <li><span class="btn">Solicitar saque</span> — habilita só quando o saldo atinge o mínimo. Abaixo do mínimo, mostra quanto falta.</li>
+    <li><strong>Histórico de saques</strong> — cada pedido com valor, data e status (em processamento, pago, rejeitado).</li>
+  </ul>
+
+  <h3>5.3 Aba Minhas contribuições</h3>
+  <ul>
+    <li><span class="btn">Contribuir</span> — atalho para <code>/contribuir</code>.</li>
+    <li><strong>Mapa</strong> das suas contribuições com localização.</li>
+    <li><strong>Lista</strong> com foto, ingrediente/produto, preço, data, cidade e status (<em>em análise</em>, <em>aprovada</em>, <em>rejeitada</em>).</li>
+    <li><span class="btn">excluir</span> — só nas que ainda estão <em>em análise</em>.</li>
+    <li><span class="btn">Ver mais</span> — carrega mais 10 por vez.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="historico">6. Histórico <span class="path">/evolucao</span> <span class="tag">admin</span></h2>
+  <p>
+    Análise da evolução dos preços no tempo. Aberta pelo link "Histórico" (só admin); acesso direto pela URL também é
+    bloqueado para quem não é admin. Tem quatro abas e um botão <span class="btn">Exportar</span> (CSV / XLSX).
+  </p>
+  <ul>
+    <li><strong>Índice</strong> — série do índice ao longo das coletas. Controles: <strong>fonte do preço</strong> (Blend = índice real, Online, Manual); <strong>métricas</strong> (mediana, média, mínimo, máximo e faixa mín–máx); <strong>filtro de região</strong>; <strong>seletor de prato</strong> (com busca); <strong>período</strong> (presets + calendário). Abaixo, <strong>composição por grupo</strong> em barras empilhadas com alternância R$ / % e o painel <strong>"E se"</strong> (desmarcar ingredientes recalcula o custo do prato ao vivo).</li>
+    <li><strong>Variação</strong> — variação acumulada do custo em relação à 1ª coleta do período (base 0%; linha subindo = mais caro). Tem uma caixa "Como ler este gráfico".</li>
+    <li><strong>Ingredientes</strong> — tabela por período com mediana, média, mín, máx, ±desvio, n, variação e fontes. Colunas ordenáveis por clique, com tooltip explicando cada uma.</li>
+    <li><strong>Mapa</strong> — mapa das contribuições de campo mais uma tabela (data, hora, ingrediente, preço, local, região). Filtro de região por checkboxes (várias) com "limpar".</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="ranking">7. Ranking <span class="path">/contribuidores</span> <span class="tag">admin</span></h2>
+  <p>
+    Top 10 do mês por contribuições aprovadas. Aberta pelo link "Ranking" (só admin). Cada linha traz o contribuidor,
+    número de entradas, ingredientes distintos, local e última contribuição. Um <strong>seletor de mês</strong> permite
+    ver meses anteriores. Link <span class="btn">Início</span> volta à home.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="admin">8. Administração <span class="path">/admin</span> <span class="tag">admin</span></h2>
+  <p>
+    Acessada pelo menu do usuário → <strong>Administração</strong> (só aparece com <code>is_admin</code>). No topo há
+    <span class="btn">← voltar</span> e a navegação por abas (no celular vira um menu suspenso). Abas marcadas com
+    <span class="tag super">super</span> só existem para superusuários. O botão <span class="btn">Excluir</span> vermelho
+    aparece só para super e registra tudo em "Ações do super".
+  </p>
+
+  <h3>8.1 Moderação</h3>
+  <p>Fila das contribuições <em>pendentes</em>. Cada card mostra a foto, o local/data e campos editáveis (Ingrediente, Preço, Quantidade, Marca).</p>
+  <ul>
+    <li><span class="btn">Aprovar</span> — aprova, registra a leitura de campo e recalcula o índice.</li>
+    <li><span class="btn">Rejeitar</span> — descarta a contribuição.</li>
+    <li><span class="btn">Excluir</span> <span class="tag super">super</span> — apaga de vez.</li>
+    <li><span class="btn">Carregar mais</span> — mostra mais 20 por vez.</li>
+  </ul>
+
+  <h3>8.2 Aprovadas</h3>
+  <p>Esteira de auditoria das contribuições já aprovadas. Editar aqui reescreve a leitura no índice.</p>
+  <ul>
+    <li><strong>Filtros:</strong> a partir de (data), preço ≥ R$, busca (ingrediente/mercado/produto) e <span class="btn">Aplicar filtros</span>.</li>
+    <li><span class="btn">Recalcular custos do índice</span> — aplica as edições ao índice; fica destacado quando há edições pendentes.</li>
+    <li>Campos editáveis por item + <span class="btn">Salvar</span>. Ao lado aparece o <strong>R$/kg</strong> que entra no índice — confira para pegar erro de digitação.</li>
+    <li><span class="btn">Excluir</span> <span class="tag super">super</span> e <span class="btn">Carregar mais</span> (contador "N de M").</li>
+  </ul>
+
+  <h3>8.3 Painel</h3>
+  <p>Visão geral das contribuições. No topo, cartões de resumo (Contribuições, Contribuidores, Cobertura, Índice atual). Abaixo, três sub-abas (controle segmentado) e um <span class="btn">Exportar CSV</span>.</p>
+  <ul>
+    <li><strong>Usuários</strong> — lista de contribuidores; clicar abre o detalhe (dados, taxa de aprovação, mapa e contribuições). Em cada contribuição há <span class="btn">editar</span>. Para super: <span class="btn">Editar perfil</span> (inclui marcar admin/super) e <span class="btn">Excluir perfil</span>.</li>
+    <li><strong>Mapa</strong> — todas as contribuições com localização, coloridas por região.</li>
+    <li><strong>Ingredientes</strong> — cobertura por ingrediente. Filtros de busca/data/preço. Bloco "Sem contribuições" (priorizado por nº de pratos) e "Com contribuições" (abre cada item para ver e editar as entradas). Para super: <span class="btn">excluir ingrediente</span>.</li>
+  </ul>
+
+  <h3>8.4 Auditoria</h3>
+  <p>Duas sub-abas:</p>
+  <ul>
+    <li><strong>Alterações</strong> — log de criações/edições/exclusões, com filtros (tabela, ação, a partir de). Cada linha expande e mostra o antes/depois campo a campo.</li>
+    <li><strong>Logins</strong> — quem entrou, dispositivo, local (link no mapa) e quando. Para super: <span class="btn">excluir</span> um login.</li>
+  </ul>
+
+  <h3>8.5 Saques</h3>
+  <p>Fila de solicitações de saque. Cada card traz nome, valor, chave PIX (com <span class="btn">copiar</span>), CPF, telefone e data.</p>
+  <ul>
+    <li><span class="btn">Marcar como pago</span> — depois de fazer o PIX manualmente.</li>
+    <li>Para super: <span class="btn">Editar</span> (valor, status, chave, CPF) e <span class="btn">Excluir</span>.</li>
+    <li><strong>Histórico de saques</strong> — tabela dos concluídos (usuário, valor, datas, aprovador, status); super pode excluir linhas.</li>
+  </ul>
+
+  <h3>8.6 Preços manuais</h3>
+  <p>Preços definidos à mão (R$/kg) para itens sem cotação online confiável. Editar grava no ingrediente; use "Recalcular custos" para refletir no índice.</p>
+  <ul>
+    <li><span class="btn">Recalcular custos do índice</span> — recomputa custos e índice.</li>
+    <li><span class="btn">+ Definir preço manual para outro ingrediente</span> — bloco recolhível no topo (ingrediente, preço R$/kg, custo fixo, loja/fonte, link).</li>
+    <li><strong>Buscar ingrediente</strong> + filtro de origem <span class="btn">Todos</span> <span class="btn">Rede</span> <span class="btn">Campo</span>, com contador.</li>
+    <li><strong>Lista recolhida:</strong> cada item aparece fechado, mostrando o nome, as etiquetas (rede/campo/fixo) e o preço usado. <strong>Clique na seta</strong> para abrir e editar: <em>Nova leitura (R$/kg)</em>, <em>Custo fixo</em>, <em>Loja/fonte</em>, <em>Link</em>, com <span class="btn">Salvar</span>, <span class="btn">Remover (voltar ao online)</span> e <span class="btn">histórico</span> (leituras arquivadas com data/valor/loja).</li>
+    <li><span class="btn">Ver mais</span> — mostra mais 20 itens.</li>
+  </ul>
+
+  <h3>8.7 Coleta <span class="tag super">super</span></h3>
+  <p>Resultado da última coleta online (snapshot mais recente).</p>
+  <ul>
+    <li>Cartões: itens no snapshot, encontrados, não encontrados (clicáveis para ver as listas).</li>
+    <li><strong>Não encontrados</strong> — para cada item sem cotação online, registre um preço de segurança: <em>Nova leitura (R$/kg)</em>, <em>Loja/fonte</em> e <em>Link</em>, com <span class="btn">Salvar</span> e <span class="btn">histórico</span>. Cada leitura fica arquivada (mesma lógica de Preços manuais), com fonte rastreável.</li>
+  </ul>
+
+  <h3>8.8 Dados <span class="tag super">super</span></h3>
+  <p>Auditoria da coleta para achar preço errado.</p>
+  <ul>
+    <li><strong>Variações fortes (&gt;30%)</strong> entre as duas últimas coletas — tabela com anterior, atual e variação; <span class="btn">ver entradas</span> abre as fontes do ingrediente.</li>
+    <li><strong>Inspecionar qualquer ingrediente</strong> — busca e abre as entradas online da última coleta.</li>
+    <li><span class="btn">excluir</span> uma entrada ruim — recalcula a mediana do ingrediente e o índice na hora, e <strong>registra a exclusão em "Ações do super"</strong>.</li>
+  </ul>
+
+  <h3>8.9 Ações do super <span class="tag super">super</span></h3>
+  <p>
+    Registro <strong>imutável</strong> de tudo que os superusuários excluíram ou editaram — ninguém apaga ou altera este
+    histórico. Filtros por tabela, ação (edição/exclusão) e data. Cada linha expande e mostra dispositivo, local e o
+    antes/depois. Exclusões feitas <strong>direto no banco do Supabase</strong> (fora do app) não aparecem aqui — só as
+    feitas pelos botões do próprio app.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="papeis">9. Papéis e permissões</h2>
+  <table>
+    <tr><th>Recurso</th><th>Visitante</th><th>Logado</th><th>Admin</th><th>Super</th></tr>
+    <tr><td>Ver índice, mapa, pratos, fontes</td><td>sim</td><td>sim</td><td>sim</td><td>sim</td></tr>
+    <tr><td>Contribuir, perfil, recompensa/saque</td><td>—</td><td>sim</td><td>sim</td><td>sim</td></tr>
+    <tr><td>Histórico, Ranking, filtro de data na home</td><td>—</td><td>—</td><td>sim</td><td>sim</td></tr>
+    <tr><td>Moderar, aprovar, saques, preços manuais</td><td>—</td><td>—</td><td>sim</td><td>sim</td></tr>
+    <tr><td>Excluir/editar registros, Coleta, Dados, Ações do super</td><td>—</td><td>—</td><td>—</td><td>sim</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="glossario">10. Glossário</h2>
+  <ul>
+    <li><strong>Índice nacional</strong> — mediana do custo dos pratos na coleta atual (ou no recorte de região/período selecionado).</li>
+    <li><strong>Coleta / snapshot</strong> — uma rodada de preços numa data; cada nova coleta acrescenta um ponto ao histórico.</li>
+    <li><strong>Preço online</strong> — mediana dos produtos raspados no varejo online.</li>
+    <li><strong>Preço manual</strong> — leitura em R$/kg cadastrada à mão no admin; usa a mediana das leituras recentes.</li>
+    <li><strong>Custo fixo</strong> — valor simbólico por prato para itens sem produto de varejo equivalente; não escala com a quantidade.</li>
+    <li><strong>Blend manual×online</strong> — quando há preço manual recente e online, o preço usado é a média dos dois.</li>
+    <li><strong>Janela ±10 dias</strong> — intervalo em torno da coleta em que uma leitura manual/campo conta como preço atual.</li>
+    <li><strong>Cobertura (x/y)</strong> — quantos ingredientes do prato têm preço (x) do total (y).</li>
+    <li><strong>R$/kg</strong> — preço normalizado por quilo; é a base do custo por prato e o número a conferir na moderação.</li>
+    <li><strong>Três preços (Online / Mercado / Atacarejo)</strong> — o mesmo custo em três cenários: online cheio, −10% e −22% (estimativas em calibração).</li>
+  </ul>
+
+  <footer>Manual de uso do aplicativo <code>indice-pf</code>. Descreve as telas na versão atual; se a interface mudar, reveja as seções afetadas.</footer>
+</div>
+</body>
+</html>

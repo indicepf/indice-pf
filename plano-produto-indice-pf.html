@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Índice PF — Plano de Produto (o que falta)</title>
+<style>
+  body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 0; line-height: 1.55; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.7rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 28px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 { font-size: 1.2rem; font-weight: bold; margin-top: 52px; padding-bottom: 4px; border-bottom: 1px solid #ccc; }
+  h3 { font-size: 1.02rem; font-weight: bold; margin-top: 26px; }
+  p { margin: 11px 0; }
+  ul, ol { margin: 10px 0; padding-left: 22px; }
+  li { margin: 7px 0; }
+  code { font-family: "Courier New", monospace; background: #f2f2f2; border: 1px solid #ddd; padding: 1px 5px; font-size: 0.86em; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.88rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .item { border: 1px solid #e2ddd3; border-left: 3px solid #c0492b; background: #fbfaf7; padding: 12px 16px; margin: 12px 0; }
+  .item h4 { margin: 0 0 6px; font-size: 0.97rem; font-family: Helvetica, Arial, sans-serif; }
+  .item p { margin: 6px 0; font-size: 0.92rem; }
+  .item .meta { font-size: 0.8rem; color: #666; font-family: Helvetica, Arial, sans-serif; }
+  .badge { display: inline-block; font-family: Helvetica, Arial, sans-serif; font-size: 0.66rem; text-transform: uppercase;
+           letter-spacing: 0.04em; border-radius: 4px; padding: 1px 6px; vertical-align: middle; white-space: nowrap; margin-left: 4px; }
+  .b-sua { border: 1px solid #7a4fb0; color: #7a4fb0; }
+  .b-novo { border: 1px solid #2f6f8b; color: #2f6f8b; }
+  .p0 { background: #c0492b; color: #fff; }
+  .p1 { background: #c98500; color: #fff; }
+  .p2 { background: #6b7a3f; color: #fff; }
+  .p3 { background: #8a8a8a; color: #fff; }
+  .legend span { margin-right: 14px; font-family: Helvetica, Arial, sans-serif; font-size: 0.82rem; white-space: nowrap; }
+  .note { border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0; background: #fff; }
+  .note p:first-child { margin-top: 0; } .note p:last-child { margin-bottom: 0; }
+  .fase td:first-child { white-space: nowrap; font-weight: bold; }
+  footer { margin-top: 64px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Índice PF — Plano de Produto Web</h1>
+  <p class="subtitle">O que falta para transformar o app em um produto público. Documento de trabalho para a reunião.</p>
+
+  <div class="note">
+    <p><strong>Como ler.</strong> Cada item traz prioridade, dependências e uma validação curta. Prioridade:</p>
+    <p class="legend" style="margin-top:6px;">
+      <span><span class="badge p0">P0</span> crítico / pré-lançamento</span>
+      <span><span class="badge p1">P1</span> curto prazo</span>
+      <span><span class="badge p2">P2</span> médio prazo</span>
+      <span><span class="badge p3">P3</span> depois de tração</span>
+    </p>
+  </div>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#a">A. Fundação técnica e infraestrutura</a></li>
+      <li><a href="#b">B. Jurídico e conformidade (LGPD)</a></li>
+      <li><a href="#c">C. Páginas institucionais e navegação</a></li>
+      <li><a href="#d">D. Analytics, SEO e marketing</a></li>
+      <li><a href="#e">E. Comunidade, redes e gamificação</a></li>
+      <li><a href="#f">F. Monetização e sustentabilidade</a></li>
+      <li><a href="#g">G. Produto e dados (núcleo do índice)</a></li>
+      <li><a href="#roadmap">Roadmap por fases</a></li>
+      <li><a href="#decisoes">Decisões para a reunião</a></li>
+      <li><a href="#riscos">Riscos e observações</a></li>
+    </ol>
+  </div>
+
+  <!-- ===================== A ===================== -->
+  <h2 id="a">A. Fundação técnica e infraestrutura</h2>
+  <p>Base que precisa existir antes de qualquer divulgação. Sem isto, tráfego pago e cadastro em massa quebram ou expõem risco.</p>
+
+  <div class="item">
+    <h4>A1. Definir domínio/URL <span class="badge p0">P0</span></h4>
+    <p>Escolher o domínio definitivo (ex.: <code>.com.br</code> + <code>.com</code>), apontar no Vercel e configurar o e-mail do domínio (<code>contato@…</code>). É pré-requisito de SMTP, redes, analytics e credibilidade.</p>
+    <p class="meta">Depende de: nada. Habilita: A4 (SMTP), C, D, E.</p>
+  </div>
+  <div class="item">
+    <h4>A2. Governança de acesso admin <span class="badge p0">P0</span></h4>
+    <p>Definir nominalmente quem terá <code>is_admin</code> e <code>is_super</code>, com menor privilégio (poucos super). O app já tem trilha imutável (Auditoria e "Ações do super") — basta definir e conceder. Documentar quem aprova saques.</p>
+    <p class="meta">Depende de: nada. Relaciona: B (LGPD, quem acessa dados pessoais).</p>
+  </div>
+  <div class="item">
+    <h4>A3. Checagem completa de segurança e correção estrutural <span class="badge p0">P0</span></h4>
+    <p>Auditoria com foco em: (1) <strong>rotacionar a chave SerpAPI</strong> — esteve exposta no histórico do git; (2) revisar as políticas RLS do Supabase (quem lê/escreve o quê); (3) criptografar CPF (hoje em texto puro); (4) rate limit / WAF / anti-bot (Vercel Firewall/BotID) nas rotas de contribuição e login; (5) revisar upload de fotos (tipos, tamanho, storage público). Pode usar o Fable para o passe estrutural.</p>
+    <p class="meta">Depende de: nada. Bloqueia: divulgação, tráfego pago.</p>
+  </div>
+  <div class="item">
+    <h4>A4. SMTP próprio para validação de e-mail <span class="badge p0">P0/P1</span></h4>
+    <p>Hoje o cadastro e a recuperação dependem de e-mail; sem SMTP de produção há limite de envio do Supabase. Configurar um provedor (ex.: Resend) com o domínio autenticado (SPF, DKIM, DMARC) para os e-mails não caírem em spam.</p>
+    <p class="meta">Depende de: A1 (domínio). Habilita: cadastro em escala.</p>
+  </div>
+  <div class="item">
+    <h4>A5. Backup off-site automático dos dados <span class="badge p0">P0/P1</span></h4>
+    <p>Exportar periodicamente <code>snapshots/precos/resultados_brutos/custos_pratos/contribuicoes</code> (CSV/JSON versionado, ex.: passo no GitHub Actions). Protege o ativo de dados sem depender do plano pago do Supabase. Já estava no backlog técnico.</p>
+    <p class="meta">Depende de: nada. Barato e independente.</p>
+  </div>
+  <div class="item">
+    <h4>A6. CI, testes e ambiente de staging <span class="badge p2">P2</span></h4>
+    <p>Um ambiente de teste separado da produção e checagens automáticas (typecheck/build/lint no PR) para não publicar quebrado quando a equipe crescer.</p>
+    <p class="meta">Depende de: A2. Reduz risco de regressão.</p>
+  </div>
+
+  <!-- ===================== B ===================== -->
+  <h2 id="b">B. Jurídico e conformidade (LGPD)</h2>
+  <p>Vocês coletam localização (GPS), CPF e chave PIX. Isso exige base legal e transparência <em>antes</em> de escalar e de ligar analytics.</p>
+
+  <div class="item">
+    <h4>B1. Política de privacidade e uso de dados <span class="badge p0">P0</span></h4>
+    <p>Página descrevendo quais dados coleta (conta, telefone, GPS, foto, CPF, PIX), para quê, por quanto tempo, com quem compartilha, e os direitos do titular (LGPD). Base do consentimento e pré-requisito de GA/Ads.</p>
+    <p class="meta">Depende de: nada. Bloqueia: D (analytics), tráfego pago.</p>
+  </div>
+  <div class="item">
+    <h4>B2. Termos de uso <span class="badge p0">P0</span></h4>
+    <p>Regras de uso do serviço, das contribuições (cessão de direito sobre as fotos), do programa de recompensa e limitação de responsabilidade sobre os preços exibidos.</p>
+    <p class="meta">Depende de: nada.</p>
+  </div>
+  <div class="item">
+    <h4>B3. Consentimento de cookies <span class="badge p0">P0</span></h4>
+    <p>Banner de consentimento antes de carregar GTM/GA/pixels. Sem ele, ligar analytics de rastreamento fere a LGPD.</p>
+    <p class="meta">Depende de: B1. Bloqueia: D1.</p>
+  </div>
+  <div class="item">
+    <h4>B4. Entidade jurídica (CNPJ) e tributação das recompensas <span class="badge p0">P0/decisão</span></h4>
+    <p>Pagar usuários via PIX e receber patrocínio em escala pede uma pessoa jurídica (MEI não cobre bem premiação/patrocínio; avaliar ME/Simples), tratamento fiscal dos pagamentos e emissão de nota. É o alicerce de #7, #8, #9 e #16.</p>
+    <p class="meta">Depende de: decisão de sócios. Habilita: F, E.</p>
+  </div>
+  <div class="item">
+    <h4>B5. Regulamento de premiação (gamificação) <span class="badge p1">P1</span></h4>
+    <p>Regras públicas do concurso mensal: critérios, período, prêmios, antifraude, desclassificação. Necessário antes de anunciar a gamificação.</p>
+    <p class="meta">Depende de: B4, E2.</p>
+  </div>
+
+  <!-- ===================== C ===================== -->
+  <h2 id="c">C. Páginas institucionais e navegação</h2>
+  <p>Constroem confiança no índice e dão ao site cara de produto, não de protótipo.</p>
+
+  <div class="item">
+    <h4>C1. Header e footer padrão do site <span class="badge p1">P1</span></h4>
+    <p>Cabeçalho e rodapé consistentes com navegação para as novas páginas (Sobre, Metodologia, Blog, Privacidade, redes sociais). Hoje cada página tem um cabeçalho próprio; padronizar quando surgirem as páginas institucionais.</p>
+    <p class="meta">Depende de: nada. Habilita: C2–C5, E1.</p>
+  </div>
+  <div class="item">
+    <h4>C2. Página "Quem somos" <span class="badge p1">P1</span></h4>
+    <p>Foto, biografia e propósito da equipe. Dá rosto e credibilidade a um índice de preços.</p>
+    <p class="meta">Depende de: C1.</p>
+  </div>
+  <div class="item">
+    <h4>C3. Página "Como o índice é calculado" <span class="badge p1">P1</span></h4>
+    <p>Metodologia em linguagem simples: quais dados, como são coletados e normalizados, como o custo por prato e o índice nacional são calculados. Transparência é o que sustenta a autoridade do número. Dá para adaptar da documentação técnica existente.</p>
+    <p class="meta">Depende de: C1.</p>
+  </div>
+  <div class="item">
+    <h4>C4. Blog com receitas <span class="badge p2">P2</span></h4>
+    <p>Conteúdo orgânico ligando cada receita aos pratos/ingredientes do índice (SEO + engajamento). Precisa decidir a ferramenta (MDX no próprio Next, ou CMS externo). Casar com a página por prato (G3).</p>
+    <p class="meta">Depende de: C1, D2 (SEO).</p>
+  </div>
+  <div class="item">
+    <h4>C5. Página de Ajuda / FAQ <span class="badge p1">P1</span></h4>
+    <p>Reaproveitar o <em>Manual de uso</em> já gerado como base de uma central de ajuda pública. Reduz suporte e melhora onboarding.</p>
+    <p class="meta">Depende de: C1. Reusa: manual-indice-pf.html.</p>
+  </div>
+
+  <!-- ===================== D ===================== -->
+  <h2 id="d">D. Analytics, SEO e marketing</h2>
+
+  <div class="item">
+    <h4>D1. GTM + GA4 + Google Ads <span class="badge p1">P1</span></h4>
+    <p>Instalar via Google Tag Manager (facilita gerir GA4 e o pixel do Ads). <strong>Ordem obrigatória:</strong> privacidade (B1) → consentimento (B3) → tags. Definir eventos-chave (cadastro, contribuição enviada/aprovada, saque).</p>
+    <p class="meta">Depende de: B1, B3.</p>
+  </div>
+  <div class="item">
+    <h4>D2. SEO técnico e Search Console <span class="badge p1">P1</span></h4>
+    <p>Sitemap, robots, metadados/OpenGraph por página, dados estruturados e Google Search Console. Já existe <code>og:image</code> por prato — expandir para todo o site. É o que faz o blog e as páginas por prato aparecerem no Google.</p>
+    <p class="meta">Depende de: A1, C1. Habilita: C4, G3.</p>
+  </div>
+  <div class="item">
+    <h4>D3. Estratégia de tráfego pago <span class="badge p2">P2</span></h4>
+    <p>Definir objetivo (visitas × cadastros × contribuições), canais (Google Ads, Meta), orçamento e meta de custo por aquisição. Só depois de landing decente, analytics e legal prontos, senão queima verba.</p>
+    <p class="meta">Depende de: A3, B1–B3, D1, C1.</p>
+  </div>
+  <div class="item">
+    <h4>D4. KPIs e painel de métricas <span class="badge p1">P1</span></h4>
+    <p>Definir os números que importam (usuários ativos, contribuições/dia, taxa de aprovação, custo por contribuição, cobertura de ingredientes, custo de infra) e um painel simples para acompanhar. O <code>/admin</code> já tem parte disso.</p>
+    <p class="meta">Depende de: D1.</p>
+  </div>
+
+  <!-- ===================== E ===================== -->
+  <h2 id="e">E. Comunidade, redes e gamificação</h2>
+
+  <div class="item">
+    <h4>E1. Redes sociais + links no footer <span class="badge p1">P1</span></h4>
+    <p>Criar os perfis (Instagram/TikTok combinam com o conteúdo visual: fotos de preço, ranking, "prato mais caro do mês") e linkar no rodapé. Definir quem produz conteúdo.</p>
+    <p class="meta">Depende de: A1, C1.</p>
+  </div>
+  <div class="item">
+    <h4>E2. Gamificação mensal com prêmios <span class="badge p2/p3">P2/P3</span></h4>
+    <p>Concurso mensal para os melhores contribuidores, com brindes alimentícios de patrocinadores. O ranking já existe (<code>/contribuidores</code>). Depende de patrocínio (F2), plano de recompensa (F1), regulamento (B5) e antifraude (G2).</p>
+    <p class="meta">Depende de: B4, B5, F1, F2, G2.</p>
+  </div>
+  <div class="item">
+    <h4>E3. Entrega de brindes vira matéria/conteúdo <span class="badge p3">P3</span></h4>
+    <p>Transformar a premiação em conteúdo de PR (post, vídeo, release). Alimenta redes e imprensa e valoriza o patrocínio. Consequência natural de E2.</p>
+    <p class="meta">Depende de: E2, E1.</p>
+  </div>
+  <div class="item">
+    <h4>E4. Notificações ao usuário <span class="badge p2">P2</span></h4>
+    <p>Avisar (e-mail/push) quando a contribuição é aprovada ou a recompensa fica disponível. Aumenta retenção e recorrência. O app já é PWA (tem manifest/service worker).</p>
+    <p class="meta">Depende de: A4 (e-mail).</p>
+  </div>
+  <div class="item">
+    <h4>E5. Onboarding do contribuidor + "instalar app" (PWA) <span class="badge p2">P2</span></h4>
+    <p>Tutorial curto de primeira contribuição e convite para adicionar o app à tela inicial. Reduz abandono no primeiro envio.</p>
+    <p class="meta">Depende de: C5.</p>
+  </div>
+  <div class="item">
+    <h4>E6. Programa de indicação e newsletter <span class="badge p3">P3</span></h4>
+    <p>Indicação (referral) para crescimento orgânico e captura de e-mail para newsletter do índice. Barato e escalável.</p>
+    <p class="meta">Depende de: A4, D1.</p>
+  </div>
+
+  <!-- ===================== F ===================== -->
+  <h2 id="f">F. Monetização e sustentabilidade</h2>
+
+  <div class="item">
+    <h4>F1. Plano e valor de recompensas <span class="badge p1">P1/decisão</span></h4>
+    <p>Hoje: R$0,01 por foto aprovada, saque mínimo R$10. Definir orçamento mensal total, teto por usuário, regras de saque e como isso escala sem estourar o caixa. Ligar ao antifraude (G2) e à tributação (B4).</p>
+    <p class="meta">Depende de: B4. Alimenta: E2.</p>
+  </div>
+  <div class="item">
+    <h4>F2. Patrocínio para custear recompensas, APIs e infra <span class="badge p1">P1/decisão</span></h4>
+    <p>Cobrir recompensas, SerpAPI, Supabase, SMS e tráfego. Preparar proposta comercial com contrapartidas (marca no site, no ranking, nos brindes). Precisa do CNPJ (B4) e de números (D4) para vender.</p>
+    <p class="meta">Depende de: B4, D4.</p>
+  </div>
+  <div class="item">
+    <h4>F3. Relatórios pagos (receita própria) <span class="badge p3">P3</span></h4>
+    <p>A arquitetura já suporta cortes temporais, por região e por prato. Empacotar como relatórios pagos para imprensa, indústria de alimentos, food service ou pesquisa. Depende de fechar o loop de calibração (G1) para os números terem valor comercial.</p>
+    <p class="meta">Depende de: G1, D4.</p>
+  </div>
+  <div class="item">
+    <h4>F4. Controle de custos operacionais <span class="badge p1">P1</span></h4>
+    <p>Planilha viva dos custos que crescem com uso: SerpAPI (750 chamadas grátis/mês), Supabase (Pro ao escalar), SMS (por envio), e-mail, recompensas, Ads. Evita surpresa de fatura.</p>
+    <p class="meta">Depende de: nada.</p>
+  </div>
+
+  <!-- ===================== G ===================== -->
+  <h2 id="g">G. Produto e dados (núcleo do índice)</h2>
+  <p>Itens que aumentam a qualidade e o valor do dado — o que diferencia o Índice PF de um site qualquer.</p>
+
+  <div class="item">
+    <h4>G1. Fechar o loop de calibração <span class="badge p2">P2</span></h4>
+    <p>Comparar preço de campo aprovado (com lat/lng/UF) × preço raspado e ajustar os percentuais de Mercado/Atacarejo <strong>por região</strong> (hoje fixos em −10%/−22%). É o coração do valor do índice e a base dos relatórios pagos.</p>
+    <p class="meta">Depende de: volume de contribuições. Habilita: F3.</p>
+  </div>
+  <div class="item">
+    <h4>G2. Antifraude nas contribuições <span class="badge p2">P2</span></h4>
+    <p>Limite de fotos/dia por usuário, checagem de preço plausível (geo + data já exigidos), verificação leve para saque. Pré-requisito para pagar recompensa em escala sem virar alvo de fraude.</p>
+    <p class="meta">Depende de: nada. Bloqueia: E2, F1 em escala.</p>
+  </div>
+  <div class="item">
+    <h4>G3. Página pública por prato + evolução do índice <span class="badge p2">P2</span></h4>
+    <p>Página dedicada por prato (bom para SEO e compartilhamento) e um gráfico público da evolução do índice (hoje o histórico é só admin). Ótimo para imprensa e tráfego orgânico.</p>
+    <p class="meta">Depende de: D2 (SEO).</p>
+  </div>
+  <div class="item">
+    <h4>G4. Responsividade mobile completa e acessibilidade <span class="badge p1">P1</span></h4>
+    <p>A maioria do público chega por celular. Fechar os bugs mobile (o admin já teve um primeiro passe) e cuidar de acessibilidade (contraste, navegação por teclado) — que também ajuda no SEO.</p>
+    <p class="meta">Depende de: nada.</p>
+  </div>
+  <div class="item">
+    <h4>G5. Moderação escalável <span class="badge p3">P3</span></h4>
+    <p>Com volume, a fila de moderação vira gargalo. Opções: mais moderadores, e/ou pré-classificação por IA da foto → ingrediente/preço para acelerar a aprovação.</p>
+    <p class="meta">Depende de: crescimento de contribuições.</p>
+  </div>
+
+  <!-- ===================== ROADMAP ===================== -->
+  <h2 id="roadmap">Roadmap por fases</h2>
+  <p>Ordem sugerida respeitando dependências. As fases se sobrepõem, mas nada da Fase seguinte deveria começar sem o essencial da anterior.</p>
+  <table class="fase">
+    <tr><th>Fase</th><th>Objetivo</th><th>Itens</th></tr>
+    <tr><td>Fase 0<br>Fundação e conformidade</td><td>Poder ir a público sem risco legal ou de segurança</td><td>A1 domínio · A2 acesso admin · A3 segurança · A4 SMTP · A5 backup · B1 privacidade · B2 termos · B3 cookies · B4 CNPJ (decisão)</td></tr>
+    <tr><td>Fase 1<br>Confiança e medição</td><td>Cara de produto + começar a medir</td><td>C1 header/footer · C2 quem somos · C3 metodologia · C5 ajuda · D1 GA/GTM · D2 SEO · D4 KPIs · E1 redes · F1 recompensa (definição) · F4 custos · G4 mobile/acessibilidade</td></tr>
+    <tr><td>Fase 2<br>Conteúdo e crescimento</td><td>Atrair e reter público</td><td>C4 blog/receitas · D3 tráfego pago · E4 notificações · E5 onboarding/PWA · G1 calibração · G2 antifraude · G3 páginas por prato</td></tr>
+    <tr><td>Fase 3<br>Comunidade e monetização</td><td>Engajar e sustentar financeiramente</td><td>B5 regulamento · E2 gamificação · E3 brindes/PR · E6 indicação/newsletter · F2 patrocínio · F3 relatórios pagos</td></tr>
+    <tr><td>Fase 4<br>Escala</td><td>Aguentar volume</td><td>A6 CI/staging · SMS (#15, ver decisões) · G5 moderação escalável · Supabase Pro + CPF cripto</td></tr>
+  </table>
+
+  <div class="note">
+    <p><strong>Sobre o SMS para validar telefone (sua ideia #15).</strong> Custa por envio e exige provedor (Twilio, Zenvia etc.).
+      Hoje o telefone é validado só por formato. Sugiro <strong>adiar para a Fase 4</strong> e só ativar se a fraude por
+      telefone se mostrar um problema real — no MVP, e-mail validado + geo/data da contribuição + antifraude (G2) cobrem
+      a maior parte do risco a custo zero.</p>
+  </div>
+
+  <!-- ===================== DECISÕES ===================== -->
+  <h2 id="decisoes">Decisões para a reunião</h2>
+  <p>Pontos que dependem de definição humana, não de execução:</p>
+  <ol>
+    <li><strong>Domínio</strong> — qual nome/extensão registrar.</li>
+    <li><strong>Entidade jurídica</strong> — abrir CNPJ? Qual modelo e quem é o responsável legal. (Trava recompensa em escala, patrocínio e gamificação.)</li>
+    <li><strong>Orçamento mensal</strong> — teto para recompensas + APIs + infra + tráfego pago.</li>
+    <li><strong>Modelo de recompensa</strong> — valor por foto, teto por usuário, regras de saque, tratamento fiscal.</li>
+    <li><strong>Equipe admin/super</strong> — quem, com qual nível, e quem aprova saques.</li>
+    <li><strong>Patrocínio</strong> — metas, contrapartidas e responsável comercial.</li>
+    <li><strong>Relatórios pagos</strong> — entram como receita? Para qual público (imprensa, indústria, governo)?</li>
+    <li><strong>Redes e conteúdo</strong> — quais canais e quem produz.</li>
+    <li><strong>SMS</strong> — validar telefone por SMS agora ou só se houver fraude?</li>
+  </ol>
+
+  <!-- ===================== RISCOS ===================== -->
+  <h2 id="riscos">Riscos e observações</h2>
+  <ul>
+    <li><strong>LGPD antes de tráfego.</strong> Coletar GPS, CPF e PIX sem política, consentimento e segurança é exposição legal — por isso B1–B3 e A3 vêm na Fase 0.</li>
+    <li><strong>Recompensa sem antifraude é convite à fraude.</strong> G2 precisa acompanhar qualquer aumento de recompensa (F1) e a gamificação (E2).</li>
+    <li><strong>Custos escalam com usuários.</strong> SMS, e-mail, Supabase e SerpAPI têm custo por uso; F4 evita surpresa e F2 (patrocínio) sustenta.</li>
+    <li><strong>Chave SerpAPI já exposta no git.</strong> Rotacioná-la é parte de A3, mesmo já estando em variável de ambiente hoje.</li>
+    <li><strong>O valor comercial mora no dado calibrado.</strong> G1 (loop de calibração) é o que transforma o índice em produto vendável (F3), não os recursos de site.</li>
+  </ul>
+
+  <footer>Índice PF — plano de produto web. Documento de trabalho; prioridades e fases são propostas para discussão, não decisões fechadas.</footer>
+</div>
+</body>
+</html>
