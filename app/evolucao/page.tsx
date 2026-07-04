@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Fragment } from 'react'
 import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import dynamic from 'next/dynamic'
-import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getContribuicoesMapa, getCalibracao, GRUPOS_CAT, type Evolucao, type FonteKey, type PontoContrib, type Calibracao } from '@/lib/queries'
+import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getContribuicoesMapa, getCalibracao, getAllFontes, GRUPOS_CAT, type Evolucao, type FonteKey, type PontoContrib, type Calibracao } from '@/lib/queries'
 import { brl } from '@/lib/format'
-import type { ItemDetalhe } from '@/lib/types'
+import type { ItemDetalhe, Fonte } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
 import BotaoExportar from './BotaoExportar'
 import InfoTip from '../InfoTip'
@@ -41,6 +41,10 @@ function EvolucaoInner() {
   const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes' | 'mapa' | 'calibracao'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
   const [calib, setCalib] = useState<Calibracao | null>(null)
+  const [calibIni, setCalibIni] = useState(''); const [calibFim, setCalibFim] = useState('')
+  const [calibBusca, setCalibBusca] = useState('')
+  const [calibOnline, setCalibOnline] = useState<Record<number, Fonte[]>>({})
+  const [calibAberto, setCalibAberto] = useState<string | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
   const [regiao, setRegiao] = useState('')           // '' = todas as regiões
@@ -86,8 +90,22 @@ function EvolucaoInner() {
     getSnapshotsNovos().then(setSnapsNovos)
     getContribuicoesMapa().then(setPontos)
   }, [])
-  // calibração carrega ao abrir a aba (1ª vez)
-  useEffect(() => { if (aba === 'calibracao' && !calib) getCalibracao().then(setCalib) }, [aba, calib])
+  // calibração: (re)carrega ao abrir a aba e quando o período muda
+  useEffect(() => {
+    if (aba !== 'calibracao') return
+    setCalib(null); setCalibAberto(null)
+    getCalibracao(calibIni || undefined, calibFim || undefined).then(setCalib)
+  }, [aba, calibIni, calibFim])
+  // fontes online (resultados_brutos) da coleta de referência da calibração
+  useEffect(() => {
+    if (calib?.snapshotId) getAllFontes(calib.snapshotId).then(setCalibOnline)
+    else setCalibOnline({})
+  }, [calib?.snapshotId])
+  function presetCalib(dias: number) {
+    if (dias === 0 || !snapsNovos.length) { setCalibIni(''); setCalibFim(''); return }
+    const f = snapsNovos[0].data; setCalibFim(f)
+    const d = new Date(f + 'T00:00:00Z'); d.setDate(d.getDate() - dias); setCalibIni(d.toISOString().slice(0, 10))
+  }
   // detalhe do "Simular" segue o período: usa a coleta mais recente dentro do intervalo
   useEffect(() => {
     if (!snapsNovos.length) return
@@ -195,6 +213,21 @@ function EvolucaoInner() {
           <strong> Onde ainda não há dado de campo, usa os percentuais atuais (−10% Mercado, −22% Atacarejo).</strong>
           <InfoTip texto="Preço de campo = contribuições aprovadas com tipo de loja Mercado ou Atacarejo. Desconto medido = 1 − (mediana do preço de campo ÷ preço online). O índice calibrado recomputa o custo dos pratos da região aplicando, por ingrediente, o desconto medido onde existe e o percentual padrão onde não existe." />
         </p>
+
+        {/* período: filtra as contribuições de campo e a coleta online de referência */}
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-muted">Período:</span>
+          <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+            {([['7d', 7], ['15d', 15], ['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
+              <button key={label} onClick={() => presetCalib(d)} className="px-3 py-1.5 text-muted hover:text-ink transition-colors">{label}</button>
+            ))}
+          </div>
+          <input type="date" value={calibIni} onChange={e => setCalibIni(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+          <span className="text-muted">até</span>
+          <input type="date" value={calibFim} onChange={e => setCalibFim(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+          {(calibIni || calibFim) && <button onClick={() => { setCalibIni(''); setCalibFim('') }} className="text-paprika hover:underline">limpar</button>}
+        </div>
+
         {!calib ? <p className="text-sm text-muted">Carregando…</p> : (
           <>
             {calib.contribsUsadas === 0 && (
@@ -236,11 +269,19 @@ function EvolucaoInner() {
               </table>
             </div>
 
-            {calib.itens.length > 0 && (
+            {calib.itens.length > 0 && (() => {
+              const q = calibBusca.trim().toLowerCase()
+              const filtrados = q ? calib.itens.filter(it => it.nome.toLowerCase().includes(q)) : calib.itens
+              const fmtDia = (d: string) => d.split('-').reverse().join('/')
+              return (
               <div>
-                <h3 className="text-sm font-medium mb-2">Descontos medidos por ingrediente</h3>
+                <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                  <h3 className="text-sm font-medium">Descontos medidos por ingrediente</h3>
+                  <input value={calibBusca} onChange={e => setCalibBusca(e.target.value)} placeholder="Buscar ingrediente…"
+                    className="bg-panel border border-line rounded-md px-3 py-1.5 text-sm w-full sm:w-56 focus:outline-none focus:border-paprika" />
+                </div>
                 <div className="border border-line rounded-lg bg-panel overflow-x-auto">
-                  <table className="w-full text-sm min-w-[40rem]">
+                  <table className="w-full text-sm min-w-[44rem]">
                     <thead>
                       <tr className="text-left text-[0.65rem] uppercase tracking-wide text-muted border-b border-line">
                         <th className="font-medium px-3 py-2">Região</th>
@@ -250,25 +291,70 @@ function EvolucaoInner() {
                         <th className="font-medium px-3 py-2 text-right">Online</th>
                         <th className="font-medium px-3 py-2 text-right">Desconto</th>
                         <th className="font-medium px-3 py-2 text-right">Leituras</th>
+                        <th className="font-medium px-3 py-2 text-right">Fontes</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {calib.itens.map((it, i) => (
-                        <tr key={i} className="border-t border-line/60">
-                          <td className="px-3 py-2 whitespace-nowrap">{it.regiao}</td>
-                          <td className="px-3 py-2">{it.tipo}</td>
-                          <td className="px-3 py-2">{it.nome}</td>
-                          <td className="px-3 py-2 text-right tnum">{brl(it.fieldKg)}/kg</td>
-                          <td className="px-3 py-2 text-right tnum text-muted">{brl(it.onlineKg)}/kg</td>
-                          <td className={`px-3 py-2 text-right tnum ${it.desconto >= 0 ? 'text-olive' : 'text-paprika'}`}>{it.desconto >= 0 ? '−' : '+'}{Math.abs(it.desconto * 100).toFixed(0)}%</td>
-                          <td className="px-3 py-2 text-right tnum text-muted">{it.n}</td>
-                        </tr>
-                      ))}
+                      {!filtrados.length && <tr><td colSpan={8} className="px-3 py-6 text-center text-muted">Nenhum ingrediente para a busca.</td></tr>}
+                      {filtrados.map(it => {
+                        const key = `${it.regiao}|${it.tipo}|${it.ingrediente_id}`
+                        const aberto = calibAberto === key
+                        const online = calibOnline[it.ingrediente_id] || []
+                        return (
+                          <Fragment key={key}>
+                            <tr className="border-t border-line/60">
+                              <td className="px-3 py-2 whitespace-nowrap">{it.regiao}</td>
+                              <td className="px-3 py-2">{it.tipo}</td>
+                              <td className="px-3 py-2">{it.nome}</td>
+                              <td className="px-3 py-2 text-right tnum">{brl(it.fieldKg)}/kg</td>
+                              <td className="px-3 py-2 text-right tnum text-muted">{brl(it.onlineKg)}/kg</td>
+                              <td className={`px-3 py-2 text-right tnum ${it.desconto >= 0 ? 'text-olive' : 'text-paprika'}`}>{it.desconto >= 0 ? '−' : '+'}{Math.abs(it.desconto * 100).toFixed(0)}%</td>
+                              <td className="px-3 py-2 text-right tnum text-muted">{it.n}</td>
+                              <td className="px-3 py-2 text-right">
+                                <button onClick={() => setCalibAberto(aberto ? null : key)} className="text-xs text-paprika hover:underline whitespace-nowrap">{aberto ? 'ocultar' : `fontes (${it.n}·${online.length})`}</button>
+                              </td>
+                            </tr>
+                            {aberto && (
+                              <tr className="bg-cream/60">
+                                <td colSpan={8} className="px-3 py-3">
+                                  <div className="grid sm:grid-cols-2 gap-4">
+                                    <div>
+                                      <p className="text-[0.65rem] uppercase tracking-wide text-muted mb-1.5">Campo — {it.n} leitura{it.n === 1 ? '' : 's'} (quem · quando · onde)</p>
+                                      <ul className="space-y-1">
+                                        {it.fontes.map((f, j) => (
+                                          <li key={j} className="text-xs flex justify-between gap-3">
+                                            <span className="min-w-0 truncate">{f.nome} · {fmtDia(f.data)}{(f.cidade || f.uf) ? ` · ${[f.cidade, f.uf].filter(Boolean).join('/')}` : ''}</span>
+                                            <span className="tnum text-paprika shrink-0">{brl(f.precoKg)}/kg</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                    <div>
+                                      <p className="text-[0.65rem] uppercase tracking-wide text-muted mb-1.5">Online — {online.length} fonte{online.length === 1 ? '' : 's'}{calib.snapshotData ? ` (${fmtDia(calib.snapshotData)})` : ''}</p>
+                                      {!online.length ? <p className="text-xs text-muted">Sem fontes online nesta coleta.</p> : (
+                                        <ul className="space-y-1">
+                                          {online.slice(0, 12).map((f, j) => (
+                                            <li key={j} className="text-xs flex justify-between gap-3">
+                                              <a href={f.link || undefined} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate hover:text-paprika">{f.titulo} <span className="text-muted">· {f.loja}</span></a>
+                                              <span className="tnum text-paprika shrink-0">{brl(Number(f.preco_bruto))}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
-            )}
+              )
+            })()}
 
             <p className="text-xs text-muted">
               Base: preço online da coleta mais recente{calib.snapshotData ? ` (${calib.snapshotData.split('-').reverse().join('/')})` : ''}.

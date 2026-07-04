@@ -237,13 +237,14 @@
   <h2 id="historico">6. Histórico <span class="path">/evolucao</span> <span class="tag">admin</span></h2>
   <p>
     Análise da evolução dos preços no tempo. Aberta pelo link "Histórico" (só admin); acesso direto pela URL também é
-    bloqueado para quem não é admin. Tem quatro abas e um botão <span class="btn">Exportar</span> (CSV / XLSX).
+    bloqueado para quem não é admin. Tem cinco abas e um botão <span class="btn">Exportar</span> (CSV / XLSX).
   </p>
   <ul>
     <li><strong>Índice</strong> — série do índice ao longo das coletas. Controles: <strong>fonte do preço</strong> (Blend = índice real, Online, Manual); <strong>métricas</strong> (mediana, média, mínimo, máximo e faixa mín–máx); <strong>filtro de região</strong>; <strong>seletor de prato</strong> (com busca); <strong>período</strong> (presets + calendário). Abaixo, <strong>composição por grupo</strong> em barras empilhadas com alternância R$ / % e o painel <strong>"E se"</strong> (desmarcar ingredientes recalcula o custo do prato ao vivo).</li>
     <li><strong>Variação</strong> — variação acumulada do custo em relação à 1ª coleta do período (base 0%; linha subindo = mais caro). Tem uma caixa "Como ler este gráfico".</li>
     <li><strong>Ingredientes</strong> — tabela por período com mediana, média, mín, máx, ±desvio, n, variação e fontes. Colunas ordenáveis por clique, com tooltip explicando cada uma.</li>
     <li><strong>Mapa</strong> — mapa das contribuições de campo mais uma tabela (data, hora, ingrediente, preço, local, região). Filtro de região por checkboxes (várias) com "limpar".</li>
+    <li><strong>Calibração</strong> — mede o desconto real de Mercado e Atacarejo comparando o preço de campo aprovado (por região × tipo de loja) com o preço online do mesmo ingrediente. Tem um <strong>filtro de período</strong> (presets 7d/15d/30d/3m/6m/Tudo + calendário) que limita os dados de campo e a coleta online de referência. Mostra, por região, o índice online, o índice com os percentuais atuais (−10%/−22%) e o <strong>índice calibrado</strong>. Abaixo, uma tabela de descontos medidos por ingrediente, com <strong>busca</strong> e um botão <span class="btn">fontes</span> que abre as leituras de campo (quem, quando, onde) e as fontes online. Onde não há dado de campo, usa os percentuais atuais.</li>
   </ul>
 
   <!-- ============================================================ -->
