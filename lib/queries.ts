@@ -287,6 +287,136 @@ export async function getEvolucao(): Promise<Evolucao> {
   return { serie, pratos, porPrato, composicao, porPratoComp, cvLojas, porPratoCV }
 }
 
+// ─── Calibração (G1): desconto real Mercado/Atacarejo vs online, por região ───
+// Compara o preço de campo aprovado (por região × tipo de loja) com o preço online
+// do mesmo ingrediente e mede o desconto real (os percentuais Mercado/Atacarejo são
+// definidos como "−X% sobre o online"). Onde NÃO há dado de campo, usa os percentuais
+// atuais (−10% Mercado, −22% Atacarejo) por ingrediente. Recalcula o índice online
+// por região sob os descontos calibrados, ao lado do índice com os percentuais atuais.
+export type CalibTipo = 'Mercado' | 'Atacarejo'
+export type CalibItem = { regiao: string; tipo: CalibTipo; ingrediente_id: number; nome: string; desconto: number; n: number; fieldKg: number; onlineKg: number }
+export type CalibTipoResumo = { assumidoPct: number; medidoPct: number | null; cobertura: number; indiceAssumido: number; indiceCalibrado: number }
+export type CalibRegiao = { regiao: string; indiceOnline: number; nPratos: number; mercado: CalibTipoResumo; atacarejo: CalibTipoResumo }
+export type Calibracao = { regioes: CalibRegiao[]; itens: CalibItem[]; snapshotData: string | null; contribsUsadas: number }
+
+const CALIB_DEFAULT: Record<CalibTipo, number> = { Mercado: 0.10, Atacarejo: 0.22 }
+const CALIB_REGIOES = ['Sul', 'Sudeste', 'Centro-oeste', 'Nordeste', 'Norte']
+// UF (sigla ou nome vindo da geocodificação) → região canônica
+const UF_REGIAO: Record<string, string> = {
+  ac: 'Norte', am: 'Norte', ap: 'Norte', pa: 'Norte', ro: 'Norte', rr: 'Norte', to: 'Norte',
+  acre: 'Norte', amazonas: 'Norte', 'amapá': 'Norte', amapa: 'Norte', 'pará': 'Norte', para: 'Norte', 'rondônia': 'Norte', rondonia: 'Norte', roraima: 'Norte', tocantins: 'Norte',
+  al: 'Nordeste', ba: 'Nordeste', ce: 'Nordeste', ma: 'Nordeste', pb: 'Nordeste', pe: 'Nordeste', pi: 'Nordeste', rn: 'Nordeste', se: 'Nordeste',
+  alagoas: 'Nordeste', bahia: 'Nordeste', 'ceará': 'Nordeste', ceara: 'Nordeste', 'maranhão': 'Nordeste', maranhao: 'Nordeste', 'paraíba': 'Nordeste', paraiba: 'Nordeste', pernambuco: 'Nordeste', 'piauí': 'Nordeste', piaui: 'Nordeste', 'rio grande do norte': 'Nordeste', sergipe: 'Nordeste',
+  df: 'Centro-oeste', go: 'Centro-oeste', mt: 'Centro-oeste', ms: 'Centro-oeste',
+  'distrito federal': 'Centro-oeste', 'goiás': 'Centro-oeste', goias: 'Centro-oeste', 'mato grosso': 'Centro-oeste', 'mato grosso do sul': 'Centro-oeste',
+  es: 'Sudeste', mg: 'Sudeste', rj: 'Sudeste', sp: 'Sudeste',
+  'espírito santo': 'Sudeste', 'espirito santo': 'Sudeste', 'minas gerais': 'Sudeste', 'rio de janeiro': 'Sudeste', 'são paulo': 'Sudeste', 'sao paulo': 'Sudeste',
+  pr: 'Sul', rs: 'Sul', sc: 'Sul',
+  'paraná': 'Sul', parana: 'Sul', 'rio grande do sul': 'Sul', 'santa catarina': 'Sul',
+}
+const calibRegiao = (regiao: string | null, uf: string | null): string | null => {
+  const r = (regiao || '').trim().toLowerCase()
+  const canon = CALIB_REGIOES.find(x => x.toLowerCase() === r)
+  if (canon) return canon
+  const u = (uf || '').trim().toLowerCase()
+  return UF_REGIAO[u] || null
+}
+
+export async function getCalibracao(): Promise<Calibracao> {
+  const [snaps, receitas, ingRows, precosRows, pratosRows, contribs] = await Promise.all([
+    supabase.from('snapshots').select('id,data').order('data', { ascending: true }),
+    fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
+    supabase.from('ingredientes').select('id,nome,unidade,peso_ref_g,custo_fixo,preco_manual'),
+    fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada').order('id')),
+    supabase.from('pratos').select('id,nome,regiao'),
+    fetchAll(() => supabase.from('contribuicoes').select('ingrediente_id,preco,peso_g,tipo_loja,regiao,uf').eq('status', 'aprovada')),
+  ])
+  const snapList = ((snaps.data || []) as any[])
+  const snapshotData = snapList.length ? snapList[snapList.length - 1].data : null
+  const ing = new Map<number, any>(); ((ingRows.data || []) as any[]).forEach(i => ing.set(i.id, i))
+
+  // preço online atual por ingrediente (R$/g) = último não-nulo (ordenado por id → cronológico)
+  const onlineG: Record<number, number> = {}
+  ;(precosRows as any[]).forEach(p => { if (p.mediana_normalizada != null) onlineG[p.ingrediente_id] = Number(p.mediana_normalizada) })
+  // base do índice por ingrediente (R$/g): online, senão manual; custo fixo tratado à parte
+  const baseG = (iid: number): number | null => {
+    if (onlineG[iid] != null) return onlineG[iid]
+    const pm = ing.get(iid)?.preco_manual
+    return pm != null ? Number(pm) / 1000 : null
+  }
+  const fixoDe = (iid: number): number | null => { const f = ing.get(iid)?.custo_fixo; return f != null ? Number(f) : null }
+
+  const recPorPrato: Record<number, { ing: number; qtd: number }[]> = {}
+  ;(receitas as any[]).forEach(r => { (recPorPrato[r.prato_id] ||= []).push({ ing: r.ingrediente_id, qtd: Number(r.qtd_g) }) })
+  const pratos = ((pratosRows.data || []) as any[]).map(p => ({ id: p.id, regiao: calibRegiao(p.regiao, null) }))
+
+  // R$/g de campo por (regiao, tipo, ingrediente)
+  const fieldGroups: Record<string, number[]> = {}
+  let contribsUsadas = 0
+  ;(contribs as any[]).forEach(c => {
+    const tipo = c.tipo_loja
+    if (tipo !== 'Mercado' && tipo !== 'Atacarejo') return
+    const regiao = calibRegiao(c.regiao, c.uf); if (!regiao) return
+    const iid = c.ingrediente_id; if (iid == null) return
+    const preco = Number(c.preco), peso = Number(c.peso_g)
+    if (!(preco > 0) || !(peso > 0)) return
+    const u = ing.get(iid)
+    const gramas = (u?.unidade === 'unidade' || u?.unidade === 'maco') ? peso * (Number(u?.peso_ref_g) || 0) : peso
+    if (!(gramas > 0)) return
+    ;(fieldGroups[`${regiao}|${tipo}|${iid}`] ||= []).push(preco / gramas)
+    contribsUsadas++
+  })
+
+  // desconto medido por (regiao, tipo, ingrediente) = 1 − mediana(campo)/online
+  const itens: CalibItem[] = []
+  const descIngKey: Record<string, number> = {}   // regiao|tipo|iid → desconto clampado p/ o índice
+  for (const key in fieldGroups) {
+    const [regiao, tipo, iidStr] = key.split('|'); const iid = +iidStr
+    const fieldG = mediana(fieldGroups[key]); const onG = onlineG[iid]
+    if (onG == null || !(onG > 0)) continue
+    const desconto = 1 - fieldG / onG
+    itens.push({ regiao, tipo: tipo as CalibTipo, ingrediente_id: iid, nome: ing.get(iid)?.nome || `#${iid}`, desconto, n: fieldGroups[key].length, fieldKg: fieldG * 1000, onlineKg: onG * 1000 })
+    descIngKey[key] = Math.min(0.6, Math.max(0, desconto))   // clamp [0, 60%] p/ não deixar 1 leitura ruim explodir o índice
+  }
+
+  // índice (mediana dos custos dos pratos da região) sob um desconto por ingrediente
+  const indiceRegiao = (regiao: string, descIng: (iid: number) => number): number => {
+    const custos: number[] = []
+    for (const p of pratos) {
+      if (p.regiao !== regiao) continue
+      const itensR = recPorPrato[p.id]; if (!itensR) continue
+      let c = 0
+      for (const it of itensR) {
+        const fx = fixoDe(it.ing)
+        if (fx != null) { c += fx; continue }
+        const b = baseG(it.ing); if (b == null) continue
+        c += b * it.qtd * (1 - descIng(it.ing))
+      }
+      if (c > 0) custos.push(c)
+    }
+    return custos.length ? mediana(custos) : 0
+  }
+
+  const regioes: CalibRegiao[] = CALIB_REGIOES.map(regiao => {
+    const nPratos = pratos.filter(p => p.regiao === regiao).length
+    const indiceOnline = indiceRegiao(regiao, () => 0)
+    const resumo = (tipo: CalibTipo): CalibTipoResumo => {
+      const def = CALIB_DEFAULT[tipo]
+      const medidos = itens.filter(x => x.regiao === regiao && x.tipo === tipo)
+      return {
+        assumidoPct: def,
+        medidoPct: medidos.length ? mediana(medidos.map(x => x.desconto)) : null,
+        cobertura: medidos.length,
+        indiceAssumido: indiceRegiao(regiao, () => def),
+        indiceCalibrado: indiceRegiao(regiao, iid => descIngKey[`${regiao}|${tipo}|${iid}`] ?? def),
+      }
+    }
+    return { regiao, indiceOnline, nPratos, mercado: resumo('Mercado'), atacarejo: resumo('Atacarejo') }
+  })
+
+  return { regioes, itens, snapshotData, contribsUsadas }
+}
+
 // Snapshots do modelo novo (com custos_pratos), mais recente primeiro.
 export async function getSnapshotsNovos(): Promise<{ id: number; data: string }[]> {
   const [cp, snaps] = await Promise.all([

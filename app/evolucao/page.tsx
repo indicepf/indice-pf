@@ -5,7 +5,7 @@ import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import dynamic from 'next/dynamic'
-import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getContribuicoesMapa, GRUPOS_CAT, type Evolucao, type FonteKey, type PontoContrib } from '@/lib/queries'
+import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getContribuicoesMapa, getCalibracao, GRUPOS_CAT, type Evolucao, type FonteKey, type PontoContrib, type Calibracao } from '@/lib/queries'
 import { brl } from '@/lib/format'
 import type { ItemDetalhe } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
@@ -38,8 +38,9 @@ export default function EvolucaoPage() {
 }
 
 function EvolucaoInner() {
-  const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes' | 'mapa'>('indice')
+  const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes' | 'mapa' | 'calibracao'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
+  const [calib, setCalib] = useState<Calibracao | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
   const [regiao, setRegiao] = useState('')           // '' = todas as regiões
@@ -85,6 +86,8 @@ function EvolucaoInner() {
     getSnapshotsNovos().then(setSnapsNovos)
     getContribuicoesMapa().then(setPontos)
   }, [])
+  // calibração carrega ao abrir a aba (1ª vez)
+  useEffect(() => { if (aba === 'calibracao' && !calib) getCalibracao().then(setCalib) }, [aba, calib])
   // detalhe do "Simular" segue o período: usa a coleta mais recente dentro do intervalo
   useEffect(() => {
     if (!snapsNovos.length) return
@@ -173,7 +176,7 @@ function EvolucaoInner() {
       <div className="max-w-5xl mx-auto px-6">
         {/* abas */}
         <div className="flex gap-5 border-b border-line pt-2">
-          {([['indice', 'Índice'], ['variacao', 'Variação'], ['ingredientes', 'Ingredientes'], ['mapa', 'Mapa']] as const).map(([k, label]) => (
+          {([['indice', 'Índice'], ['variacao', 'Variação'], ['ingredientes', 'Ingredientes'], ['mapa', 'Mapa'], ['calibracao', 'Calibração']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
               {label}
@@ -184,6 +187,97 @@ function EvolucaoInner() {
 
       {aba === 'ingredientes' ? (
         <div className="max-w-5xl mx-auto px-6 py-8"><TabelaIngredientes /></div>
+      ) : aba === 'calibracao' ? (
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-5">
+        <p className="text-sm text-muted">
+          Calibração dos preços de Mercado e Atacarejo com dados de campo. Para cada região e tipo de loja, compara o
+          preço de campo aprovado com o preço online do mesmo ingrediente e mede o desconto real.
+          <strong> Onde ainda não há dado de campo, usa os percentuais atuais (−10% Mercado, −22% Atacarejo).</strong>
+          <InfoTip texto="Preço de campo = contribuições aprovadas com tipo de loja Mercado ou Atacarejo. Desconto medido = 1 − (mediana do preço de campo ÷ preço online). O índice calibrado recomputa o custo dos pratos da região aplicando, por ingrediente, o desconto medido onde existe e o percentual padrão onde não existe." />
+        </p>
+        {!calib ? <p className="text-sm text-muted">Carregando…</p> : (
+          <>
+            {calib.contribsUsadas === 0 && (
+              <div className="border border-line rounded-lg bg-panel p-4 text-sm text-muted">
+                Ainda não há contribuições de campo (Mercado/Atacarejo) aprovadas para calibrar. O índice calibrado é
+                igual ao com os percentuais atuais — ele passa a divergir conforme chegam contribuições de campo.
+              </div>
+            )}
+            <div className="border border-line rounded-lg bg-panel overflow-x-auto">
+              <table className="w-full text-sm min-w-[46rem]">
+                <thead>
+                  <tr className="text-left text-[0.65rem] uppercase tracking-wide text-muted border-b border-line">
+                    <th className="font-medium px-3 py-2">Região</th>
+                    <th className="font-medium px-3 py-2 text-right">Índice online</th>
+                    <th className="font-medium px-3 py-2 text-right">Mercado −10%</th>
+                    <th className="font-medium px-3 py-2 text-right">Mercado calibrado</th>
+                    <th className="font-medium px-3 py-2 text-right">Atacarejo −22%</th>
+                    <th className="font-medium px-3 py-2 text-right">Atacarejo calibrado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calib.regioes.map(r => (
+                    <tr key={r.regiao} className="border-t border-line/60">
+                      <td className="px-3 py-2 whitespace-nowrap">{r.regiao} <span className="text-xs text-muted">· {r.nPratos} pratos</span></td>
+                      <td className="px-3 py-2 text-right tnum">{r.indiceOnline > 0 ? brl(r.indiceOnline) : '—'}</td>
+                      <td className="px-3 py-2 text-right tnum text-muted">{r.indiceOnline > 0 ? brl(r.mercado.indiceAssumido) : '—'}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className="tnum">{r.indiceOnline > 0 ? brl(r.mercado.indiceCalibrado) : '—'}</span>
+                        <span className="block text-[0.65rem] text-muted">{r.mercado.medidoPct != null ? `medido ${r.mercado.medidoPct >= 0 ? '−' : '+'}${Math.abs(r.mercado.medidoPct * 100).toFixed(0)}% · ${r.mercado.cobertura} ingred.` : 'sem campo · −10%'}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right tnum text-muted">{r.indiceOnline > 0 ? brl(r.atacarejo.indiceAssumido) : '—'}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className="tnum">{r.indiceOnline > 0 ? brl(r.atacarejo.indiceCalibrado) : '—'}</span>
+                        <span className="block text-[0.65rem] text-muted">{r.atacarejo.medidoPct != null ? `medido ${r.atacarejo.medidoPct >= 0 ? '−' : '+'}${Math.abs(r.atacarejo.medidoPct * 100).toFixed(0)}% · ${r.atacarejo.cobertura} ingred.` : 'sem campo · −22%'}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {calib.itens.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium mb-2">Descontos medidos por ingrediente</h3>
+                <div className="border border-line rounded-lg bg-panel overflow-x-auto">
+                  <table className="w-full text-sm min-w-[40rem]">
+                    <thead>
+                      <tr className="text-left text-[0.65rem] uppercase tracking-wide text-muted border-b border-line">
+                        <th className="font-medium px-3 py-2">Região</th>
+                        <th className="font-medium px-3 py-2">Tipo</th>
+                        <th className="font-medium px-3 py-2">Ingrediente</th>
+                        <th className="font-medium px-3 py-2 text-right">Campo</th>
+                        <th className="font-medium px-3 py-2 text-right">Online</th>
+                        <th className="font-medium px-3 py-2 text-right">Desconto</th>
+                        <th className="font-medium px-3 py-2 text-right">Leituras</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {calib.itens.map((it, i) => (
+                        <tr key={i} className="border-t border-line/60">
+                          <td className="px-3 py-2 whitespace-nowrap">{it.regiao}</td>
+                          <td className="px-3 py-2">{it.tipo}</td>
+                          <td className="px-3 py-2">{it.nome}</td>
+                          <td className="px-3 py-2 text-right tnum">{brl(it.fieldKg)}/kg</td>
+                          <td className="px-3 py-2 text-right tnum text-muted">{brl(it.onlineKg)}/kg</td>
+                          <td className={`px-3 py-2 text-right tnum ${it.desconto >= 0 ? 'text-olive' : 'text-paprika'}`}>{it.desconto >= 0 ? '−' : '+'}{Math.abs(it.desconto * 100).toFixed(0)}%</td>
+                          <td className="px-3 py-2 text-right tnum text-muted">{it.n}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-muted">
+              Base: preço online da coleta mais recente{calib.snapshotData ? ` (${calib.snapshotData.split('-').reverse().join('/')})` : ''}.
+              Desconto positivo = campo mais barato que o online. No índice calibrado, o desconto por ingrediente é limitado
+              a 0–60% para uma leitura isolada não distorcer o resultado.
+            </p>
+          </>
+        )}
+      </div>
       ) : aba === 'mapa' ? (
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
         <p className="text-sm text-muted">
@@ -438,7 +532,9 @@ function EvolucaoInner() {
                   ticks={ticks} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
                   tick={{ fontSize: 13, fill: COR.muted }} />
                 <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
-                <Tooltip formatter={(v: any) => `R$ ${Number(v).toFixed(2)}`}
+                <Tooltip formatter={(v: any) => Array.isArray(v)
+                  ? `R$ ${Number(v[0]).toFixed(2)} – R$ ${Number(v[1]).toFixed(2)}`
+                  : `R$ ${Number(v).toFixed(2)}`}
                   labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
                 <Legend wrapperStyle={{ fontSize: 13 }} />
                 {nacional ? (
