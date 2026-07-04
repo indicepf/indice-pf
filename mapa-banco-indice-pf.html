@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Índice PF — Mapa do Banco de Dados</title>
+<style>
+  body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 0; line-height: 1.55; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.7rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 28px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 { font-size: 1.2rem; font-weight: bold; margin-top: 48px; padding-bottom: 4px; border-bottom: 1px solid #ccc; }
+  h3 { font-size: 1.02rem; font-weight: bold; margin-top: 26px; }
+  p { margin: 11px 0; }
+  code { font-family: "Courier New", monospace; background: #f2f2f2; border: 1px solid #ddd; padding: 1px 5px; font-size: 0.85em; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid #e2ddd3; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  .note { border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0; background: #fbfaf7; }
+  .note p:first-child { margin-top: 0; } .note p:last-child { margin-bottom: 0; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .diagram { border: 1px solid #ddd; border-radius: 8px; background: #fff; overflow-x: auto; margin: 18px 0; }
+  .diagram svg { display: block; min-width: 720px; width: 100%; height: auto; }
+  .legend { font-family: Helvetica, Arial, sans-serif; font-size: 0.82rem; display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 0 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 2px solid; }
+  .tbl { border: 1px solid #e2ddd3; border-radius: 8px; padding: 4px 16px 12px; margin: 14px 0; background: #fdfcfa; }
+  .tbl h3 { margin-top: 14px; }
+  .pk { color: #c98500; font-weight: bold; }
+  .fk { color: #2f6f8b; font-weight: bold; }
+  .cluster-a { border-left: 3px solid #c98500; }
+  .cluster-b { border-left: 3px solid #4e8b2f; }
+  .cluster-c { border-left: 3px solid #2f6f8b; }
+  .usado { font-family: Helvetica, Arial, sans-serif; font-size: 0.82rem; color: #444; }
+  .rls { font-family: Helvetica, Arial, sans-serif; font-size: 0.82rem; color: #666; }
+  footer { margin-top: 64px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Índice PF — Mapa do Banco de Dados</h1>
+  <p class="subtitle">Tabelas, chaves, relações, políticas de acesso (RLS), funções/gatilhos e onde cada tabela é usada no app.</p>
+
+  <div class="note">
+    <p><strong>Fonte:</strong> reconstruído das migrações (<code>Migration Supabase/*.sql</code>) e do código
+      (<code>lib/queries.ts</code>, componentes e scripts Python). As tabelas <code>snapshots</code>, <code>precos</code>,
+      <code>resultados_brutos</code> e a view <code>historico_precos</code> vêm do <strong>schema original</strong> (as
+      migrações desta pasta não as criam) — suas colunas foram inferidas do uso no código. O schema <em>vivo</em> no
+      Supabase pode divergir se houver alteração manual; para 100% de fidelidade, rode uma introspecção
+      (<code>information_schema</code>) no painel.</p>
+  </div>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#diagrama">Diagrama de relações</a></li>
+      <li><a href="#pipeline">Bloco A — Pipeline de preços</a></li>
+      <li><a href="#crowd">Bloco B — Crowdsourcing e recompensa</a></li>
+      <li><a href="#auth">Bloco C — Autenticação e segurança</a></li>
+      <li><a href="#funcoes">Funções (RPC) e gatilhos</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================ DIAGRAMA ============================ -->
+  <h2 id="diagrama">1. Diagrama de relações</h2>
+  <p>Setas apontam do lado da chave estrangeira para a tabela referenciada (filho → pai). Linhas tracejadas são elos lógicos por <code>auth.users</code> sem constraint de FK.</p>
+  <div class="legend">
+    <span><span class="sw" style="border-color:#c98500;background:#f7f0e2"></span> Pipeline de preços</span>
+    <span><span class="sw" style="border-color:#4e8b2f;background:#eef4ea"></span> Crowdsourcing / recompensa</span>
+    <span><span class="sw" style="border-color:#2f6f8b;background:#e9f0f4"></span> Auth / segurança</span>
+  </div>
+  <div class="diagram">
+    <svg viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+      <defs>
+        <marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 z" fill="#7a7266"/>
+        </marker>
+        <marker id="arwd" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 z" fill="#c2b9ab"/>
+        </marker>
+      </defs>
+
+      <!-- cluster backgrounds -->
+      <rect x="20" y="44" width="960" height="212" rx="10" fill="#fbf7ef" stroke="#e6d6b4"/>
+      <text x="34" y="64" font-size="12" font-weight="bold" fill="#b07d0a">A · PIPELINE DE PREÇOS</text>
+      <rect x="140" y="300" width="760" height="96" rx="10" fill="#f2f7ee" stroke="#cbe0bd"/>
+      <text x="154" y="320" font-size="12" font-weight="bold" fill="#3f7327">B · CROWDSOURCING / RECOMPENSA</text>
+      <rect x="140" y="484" width="760" height="196" rx="10" fill="#eef4f7" stroke="#c3dae6"/>
+      <text x="154" y="504" font-size="12" font-weight="bold" fill="#2f6f8b">C · AUTH / SEGURANÇA</text>
+
+      <!-- FK connectors (drawn before boxes so ends tuck under boxes) -->
+      <g stroke="#7a7266" stroke-width="1.5" fill="none" marker-end="url(#arw)">
+        <line x1="110" y1="191" x2="150" y2="101"/>   <!-- precos -> snapshots -->
+        <line x1="140" y1="191" x2="455" y2="101"/>   <!-- precos -> ingredientes -->
+        <line x1="300" y1="191" x2="182" y2="101"/>   <!-- resultados_brutos -> snapshots -->
+        <line x1="352" y1="191" x2="492" y2="101"/>   <!-- resultados_brutos -> ingredientes -->
+        <line x1="575" y1="191" x2="528" y2="101"/>   <!-- receitas -> ingredientes -->
+        <line x1="628" y1="191" x2="800" y2="101"/>   <!-- receitas -> pratos -->
+        <line x1="800" y1="191" x2="205" y2="101"/>   <!-- custos_pratos -> snapshots -->
+        <line x1="845" y1="191" x2="848" y2="101"/>   <!-- custos_pratos -> pratos -->
+        <line x1="495" y1="341" x2="495" y2="101"/>   <!-- contribuicoes -> ingredientes -->
+        <line x1="262" y1="341" x2="466" y2="101"/>   <!-- precos_manuais_hist -> ingredientes -->
+        <line x1="305" y1="360" x2="418" y2="360"/>   <!-- precos_manuais_hist -> contribuicoes -->
+        <line x1="495" y1="379" x2="495" y2="539"/>   <!-- contribuicoes -> auth.users -->
+        <line x1="775" y1="379" x2="545" y2="543"/>   <!-- pagamentos -> auth.users -->
+        <line x1="713" y1="560" x2="572" y2="560"/>   <!-- profiles -> auth.users -->
+      </g>
+      <g stroke="#c2b9ab" stroke-width="1.4" stroke-dasharray="4 3" fill="none" marker-end="url(#arwd)">
+        <line x1="305" y1="560" x2="418" y2="560"/>   <!-- login_log ~ auth.users -->
+        <line x1="298" y1="650" x2="452" y2="576"/>   <!-- audit_log ~ auth.users -->
+        <line x1="713" y1="650" x2="558" y2="576"/>   <!-- super_acoes ~ auth.users -->
+      </g>
+
+      <!-- boxes -->
+      <g font-size="13" text-anchor="middle">
+        <!-- pipeline (amber) -->
+        <g><rect x="90" y="61" width="150" height="38" rx="6" fill="#f7f0e2" stroke="#c98500"/><text x="165" y="85">snapshots</text></g>
+        <g><rect x="420" y="61" width="150" height="38" rx="6" fill="#f7f0e2" stroke="#c98500"/><text x="495" y="85">ingredientes</text></g>
+        <g><rect x="755" y="61" width="150" height="38" rx="6" fill="#f7f0e2" stroke="#c98500"/><text x="830" y="85">pratos</text></g>
+        <g><rect x="35" y="191" width="150" height="38" rx="6" fill="#f7f0e2" stroke="#c98500"/><text x="110" y="215">precos</text></g>
+        <g><rect x="255" y="191" width="150" height="38" rx="6" fill="#f7f0e2" stroke="#c98500"/><text x="330" y="211" font-size="12">resultados_brutos</text></g>
+        <g><rect x="525" y="191" width="150" height="38" rx="6" fill="#f7f0e2" stroke="#c98500"/><text x="600" y="215">receitas</text></g>
+        <g><rect x="755" y="191" width="150" height="38" rx="6" fill="#f7f0e2" stroke="#c98500"/><text x="830" y="211" font-size="12">custos_pratos</text></g>
+        <!-- crowd (green) -->
+        <g><rect x="155" y="341" width="150" height="38" rx="6" fill="#eef4ea" stroke="#4e8b2f"/><text x="230" y="361" font-size="11.5">precos_manuais_hist</text></g>
+        <g><rect x="420" y="341" width="150" height="38" rx="6" fill="#eef4ea" stroke="#4e8b2f"/><text x="495" y="365">contribuicoes</text></g>
+        <g><rect x="715" y="341" width="150" height="38" rx="6" fill="#eef4ea" stroke="#4e8b2f"/><text x="790" y="365">pagamentos</text></g>
+        <!-- auth (blue) -->
+        <g><rect x="420" y="541" width="150" height="38" rx="6" fill="#e9f0f4" stroke="#2f6f8b" stroke-dasharray="4 3"/><text x="495" y="565">auth.users</text></g>
+        <g><rect x="715" y="541" width="150" height="38" rx="6" fill="#e9f0f4" stroke="#2f6f8b"/><text x="790" y="565">profiles</text></g>
+        <g><rect x="155" y="541" width="150" height="38" rx="6" fill="#e9f0f4" stroke="#2f6f8b"/><text x="230" y="565">login_log</text></g>
+        <g><rect x="155" y="631" width="150" height="38" rx="6" fill="#e9f0f4" stroke="#2f6f8b"/><text x="230" y="655">audit_log</text></g>
+        <g><rect x="715" y="631" width="150" height="38" rx="6" fill="#e9f0f4" stroke="#2f6f8b"/><text x="790" y="655">super_acoes</text></g>
+      </g>
+    </svg>
+  </div>
+  <p class="rls">Diagrama esquemático. A referência abaixo é a fonte precisa das colunas e chaves. <code>auth.users</code> é gerida pelo Supabase (tracejada).</p>
+
+  <!-- ============================ BLOCO A ============================ -->
+  <h2 id="pipeline">2. Bloco A — Pipeline de preços</h2>
+  <p>Da coleta de preços ao custo por prato. <code>snapshots</code> e <code>resultados_brutos</code> são <strong>append-only</strong> (nunca deletar). Leitura pública (RLS <code>using(true)</code>); escrita pelo pipeline (service role).</p>
+
+  <div class="tbl cluster-a">
+    <h3>snapshots <span class="rls">· schema original</span></h3>
+    <table>
+      <tr><th>Coluna</th><th>Tipo</th><th>Papel</th></tr>
+      <tr><td class="pk">id</td><td>int</td><td>PK · uma linha por coleta</td></tr>
+      <tr><td>data</td><td>date</td><td>data da coleta</td></tr>
+      <tr><td>fonte</td><td>text</td><td>ex.: "Google Shopping via SerpAPI"</td></tr>
+      <tr><td>custo_total_pf</td><td>numeric</td><td>índice nacional = mediana dos custos dos pratos</td></tr>
+      <tr><td>simulado</td><td>bool</td><td>marcava histórico sintético (legado)</td></tr>
+    </table>
+    <p class="usado"><strong>Usado em:</strong> <code>getSnapshotsNovos</code>, <code>getLatestSnapshot</code>, <code>getEvolucao</code>, <code>getCalibracao</code>, <code>getStatusUltimaColeta</code> · <code>salvar_supabase.py</code>.</p>
+  </div>
+
+  <div class="tbl cluster-a">
+    <h3>precos <span class="rls">· schema original</span></h3>
+    <table>
+      <tr><th>Coluna</th><th>Tipo</th><th>Papel</th></tr>
+      <tr><td class="pk">id</td><td>int</td><td>PK</td></tr>
+      <tr><td class="fk">snapshot_id</td><td>int</td><td>FK → snapshots(id)</td></tr>
+      <tr><td class="fk">ingrediente_id</td><td>int</td><td>FK → ingredientes(id)</td></tr>
+      <tr><td>mediana_normalizada</td><td>numeric</td><td>R$/g — preço online oficial do ingrediente</td></tr>
+      <tr><td>mediana/media/minimo/maximo_exibicao</td><td>numeric</td><td>estatísticas p/ exibição (R$/kg etc.)</td></tr>
+      <tr><td>desvio_padrao, qtd_resultados, label</td><td>—</td><td>dispersão, nº de cotações, rótulo da unidade</td></tr>
+    </table>
+    <p class="usado"><strong>Usado em:</strong> <code>getEvolucao</code>, <code>getCalibracao</code>, <code>getStatusUltimaColeta</code>, <code>getVariacoesFortes</code>, <code>getEntradasIngrediente</code>, <code>excluirEntradaERecalcular</code> · RPC <code>recalcular_custos_ultimo_snapshot</code> · <code>salvar_supabase.py</code>.</p>
+  </div>
+
+  <div class="tbl cluster-a">
+    <h3>resultados_brutos <span class="rls">· schema original · append-only</span></h3>
+    <table>
+      <tr><th>Coluna</th><th>Tipo</th><th>Papel</th></tr>
+      <tr><td class="pk">id</td><td>int</td><td>PK</td></tr>
+      <tr><td class="fk">snapshot_id</td><td>int</td><td>FK → snapshots(id)</td></tr>
+      <tr><td class="fk">ingrediente_id</td><td>int</td><td>FK → ingredientes(id)</td></tr>
+      <tr><td>titulo, loja, link</td><td>text</td><td>produto individual coletado (modal "Fontes")</td></tr>
+      <tr><td>preco_bruto, preco_normalizado, exibicao</td><td>—</td><td>preço anunciado, R$/g, texto de exibição</td></tr>
+    </table>
+    <p class="usado"><strong>Usado em:</strong> <code>getAllFontes</code> (fontes na home e na Calibração), <code>getEntradasIngrediente</code>, <code>excluirEntradaERecalcular</code> (via <code>super_excluir</code>) · <code>salvar_supabase.py</code>.</p>
+  </div>
+
+  <div class="tbl cluster-a">
+    <h3>ingredientes <span class="rls">· leitura pública · update admin</span></h3>
+    <table>
+      <tr><th>Coluna</th><th>Tipo</th><th>Papel</th></tr>
+      <tr><td class="pk">id</td><td>serial</td><td>PK · catálogo canônico (~111 itens)</td></tr>
+      <tr><td>nome (unique), categoria, ativo</td><td>—</td><td>identificação e grupo</td></tr>
+      <tr><td>busca, palavras_ok, palavras_nao</td><td>text</td><td>regras de scraping (SerpAPI)</td></tr>
+      <tr><td>unidade, peso_ref_g</td><td>—</td><td>normalização (g/ml/unidade/maço)</td></tr>
+      <tr><td>custo_fixo, preco_manual</td><td>numeric</td><td>preço não-cotável / manual (R$/kg)</td></tr>
+      <tr><td>preco_manual_loja/_link/_em</td><td>—</td><td>fonte e data do preço manual efetivo</td></tr>
+    </table>
+    <p class="usado"><strong>Usado em:</strong> <code>getIngredientes</code>, <code>getIngredientesManuais</code>, <code>setPrecoManual</code>, <code>getEvolucao</code>, <code>getCalibracao</code>, <code>montarItens</code>, Painel/Preços manuais · <code>scraper_pf.py</code> (carrega o catálogo). Gatilho de auditoria: <code>trg_audit_ing</code>.</p>
+  </div>
+
+  <div class="tbl cluster-a">
+    <h3>pratos &nbsp;·&nbsp; receitas &nbsp;·&nbsp; custos_pratos</h3>
+    <table>
+      <tr><th>Tabela</th><th>Chaves</th><th>Colunas / papel</th></tr>
+      <tr><td>pratos</td><td class="pk">id</td><td>regiao, nome — os 100 pratos regionais. Leitura pública.</td></tr>
+      <tr><td>receitas</td><td class="pk">id</td><td class="fk">prato_id → pratos, ingrediente_id → ingredientes</td></tr>
+      <tr><td></td><td></td><td>qtd_g — ingrediente × quantidade por porção. Leitura pública.</td></tr>
+      <tr><td>custos_pratos</td><td class="pk">id</td><td class="fk">snapshot_id → snapshots, prato_id → pratos</td></tr>
+      <tr><td></td><td></td><td>custo_total, ingredientes_cobertos/_total/_estimados. Leitura pública.</td></tr>
+    </table>
+    <p class="usado"><strong>Usado em:</strong> <code>getDishCostsRange</code>, <code>getEvolucao</code>, <code>getCalibracao</code>, <code>getAllDetalhes</code>/<code>montarItens</code>, <code>getSnapshotsNovos</code> (define "modelo novo" = tem <code>custos_pratos</code>) · <code>calcular_custos_pratos.py</code> · RPC <code>recalcular_custos_ultimo_snapshot</code>.</p>
+  </div>
+
+  <!-- ============================ BLOCO B ============================ -->
+  <h2 id="crowd">3. Bloco B — Crowdsourcing e recompensa</h2>
+
+  <div class="tbl cluster-b">
+    <h3>contribuicoes</h3>
+    <table>
+      <tr><th>Coluna</th><th>Tipo</th><th>Papel</th></tr>
+      <tr><td class="pk">id</td><td>bigserial</td><td>PK · uma foto de preço enviada</td></tr>
+      <tr><td class="fk">user_id</td><td>uuid</td><td>FK → auth.users(id)</td></tr>
+      <tr><td class="fk">ingrediente_id</td><td>int</td><td>FK → ingredientes(id)</td></tr>
+      <tr><td>produto, marca, preco, peso_g</td><td>—</td><td>dados do produto</td></tr>
+      <tr><td>tipo_loja, mercado, cidade, uf, bairro, endereco, regiao</td><td>—</td><td>local (regiao preenchida por gatilho a partir da uf)</td></tr>
+      <tr><td>lat, lng, foto_url, foto_etiqueta_url, foto_hash</td><td>—</td><td>geo, imagens e hash de dedup</td></tr>
+      <tr><td>status</td><td>text</td><td>pendente | aprovada | rejeitada</td></tr>
+      <tr><td>aprovado_por/_em/_dispositivo/_lat/_lng</td><td>—</td><td>trilha de quem aprovou</td></tr>
+    </table>
+    <p class="rls"><strong>RLS:</strong> o dono lê/insere o próprio (<code>contrib_select</code>/<code>contrib_insert</code>); admin faz tudo (<code>contrib_admin_all</code>). Fotos no Storage bucket <code>contribuicoes</code>.</p>
+    <p class="usado"><strong>Usado em:</strong> <code>getContribuicoes</code>, <code>getContribuicoesAprovadas</code>, <code>getContribuicoesMapa</code>, <code>getMinhasContribuicoes</code>, <code>getPainelContribuicoes</code>, <code>getCalibracao</code>, <code>/contribuir</code> · RPCs <code>aprovar_contribuicao</code>, <code>editar_contribuicao_aprovada</code>. Gatilhos: <code>trg_regiao_contrib</code>, <code>trg_audit</code>.</p>
+  </div>
+
+  <div class="tbl cluster-b">
+    <h3>pagamentos <span class="rls">· saques PIX</span></h3>
+    <table>
+      <tr><th>Coluna</th><th>Tipo</th><th>Papel</th></tr>
+      <tr><td class="pk">id</td><td>bigserial</td><td>PK</td></tr>
+      <tr><td class="fk">user_id</td><td>uuid</td><td>FK → auth.users(id)</td></tr>
+      <tr><td>valor, cpf, chave_pix</td><td>—</td><td>dados do saque</td></tr>
+      <tr><td>status, criado_em, pago_em</td><td>—</td><td>solicitado | pago | rejeitada</td></tr>
+    </table>
+    <p class="rls"><strong>RLS:</strong> dono lê/insere o próprio; admin faz tudo (<code>pag_admin_all</code>).</p>
+    <p class="usado"><strong>Usado em:</strong> <code>getSaques</code>, <code>getTodosSaques</code>, <code>getMeusSaques</code>, <code>getRecompensa</code>, <code>solicitarSaque</code>, <code>marcarSaquePago</code> · RPC <code>super_editar_saque</code>. Gatilho <code>trg_audit</code>.</p>
+  </div>
+
+  <div class="tbl cluster-b">
+    <h3>precos_manuais_hist <span class="rls">· leituras manuais e de campo</span></h3>
+    <table>
+      <tr><th>Coluna</th><th>Tipo</th><th>Papel</th></tr>
+      <tr><td class="pk">id</td><td>bigserial</td><td>PK · uma leitura (R$/kg) com histórico</td></tr>
+      <tr><td class="fk">ingrediente_id</td><td>bigint</td><td>FK → ingredientes(id)</td></tr>
+      <tr><td class="fk">contribuicao_id</td><td>bigint</td><td>FK → contribuicoes(id) — elo p/ leitura de campo</td></tr>
+      <tr><td>preco_manual, custo_fixo, loja, link</td><td>—</td><td>valor e fonte</td></tr>
+      <tr><td>origem</td><td>text</td><td>manual | campo</td></tr>
+    </table>
+    <p class="rls"><strong>RLS:</strong> leitura pública (<code>pmh_read</code>).</p>
+    <p class="usado"><strong>Usado em:</strong> <code>getHistoricoManual</code>, <code>getAllFontesManuais</code>, <code>getEvolucao</code> · RPCs <code>salvar_leitura_manual</code>, <code>refresh_precos_manuais</code>, <code>aprovar_contribuicao</code>. Gatilhos: <code>trg_preco_manual</code> (via <code>log_preco_manual</code>), <code>trg_audit</code>.</p>
+  </div>
+
+  <!-- ============================ BLOCO C ============================ -->
+  <h2 id="auth">4. Bloco C — Autenticação e segurança</h2>
+
+  <div class="tbl cluster-c">
+    <h3>profiles</h3>
+    <table>
+      <tr><th>Coluna</th><th>Tipo</th><th>Papel</th></tr>
+      <tr><td class="pk fk">id</td><td>uuid</td><td>PK e FK → auth.users(id) (1:1 com o usuário)</td></tr>
+      <tr><td>nome, telefone, regiao, sexo, data_nascimento</td><td>—</td><td>perfil (telefone é o lead)</td></tr>
+      <tr><td>cpf, chave_pix, consentimento_cpf_em</td><td>—</td><td>dados de recompensa (LGPD)</td></tr>
+      <tr><td>is_admin, is_super</td><td>bool</td><td>papéis de acesso</td></tr>
+    </table>
+    <p class="rls"><strong>RLS:</strong> cada um lê/edita o próprio (<code>perfil_select</code>/<code>perfil_update</code>); admin lê todos (<code>perfil_admin_select</code>). Criada automaticamente no cadastro por <code>handle_new_user</code>.</p>
+    <p class="usado"><strong>Usado em:</strong> <code>getProfile</code>, <code>useAuth</code>, <code>isAdmin</code>/<code>isSuper</code>, <code>getPerfis</code>, <code>nomesPorId</code>, <code>Auth</code>, <code>/perfil</code>, Painel · RPC <code>super_editar_perfil</code>. Base das funções <code>eh_admin()</code>/<code>eh_super()</code>.</p>
+  </div>
+
+  <div class="tbl cluster-c">
+    <h3>login_log &nbsp;·&nbsp; audit_log &nbsp;·&nbsp; super_acoes <span class="rls">· trilhas de auditoria</span></h3>
+    <table>
+      <tr><th>Tabela</th><th>Conteúdo</th><th>Acesso</th></tr>
+      <tr><td>login_log</td><td>logins: user_id, dispositivo, lat/lng/precisao, criado_em</td><td>insere o próprio; admin lê (<code>login_admin_select</code>)</td></tr>
+      <tr><td>audit_log</td><td>toda alteração (INSERT/UPDATE/DELETE) das tabelas sensíveis, com antes/depois (jsonb)</td><td>SELECT-only p/ admin — <strong>imutável</strong> (<code>fn_audit</code>)</td></tr>
+      <tr><td>super_acoes</td><td>ações do superusuário (exclusão/edição), com antes/depois, dispositivo e local</td><td>SELECT-only p/ admin — <strong>imutável</strong>; só as RPCs de super inserem</td></tr>
+    </table>
+    <p class="usado"><strong>Usado em:</strong> <code>registrarLogin</code>/<code>getLogins</code> (login_log), <code>getAuditLog</code> (audit_log, aba Auditoria), <code>getSuperAcoes</code> (super_acoes, aba Ações do super). <code>ator</code>/<code>user_id</code> referenciam <code>auth.users</code> logicamente (sem constraint de FK).</p>
+  </div>
+
+  <!-- ============================ FUNÇÕES ============================ -->
+  <h2 id="funcoes">5. Funções (RPC) e gatilhos</h2>
+
+  <h3>5.1 RPCs chamadas pelo app</h3>
+  <table>
+    <tr><th>Função</th><th>O que faz</th><th>Quem chama</th></tr>
+    <tr><td><code>eh_admin()</code> / <code>eh_super()</code></td><td>retornam se o usuário atual é admin/super (base das RLS)</td><td>usadas dentro das policies</td></tr>
+    <tr><td><code>salvar_leitura_manual(id, preco, fixo, loja, link)</code></td><td>registra uma leitura em <code>precos_manuais_hist</code> e recalcula o preço manual efetivo</td><td><code>setPrecoManual</code> (Preços manuais, Coleta)</td></tr>
+    <tr><td><code>refresh_precos_manuais()</code></td><td>materializa o preço manual (mediana da janela) em <code>ingredientes</code></td><td>pipeline / ao salvar</td></tr>
+    <tr><td><code>recalcular_custos_ultimo_snapshot()</code></td><td>refaz <code>custos_pratos</code> e o índice do último snapshot</td><td><code>recalcularCustos</code> (botões "Recalcular custos")</td></tr>
+    <tr><td><code>aprovar_contribuicao(...)</code></td><td>aprova a contribuição, grava a leitura de campo e a trilha de aprovação</td><td>moderação em <code>/admin</code></td></tr>
+    <tr><td><code>editar_contribuicao_aprovada(...)</code></td><td>reescreve a leitura de uma aprovada (recalibra o índice)</td><td>aba Aprovadas / Painel</td></tr>
+    <tr><td><code>super_excluir(tabela, id, ctx)</code></td><td>exclui um registro (whitelist) e registra em <code>super_acoes</code></td><td>botões Excluir do super</td></tr>
+    <tr><td><code>super_editar_saque(...)</code> / <code>super_editar_perfil(...)</code></td><td>editam saque/perfil e registram em <code>super_acoes</code></td><td>abas Saques / Painel (super)</td></tr>
+    <tr><td><code>top_contribuidores(mes)</code></td><td>agrega o ranking mensal (SECURITY DEFINER; só agregados, sem dados pessoais)</td><td><code>/contribuidores</code></td></tr>
+    <tr><td><code>regiao_do_estado(uf)</code></td><td>mapeia UF → região (usada pelo gatilho de contribuição)</td><td>gatilho <code>set_regiao_contrib</code></td></tr>
+  </table>
+
+  <h3>5.2 Gatilhos (triggers)</h3>
+  <table>
+    <tr><th>Gatilho</th><th>Tabela</th><th>Ação</th></tr>
+    <tr><td><code>on_auth_user_created</code></td><td>auth.users (insert)</td><td><code>handle_new_user</code> — cria a linha em <code>profiles</code></td></tr>
+    <tr><td><code>trg_regiao_contrib</code></td><td>contribuicoes</td><td><code>set_regiao_contrib</code> — preenche <code>regiao</code> a partir da <code>uf</code></td></tr>
+    <tr><td><code>trg_preco_manual</code></td><td>ingredientes (before update)</td><td><code>log_preco_manual</code> — registra mudança de preço manual em <code>precos_manuais_hist</code></td></tr>
+    <tr><td><code>trg_audit</code></td><td>contribuicoes, pagamentos, precos_manuais_hist, profiles</td><td><code>fn_audit</code> — grava antes/depois em <code>audit_log</code></td></tr>
+    <tr><td><code>trg_audit_ing</code></td><td>ingredientes</td><td><code>fn_audit_ingredientes</code> — grava em <code>audit_log</code></td></tr>
+  </table>
+
+  <footer>Índice PF — mapa do banco de dados. Reconstruído das migrações e do código; para o schema vivo, introspecção no Supabase.</footer>
+</div>
+</body>
+</html>
