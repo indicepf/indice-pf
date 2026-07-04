@@ -49,6 +49,8 @@ export default function AdminPage() {
   const [buscaPreco, setBuscaPreco] = useState('')
   const [filtroOrigem, setFiltroOrigem] = useState<'todos' | 'net' | 'campo'>('todos')
   const [visiveisPrecos, setVisiveisPrecos] = useState(20)
+  const [precoAberto, setPrecoAberto] = useState<number | null>(null)
+  const [visiveisMod, setVisiveisMod] = useState(20)
   const [addAberto, setAddAberto] = useState(false)
 
   const [uid, setUid] = useState<string | null | undefined>(undefined)
@@ -300,7 +302,7 @@ export default function AdminPage() {
       {aba === 'mod' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6" key="mod">
         {!itens.length && <p className="text-sm text-muted text-center py-10">Nenhuma contribuição pendente.</p>}
-        {itens.map(c => (
+        {itens.slice(0, visiveisMod).map(c => (
           <div key={c.id} className="border border-line rounded-lg bg-panel overflow-hidden sm:flex">
             <a href={c.foto_url || undefined} target="_blank" rel="noopener noreferrer" className="sm:w-56 shrink-0 block">
               {c.foto_url
@@ -313,7 +315,7 @@ export default function AdminPage() {
                 {c.lat ? ` · ${c.lat}, ${c.lng}` : ''} · {new Date(c.criado_em).toLocaleString('pt-BR')}
               </p>
               {c.produto && <p className="text-sm mb-2">“{c.produto}”</p>}
-              <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                 <label>Ingrediente
                   <select value={c.ingrediente_id ?? ''} onChange={e => patch(c.id, 'ingrediente_id', e.target.value ? Number(e.target.value) : null)}
                     className={inputCls}>
@@ -329,7 +331,7 @@ export default function AdminPage() {
                   <input value={c.peso_g ?? ''} onChange={e => patch(c.id, 'peso_g', e.target.value.replace(/[^\d.,]/g, ''))}
                     inputMode="decimal" className={inputCls} />
                 </label>
-                <label className="col-span-3">Marca (opcional — deixe vazio p/ itens sem marca)
+                <label className="col-span-2 sm:col-span-3">Marca (opcional — deixe vazio p/ itens sem marca)
                   <input value={c.marca ?? ''} onChange={e => patch(c.id, 'marca', e.target.value || null)}
                     placeholder="ex: Ancelli" className={inputCls} />
                 </label>
@@ -348,6 +350,12 @@ export default function AdminPage() {
             </div>
           </div>
         ))}
+        {itens.length > visiveisMod && (
+          <button onClick={() => setVisiveisMod(v => v + 20)}
+            className="w-full text-sm text-paprika border border-line rounded-md py-2 hover:bg-cream transition">
+            Carregar mais ({itens.length - visiveisMod} restantes)
+          </button>
+        )}
       </div>
       ) : aba === 'aprovadas' ? (
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-5" key="aprovadas">
@@ -536,8 +544,8 @@ export default function AdminPage() {
           {histSaques === null ? <p className="text-sm text-muted">Carregando…</p>
             : !histSaques.filter(s => s.status !== 'solicitado').length ? <p className="text-sm text-muted">Nenhum saque concluído ainda.</p>
             : (
-              <div className="border border-line rounded-lg bg-panel overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="border border-line rounded-lg bg-panel overflow-x-auto">
+                <table className="w-full text-sm min-w-[40rem]">
                   <thead>
                     <tr className="text-left text-muted border-b border-line">
                       <th className="font-medium px-3 py-2">Usuário</th>
@@ -659,20 +667,29 @@ export default function AdminPage() {
         <div className="space-y-3">
           {!manuais.length && <p className="text-sm text-muted">Nenhum preço manual definido.</p>}
           {manuais.length > 0 && !manuaisFiltrados.length && <p className="text-sm text-muted">Nenhum item para este filtro/busca.</p>}
-          {manuaisFiltrados.slice(0, visiveisPrecos).map(m => (
-            <div key={m.id} className="border border-line rounded-lg bg-panel p-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="font-medium flex items-center gap-1.5 flex-wrap">
-                  {m.nome}
+          {manuaisFiltrados.slice(0, visiveisPrecos).map(m => {
+            const aberto = precoAberto === m.id
+            return (
+            <div key={m.id} className="border border-line rounded-lg bg-panel">
+              <button onClick={() => setPrecoAberto(aberto ? null : m.id)}
+                className="w-full flex items-center gap-3 p-4 text-left hover:bg-cream transition rounded-lg">
+                <span className="font-medium flex items-center gap-1.5 flex-wrap min-w-0">
+                  <span className="truncate">{m.nome}</span>
                   {origens[m.id]?.net && <Badge texto="rede" cls="text-muted border-line" />}
                   {origens[m.id]?.campo && <Badge texto="campo" cls="text-olive border-olive/30 bg-olive/5" />}
                   {!origens[m.id] && m.custo_fixo != null && <Badge texto="fixo" cls="text-muted border-line" />}
-                </p>
-                <span className="text-xs text-muted">{m.categoria || '—'}</span>
-              </div>
-              <p className="text-xs text-muted mt-1">
+                </span>
+                <span className="text-xs tnum text-muted ml-auto shrink-0">
+                  {m.preco_manual != null ? `${brl(Number(m.preco_manual))}/kg` : (m.custo_fixo != null ? `${brl(Number(m.custo_fixo))} fixo` : '—')}
+                </span>
+                <span className="text-muted text-xs shrink-0">{aberto ? '−' : '+'}</span>
+              </button>
+              {aberto && (
+              <div className="px-4 pb-4 border-t border-line/60 pt-3">
+              <p className="text-xs text-muted">
                 Preço usado: <span className="text-ink tnum">{m.preco_manual != null ? `${brl(Number(m.preco_manual))}/kg` : (m.custo_fixo != null ? `${brl(Number(m.custo_fixo))} fixo` : '—')}</span>
                 {m.preco_manual != null && <span> · mediana das leituras dos últimos 5 dias (média 50/50 com o online, se houver)</span>}
+                <span> · {m.categoria || '—'}</span>
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs">
                 <label>Nova leitura (R$/kg)
@@ -738,8 +755,11 @@ export default function AdminPage() {
                   )}
                 </div>
               )}
+              </div>
+              )}
             </div>
-          ))}
+            )
+          })}
           {manuaisFiltrados.length > visiveisPrecos && (
             <button onClick={() => setVisiveisPrecos(v => v + 20)}
               className="w-full text-sm text-paprika border border-line rounded-md py-2 hover:bg-cream transition">

@@ -313,13 +313,15 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
       )}
 
       {/* sub-abas */}
-      <div className="flex items-center gap-4 border-b border-line">
-        {([['usuarios', 'Usuários'], ['mapa', 'Mapa'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
-          <button key={k} onClick={() => setSub(k)}
-            className={`text-sm pb-2 -mb-px border-b-2 transition ${sub === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
-            {label}
-          </button>
-        ))}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm">
+          {([['usuarios', 'Usuários'], ['mapa', 'Mapa'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setSub(k)}
+              className={`px-4 py-2 font-medium transition-colors ${sub === k ? 'bg-paprika text-white' : 'text-muted hover:bg-cream'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => baixarCSV('contribuicoes.csv', [
             ['usuario', 'regiao', 'ingrediente', 'preco', 'peso_g', 'mercado', 'cidade', 'status', 'data'],

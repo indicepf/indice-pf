@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getTopContribuidores, type Contribuidor } from '@/lib/queries'
 import AuthControls from '../Auth'
+import RequireAdmin from '../RequireAdmin'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const rotuloMes = (m: string) => { const [a, mm] = m.split('-'); return `${MESES[Number(mm) - 1]}/${a}` }
 
 export default function ContribuidoresPage() {
+  return <RequireAdmin><ContribuidoresInner /></RequireAdmin>
+}
+
+function ContribuidoresInner() {
   const [mes, setMes] = useState('')
   const [lista, setLista] = useState<Contribuidor[]>([])
   const [loading, setLoading] = useState(true)

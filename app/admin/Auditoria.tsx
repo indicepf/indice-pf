@@ -101,12 +101,12 @@ export default function Auditoria({ souSuper }: { souSuper: boolean }) {
                   const ab = aberto === r.id
                   return (
                     <div key={r.id} className="border border-line rounded-lg bg-panel">
-                      <button onClick={() => setAberto(ab ? null : r.id)} className="w-full flex items-center gap-2 p-3 text-left hover:bg-cream transition rounded-lg text-sm">
+                      <button onClick={() => setAberto(ab ? null : r.id)} className="w-full min-w-0 flex items-center gap-2 p-3 text-left hover:bg-cream transition rounded-lg text-sm">
                         <span className={`text-[0.6rem] uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${ACAO_CLS[r.acao] || ''}`}>{r.acao}</span>
-                        <span className="font-medium">{r.tabela}</span>
-                        <span className="text-muted">#{r.registro_id ?? '—'}</span>
-                        <span className="text-muted ml-auto shrink-0 text-xs">{r.ator_nome} · {new Date(r.criado_em).toLocaleString('pt-BR')}</span>
-                        <span className="text-muted text-xs">{ab ? '−' : '+'}</span>
+                        <span className="font-medium shrink-0">{r.tabela}</span>
+                        <span className="text-muted shrink-0">#{r.registro_id ?? '—'}</span>
+                        <span className="text-muted ml-auto text-xs truncate min-w-0">{r.ator_nome} · {new Date(r.criado_em).toLocaleString('pt-BR')}</span>
+                        <span className="text-muted text-xs shrink-0">{ab ? '−' : '+'}</span>
                       </button>
                       {ab && (
                         <div className="px-3 pb-3 border-t border-line/60 pt-2">
@@ -138,8 +138,8 @@ export default function Auditoria({ souSuper }: { souSuper: boolean }) {
           {logins === null ? <p className="text-sm text-muted">Carregando…</p>
             : !logins.length ? <p className="text-sm text-muted text-center py-8">Nenhum login registrado ainda.</p>
             : (
-              <div className="border border-line rounded-lg bg-panel overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="border border-line rounded-lg bg-panel overflow-x-auto">
+                <table className="w-full text-sm min-w-[36rem]">
                   <thead>
                     <tr className="text-left text-muted border-b border-line">
                       <th className="font-medium px-3 py-2">Usuário</th>
