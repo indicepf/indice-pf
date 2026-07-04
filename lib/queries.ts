@@ -294,10 +294,11 @@ export async function getEvolucao(): Promise<Evolucao> {
 // atuais (−10% Mercado, −22% Atacarejo) por ingrediente. Recalcula o índice online
 // por região sob os descontos calibrados, ao lado do índice com os percentuais atuais.
 export type CalibTipo = 'Mercado' | 'Atacarejo'
-export type CalibItem = { regiao: string; tipo: CalibTipo; ingrediente_id: number; nome: string; desconto: number; n: number; fieldKg: number; onlineKg: number }
+export type CalibFonteCampo = { nome: string; data: string; cidade: string | null; uf: string | null; precoKg: number }
+export type CalibItem = { regiao: string; tipo: CalibTipo; ingrediente_id: number; nome: string; desconto: number; n: number; fieldKg: number; onlineKg: number; fontes: CalibFonteCampo[] }
 export type CalibTipoResumo = { assumidoPct: number; medidoPct: number | null; cobertura: number; indiceAssumido: number; indiceCalibrado: number }
 export type CalibRegiao = { regiao: string; indiceOnline: number; nPratos: number; mercado: CalibTipoResumo; atacarejo: CalibTipoResumo }
-export type Calibracao = { regioes: CalibRegiao[]; itens: CalibItem[]; snapshotData: string | null; contribsUsadas: number }
+export type Calibracao = { regioes: CalibRegiao[]; itens: CalibItem[]; snapshotData: string | null; snapshotId: number | null; contribsUsadas: number }
 
 const CALIB_DEFAULT: Record<CalibTipo, number> = { Mercado: 0.10, Atacarejo: 0.22 }
 const CALIB_REGIOES = ['Sul', 'Sudeste', 'Centro-oeste', 'Nordeste', 'Norte']
@@ -322,22 +323,32 @@ const calibRegiao = (regiao: string | null, uf: string | null): string | null =>
   return UF_REGIAO[u] || null
 }
 
-export async function getCalibracao(): Promise<Calibracao> {
+export async function getCalibracao(ini?: string, fim?: string): Promise<Calibracao> {
   const [snaps, receitas, ingRows, precosRows, pratosRows, contribs] = await Promise.all([
     supabase.from('snapshots').select('id,data').order('data', { ascending: true }),
     fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
     supabase.from('ingredientes').select('id,nome,unidade,peso_ref_g,custo_fixo,preco_manual'),
     fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada').order('id')),
     supabase.from('pratos').select('id,nome,regiao'),
-    fetchAll(() => supabase.from('contribuicoes').select('ingrediente_id,preco,peso_g,tipo_loja,regiao,uf').eq('status', 'aprovada')),
+    fetchAll(() => supabase.from('contribuicoes').select('user_id,ingrediente_id,preco,peso_g,tipo_loja,regiao,uf,cidade,criado_em').eq('status', 'aprovada')),
   ])
-  const snapList = ((snaps.data || []) as any[])
-  const snapshotData = snapList.length ? snapList[snapList.length - 1].data : null
+  const snapAll = ((snaps.data || []) as any[])
+  // coleta de referência p/ o online = a mais recente dentro do intervalo (ou a última <= fim)
+  const inRange = snapAll.filter((s: any) => (!ini || s.data >= ini) && (!fim || s.data <= fim))
+  const ref = inRange.length ? inRange[inRange.length - 1]
+    : (fim ? [...snapAll].reverse().find((s: any) => s.data <= fim) : snapAll[snapAll.length - 1]) || null
+  const snapshotData: string | null = ref?.data ?? null
+  const snapshotId: number | null = ref?.id ?? null
   const ing = new Map<number, any>(); ((ingRows.data || []) as any[]).forEach(i => ing.set(i.id, i))
 
-  // preço online atual por ingrediente (R$/g) = último não-nulo (ordenado por id → cronológico)
+  // preço online por ingrediente (R$/g) = último não-nulo até a coleta de referência
+  const dateOf = new Map<number, string>(snapAll.map((s: any) => [s.id, s.data]))
   const onlineG: Record<number, number> = {}
-  ;(precosRows as any[]).forEach(p => { if (p.mediana_normalizada != null) onlineG[p.ingrediente_id] = Number(p.mediana_normalizada) })
+  ;(precosRows as any[]).forEach(p => {
+    if (p.mediana_normalizada == null) return
+    const d = dateOf.get(p.snapshot_id); if (snapshotData && d && d > snapshotData) return
+    onlineG[p.ingrediente_id] = Number(p.mediana_normalizada)
+  })
   // base do índice por ingrediente (R$/g): online, senão manual; custo fixo tratado à parte
   const baseG = (iid: number): number | null => {
     if (onlineG[iid] != null) return onlineG[iid]
@@ -350,12 +361,15 @@ export async function getCalibracao(): Promise<Calibracao> {
   ;(receitas as any[]).forEach(r => { (recPorPrato[r.prato_id] ||= []).push({ ing: r.ingrediente_id, qtd: Number(r.qtd_g) }) })
   const pratos = ((pratosRows.data || []) as any[]).map(p => ({ id: p.id, regiao: calibRegiao(p.regiao, null) }))
 
-  // R$/g de campo por (regiao, tipo, ingrediente)
-  const fieldGroups: Record<string, number[]> = {}
+  // leituras de campo por (regiao, tipo, ingrediente) dentro do intervalo
+  const fieldRows: Record<string, { g: number; user_id: string; data: string; cidade: string | null; uf: string | null }[]> = {}
   let contribsUsadas = 0
+  const userIds: string[] = []
   ;(contribs as any[]).forEach(c => {
     const tipo = c.tipo_loja
     if (tipo !== 'Mercado' && tipo !== 'Atacarejo') return
+    const d = (c.criado_em || '').slice(0, 10)
+    if ((ini && d < ini) || (fim && d > fim)) return
     const regiao = calibRegiao(c.regiao, c.uf); if (!regiao) return
     const iid = c.ingrediente_id; if (iid == null) return
     const preco = Number(c.preco), peso = Number(c.peso_g)
@@ -363,19 +377,27 @@ export async function getCalibracao(): Promise<Calibracao> {
     const u = ing.get(iid)
     const gramas = (u?.unidade === 'unidade' || u?.unidade === 'maco') ? peso * (Number(u?.peso_ref_g) || 0) : peso
     if (!(gramas > 0)) return
-    ;(fieldGroups[`${regiao}|${tipo}|${iid}`] ||= []).push(preco / gramas)
+    ;(fieldRows[`${regiao}|${tipo}|${iid}`] ||= []).push({ g: preco / gramas, user_id: c.user_id, data: d, cidade: c.cidade, uf: c.uf })
+    if (c.user_id) userIds.push(c.user_id)
     contribsUsadas++
   })
+  const nomes = await nomesPorId(userIds)
 
   // desconto medido por (regiao, tipo, ingrediente) = 1 − mediana(campo)/online
   const itens: CalibItem[] = []
   const descIngKey: Record<string, number> = {}   // regiao|tipo|iid → desconto clampado p/ o índice
-  for (const key in fieldGroups) {
+  for (const key in fieldRows) {
     const [regiao, tipo, iidStr] = key.split('|'); const iid = +iidStr
-    const fieldG = mediana(fieldGroups[key]); const onG = onlineG[iid]
+    const rows = fieldRows[key]
+    const fieldG = mediana(rows.map(r => r.g)); const onG = onlineG[iid]
     if (onG == null || !(onG > 0)) continue
     const desconto = 1 - fieldG / onG
-    itens.push({ regiao, tipo: tipo as CalibTipo, ingrediente_id: iid, nome: ing.get(iid)?.nome || `#${iid}`, desconto, n: fieldGroups[key].length, fieldKg: fieldG * 1000, onlineKg: onG * 1000 })
+    itens.push({
+      regiao, tipo: tipo as CalibTipo, ingrediente_id: iid, nome: ing.get(iid)?.nome || `#${iid}`,
+      desconto, n: rows.length, fieldKg: fieldG * 1000, onlineKg: onG * 1000,
+      fontes: rows.map(r => ({ nome: nomes[r.user_id] || 'anônimo', data: r.data, cidade: r.cidade, uf: r.uf, precoKg: r.g * 1000 }))
+        .sort((a, b) => b.data.localeCompare(a.data)),
+    })
     descIngKey[key] = Math.min(0.6, Math.max(0, desconto))   // clamp [0, 60%] p/ não deixar 1 leitura ruim explodir o índice
   }
 
@@ -414,7 +436,8 @@ export async function getCalibracao(): Promise<Calibracao> {
     return { regiao, indiceOnline, nPratos, mercado: resumo('Mercado'), atacarejo: resumo('Atacarejo') }
   })
 
-  return { regioes, itens, snapshotData, contribsUsadas }
+  itens.sort((a, b) => a.regiao.localeCompare(b.regiao) || a.tipo.localeCompare(b.tipo) || a.nome.localeCompare(b.nome))
+  return { regioes, itens, snapshotData, snapshotId, contribsUsadas }
 }
 
 // Snapshots do modelo novo (com custos_pratos), mais recente primeiro.

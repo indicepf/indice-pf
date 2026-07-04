@@ -68,6 +68,7 @@
       <li><a href="#proximos">Estado atual e próximos passos</a></li>
       <li><a href="#att-0702">Atualizações de 02/07/2026 — preço, coleta, admin e análise</a></li>
       <li><a href="#att-0407">Atualizações de 04/07/2026 — auditoria, filtros por período/região, export e ranking</a></li>
+      <li><a href="#att-0704b">Atualizações de 04/07/2026 (2) — acesso restrito, calibração campo × online (G1) e ajustes</a></li>
     </ol>
   </div>
 
@@ -704,6 +705,65 @@
   <div class="note">
     <p><strong>Ação pendente do responsável:</strong> rodar a <code>Migration Supabase/supabase_migration_24.sql</code> no
       Supabase para criar a função <code>top_contribuidores</code>. Até lá, <code>/contribuidores</code> abre mas fica vazia.</p>
+  </div>
+
+  <h2 id="att-0704b">14. Atualizações de 04/07/2026 (2) — acesso restrito, calibração campo × online (G1) e ajustes</h2>
+
+  <h3>14.1 Acesso restrito a administradores</h3>
+  <p>
+    <strong>Histórico</strong> (<code>/evolucao</code>), <strong>Ranking</strong> (<code>/contribuidores</code>) e o
+    <strong>filtro de data da home</strong> passaram a ser exclusivos de <code>is_admin</code>. O componente
+    <code>app/RequireAdmin.tsx</code> envolve as duas páginas: enquanto a auth resolve mostra "Carregando", e redireciona
+    para a home quem não é admin (não monta o conteúdo, então nem busca os dados). Na home, os links "Histórico"/"Ranking"
+    e o bloco de período só aparecem para admin.
+  </p>
+
+  <h3>14.2 Admin: preços manuais recolhidos, coleta rastreável, moderação paginada</h3>
+  <ul>
+    <li>A lista de <strong>Preços manuais</strong> virou itens <strong>recolhíveis</strong> (cabeçalho com nome/tags/preço; abre ao clicar).</li>
+    <li>A aba <strong>Coleta</strong> → "Não encontrados" ganhou <strong>loja/link + histórico</strong> por item, usando a mesma RPC <code>salvar_leitura_manual</code> (leituras arquivadas em <code>precos_manuais_hist</code>).</li>
+    <li><strong>Moderação</strong> com botão "Carregar mais" (renderiza 20 por vez); sub-abas do <strong>Painel</strong> (Usuários/Mapa/Ingredientes) em controle segmentado; ajustes de responsividade mobile (tabelas largas com scroll próprio).</li>
+  </ul>
+
+  <h3>14.3 Exclusão em Admin &gt; Dados vira log de super (migração 25)</h3>
+  <p>
+    A exclusão de uma fonte errada (<code>resultados_brutos</code>) na aba Dados passou a usar a RPC
+    <code>super_excluir</code>, ficando registrada em <strong>"Ações do super"</strong>. A
+    <code>Migration Supabase/supabase_migration_25.sql</code> adiciona <code>resultados_brutos</code> à whitelist da função.
+    (<code>excluirEntradaERecalcular</code> recebe o contexto e delega a exclusão ao RPC antes de recalcular a mediana e o índice.)
+  </p>
+
+  <h3>14.4 Aba "Calibração" — desconto real campo × online (G1)</h3>
+  <p>
+    Nova aba no <strong>Histórico</strong> (só admin) que implementa o loop de calibração: compara o preço de campo aprovado
+    com o preço online do mesmo ingrediente para medir o desconto real de <strong>Mercado</strong> e <strong>Atacarejo</strong>
+    por região, em vez dos percentuais fixos −10%/−22%. Lógica em <code>getCalibracao(ini?, fim?)</code> (<code>lib/queries.ts</code>):
+  </p>
+  <ul>
+    <li><strong>Preço de campo (R$/g):</strong> contribuições <code>aprovada</code> com <code>tipo_loja</code> Mercado ou Atacarejo,
+      agrupadas por (região × tipo × ingrediente); <code>preço ÷ gramas</code> (usa <code>peso_ref_g</code> para itens em unidade/maço).
+      A região vem da coluna <code>regiao</code> da contribuição, com <strong>fallback UF→região</strong>.</li>
+    <li><strong>Desconto medido</strong> = <code>1 − mediana(campo) ÷ online</code> (R$/g), por ingrediente.
+      <strong>Fallback:</strong> ingredientes sem dado de campo usam o percentual atual (−10% / −22%).</li>
+    <li><strong>Índice calibrado por região</strong> = mediana dos custos dos pratos da região recomputando cada ingrediente com
+      <code>base_online × (1 − desconto_efetivo)</code>, onde o desconto é o medido (limitado a 0–60% para uma leitura isolada não
+      distorcer) onde existe, senão o padrão. A base é o preço <strong>online</strong> (os percentuais são definidos como "−X% sobre o online").
+      A tabela por região mostra o índice online, o índice com os percentuais atuais e o calibrado, com cobertura.</li>
+    <li><strong>Período:</strong> presets 7d/15d/30d/3m/6m/Tudo + calendário. Filtra as contribuições de campo e define a
+      <strong>coleta online de referência</strong> (a mais recente dentro do intervalo).</li>
+    <li><strong>Detalhe por ingrediente</strong> com <strong>busca</strong> e botão "fontes": abre as leituras de campo
+      (quem via <code>nomesPorId</code>, quando, onde — cidade/UF) e as fontes online (<code>resultados_brutos</code> da coleta de
+      referência via <code>getAllFontes</code>), preservando o número de leituras.</li>
+  </ul>
+  <p>
+    <strong>Correção:</strong> o tooltip da faixa mín–máx (aba Índice) mostrava "R$ NaN" — o valor da série é o par
+    <code>[mín, máx]</code> e o formatter tentava convertê-lo num número único; agora exibe "R$ mín – R$ máx".
+  </p>
+  <div class="note">
+    <p><strong>Ação pendente do responsável:</strong> rodar a <code>Migration Supabase/supabase_migration_25.sql</code>
+      (whitelist de <code>resultados_brutos</code> em <code>super_excluir</code>). A aba Calibração não exige migração —
+      enquanto não houver contribuições de campo aprovadas em Mercado/Atacarejo, o índice calibrado é igual ao com os
+      percentuais atuais e passa a divergir conforme os dados de campo chegam.</p>
   </div>
 
   <footer>Documento técnico do projeto <code>indice-pf</code> — atualizado a cada fase.</footer>
