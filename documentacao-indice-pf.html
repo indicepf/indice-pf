@@ -67,6 +67,7 @@
       <li><a href="#seguranca">Observações de segurança</a></li>
       <li><a href="#proximos">Estado atual e próximos passos</a></li>
       <li><a href="#att-0702">Atualizações de 02/07/2026 — preço, coleta, admin e análise</a></li>
+      <li><a href="#att-0407">Atualizações de 04/07/2026 — auditoria, filtros por período/região, export e ranking</a></li>
     </ol>
   </div>
 
@@ -608,8 +609,101 @@
     separação para daltonismo — todos os checks OK em superfície branca).
   </p>
   <div class="note">
-    <p>Hoje há <strong>3 coletas comparáveis</strong> (20/06, 21/06, 01/07) no modelo novo — os gráficos de série,
-      composição, período e CV mostram poucos pontos e crescem a cada coleta.</p>
+    <p>As coletas de 20/06 e 21/06 eram fase de teste (1 dia de intervalo) e foram <strong>aglutinadas em 21/06</strong>
+      (ver §13.1). Hoje há <strong>2 coletas comparáveis</strong> no modelo novo (21/06 e 01/07) — os gráficos crescem a
+      cada nova coleta. <strong>A aba Variação deixou de usar CV</strong> e passou a mostrar variação acumulada (ver
+      §13.3), então a descrição de CV acima está superada.</p>
+  </div>
+
+  <h2 id="att-0407">13. Atualizações de 04/07/2026 — auditoria, filtros por período/região, export e ranking</h2>
+  <p>
+    Leva de ajustes sobre o v2. Cada item foi uma branch → <code>tsc --noEmit</code> → <code>npm run dev</code> + verificação
+    de rota → PR → merge → deploy (Vercel). PRs #44–#54.
+  </p>
+
+  <h3>13.1 Aglutinação de coletas de teste</h3>
+  <p>
+    O snapshot de <strong>20/06 (id 8)</strong> e seus filhos (97 <code>precos</code>, 723 <code>resultados_brutos</code>,
+    100 <code>custos_pratos</code>) foram excluídos; ficou só <strong>21/06 (id 32)</strong>, a coleta mais completa.
+    A exclusão foi feita na ordem filhos → snapshot. Isso colapsou os dois pontos de teste (1 dia de intervalo) em um só.
+  </p>
+
+  <h3>13.2 Aba "Evolução" renomeada para "Histórico"</h3>
+  <p>Só o rótulo no menu/página; a rota segue <code>/evolucao</code>.</p>
+
+  <h3>13.3 Aba Variação — de CV para variação acumulada</h3>
+  <p>
+    O CV entre datas confundia (linha de Δ entre coletas caindo de +16% para +6% parecia "mais barato", quando os dois
+    eram aumentos; e o 1º ponto parecia sem base). Substituído por <strong>variação acumulada em relação à 1ª coleta do
+    período</strong>: a base = <strong>0%</strong> e cada ponto é <code>(custo_i − custo_base) ÷ custo_base × 100</code>.
+    <strong>Linha subindo = mais caro</strong>. Dirigida pelos filtros (prato/fonte; em "Todos os pratos", checkboxes de
+    Nacional + regiões). Tem caixa "Como ler este gráfico" com fórmula e exemplo.
+  </p>
+
+  <h3>13.4 Aba Mapa (Histórico) — tabela de pontos e região multi</h3>
+  <ul>
+    <li><strong>Tabela abaixo do mapa</strong> com cada contribuição do filtro: data, hora, ingrediente, preço, local
+      (cidade/tipo) e região. <code>getContribuicoesMapa()</code> passou a devolver <code>criado_em</code> (data + hora).</li>
+    <li>Filtro de região virou <strong>checkboxes</strong> (várias de uma vez), com "limpar".</li>
+  </ul>
+
+  <h3>13.5 Página inicial — mapa multi-região, período e todos os filtros afetando tudo</h3>
+  <ul>
+    <li><strong>Mapa do Brasil</strong> aceita <strong>seleção de várias regiões</strong> (clique alterna cada uma;
+      selecionadas em destaque). <code>MapaBrasil</code> passou a receber um <code>Set</code> de regiões + <code>onLimpar</code>.</li>
+    <li><strong>Calendário no hero</strong> (presets <strong>7d · 15d · 30d · 3m · 6m · Tudo</strong> + datas início/fim):
+      recalcula o índice/mapa/lista para o intervalo. Default = <strong>última coleta</strong>; um intervalo com 2+ coletas
+      usa a <strong>média das coletas por prato</strong> (<code>getDishCostsRange()</code>).</li>
+    <li><strong>Índice do hero segue a região</strong>: com região(ões) selecionada(s), o índice e a contagem de pratos são
+      só daquele recorte (rótulo muda para "Índice — &lt;região&gt;"). Assim período + região batem em índice, mapa e lista
+      ao mesmo tempo.</li>
+  </ul>
+
+  <h3>13.6 Contribuir — popup só sem login e lote estilo WhatsApp</h3>
+  <ul>
+    <li>O botão "Contribuir" vai <strong>direto para <code>/contribuir</code></strong> quando o usuário está logado com
+      perfil completo; o popup-convite só aparece para quem <strong>não está logado</strong> (ou perfil incompleto).</li>
+    <li>Modo <strong>lote</strong>: grade de miniaturas — anexa <strong>várias fotos de uma vez</strong> (multi-seleção) e
+      define só <strong>localização, mercado e tipo</strong> (compartilhados); ingrediente/preço de cada foto vão para a
+      moderação. Cada foto vira uma contribuição.</li>
+  </ul>
+
+  <h3>13.7 <code>/admin</code> — aba "Dados" (só super): auditoria da coleta</h3>
+  <ul>
+    <li><strong>Variações fortes:</strong> ingredientes com <code>|Δ%| &gt; 30%</code> na mediana entre as duas últimas
+      coletas (pega casos como <em>Mocotó +294%</em> = produto pronto no lugar do ingrediente).
+      <code>getVariacoesFortes()</code>.</li>
+    <li><strong>Inspecionar/excluir:</strong> abre as entradas online (<code>resultados_brutos</code>) de qualquer
+      ingrediente na última coleta e permite <strong>excluir uma entrada ruim</strong>. Ao excluir
+      (<code>excluirEntradaERecalcular()</code>): recomputa mediana/média/mín/máx/DP do ingrediente a partir das entradas
+      restantes, atualiza <code>precos</code> e chama <code>recalcular_custos_ultimo_snapshot</code> — o índice se ajusta
+      na hora.</li>
+  </ul>
+
+  <h3>13.8 Exportar CSV/XLSX no Histórico</h3>
+  <p>
+    Botão <strong>Exportar</strong> (CSV / XLSX, via <code>xlsx</code>/SheetJS) nas abas Índice (série), Variação,
+    Ingredientes e Mapa. Em Ingredientes o XLSX traz duas abas: o <strong>compilado</strong> e <strong>Fontes</strong>
+    (cada cotação online e leitura manual que gerou as médias). Utilitário em <code>lib/exportar.ts</code>, botão em
+    <code>app/evolucao/BotaoExportar.tsx</code>.
+  </p>
+
+  <h3>13.9 Categoria "Proteína ovina/caprina"</h3>
+  <p>
+    <code>Carne de bode</code> (caprino) e <code>Carne ovina (costela)</code> saíram de "Proteína bovina" para
+    <strong>"Proteína ovina/caprina"</strong> (banco + mapa de grupo em <code>lib/queries.ts</code>, agrupa em Proteína).
+  </p>
+
+  <h3>13.10 Ranking de contribuidores (<code>/contribuidores</code>)</h3>
+  <p>
+    Página com o <strong>top 10 do mês</strong> por contribuições aprovadas (nome, entradas, ingredientes distintos, local,
+    última contribuição), com seletor de mês. Link "Ranking" no topo da home. Um ranking público precisa agregar dados de
+    todos os usuários, o que o RLS bloquearia — por isso usa a RPC <code>top_contribuidores</code>
+    (<strong>SECURITY DEFINER</strong>), que só devolve agregados (nada de CPF/PIX/e-mail).
+  </p>
+  <div class="note">
+    <p><strong>Ação pendente do responsável:</strong> rodar a <code>Migration Supabase/supabase_migration_24.sql</code> no
+      Supabase para criar a função <code>top_contribuidores</code>. Até lá, <code>/contribuidores</code> abre mas fica vazia.</p>
   </div>
 
   <footer>Documento técnico do projeto <code>indice-pf</code> — atualizado a cada fase.</footer>
