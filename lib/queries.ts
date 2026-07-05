@@ -551,7 +551,7 @@ export async function getIngredientes(): Promise<Ing[]> {
 }
 
 export async function getProfile(uid: string): Promise<Profile | null> {
-  const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao,is_admin,sexo,data_nascimento').eq('id', uid).single()
+  const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao,is_admin,sexo,data_nascimento,avatar_url').eq('id', uid).single()
   return (data as Profile) ?? null
 }
 

@@ -18,6 +18,19 @@ const SAQUE_STATUS: Record<string, { txt: string; cls: string }> = {
   rejeitada:  { txt: 'rejeitado',        cls: 'text-red-600 border-red-200 bg-red-50' },
 }
 
+// reduz e recorta a foto num quadrado ~256px antes do upload do avatar
+async function comprimirAvatar(file: File, lado = 256, q = 0.85): Promise<Blob> {
+  const bmp = await createImageBitmap(file)
+  const min = Math.min(bmp.width, bmp.height)
+  const sx = (bmp.width - min) / 2, sy = (bmp.height - min) / 2
+  const canvas = document.createElement('canvas')
+  canvas.width = lado; canvas.height = lado
+  canvas.getContext('2d')!.drawImage(bmp, sx, sy, min, min, 0, 0, lado, lado)
+  bmp.close()
+  return new Promise<Blob>((res, rej) =>
+    canvas.toBlob(b => (b ? res(b) : rej(new Error('falha ao processar imagem'))), 'image/jpeg', q))
+}
+
 const MapaLocal = dynamic(() => import('../MapaLocal'), {
   ssr: false,
   loading: () => <div className="h-[280px] rounded-lg border border-line grid place-items-center text-muted text-sm">carregando mapa…</div>,
@@ -40,6 +53,8 @@ export default function PerfilPage() {
   const [regiao, setRegiao] = useState('')
   const [sexo, setSexo] = useState('')
   const [dataNasc, setDataNasc] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [avatarBusy, setAvatarBusy] = useState(false)
   const [saques, setSaques] = useState<MeuSaque[]>([])
   const [salvando, setSalvando] = useState(false)
   const [msg, setMsg] = useState('')
@@ -84,6 +99,7 @@ export default function PerfilPage() {
       setProfile(p)
       setNome(p?.nome ?? ''); setTel(p?.telefone ?? ''); setRegiao(p?.regiao ?? '')
       setSexo(p?.sexo ?? ''); setDataNasc(p?.data_nascimento ?? '')
+      setAvatarUrl(p?.avatar_url ?? null)
       setContribs(cs)
       setRec(r)
       setSaques(sq)
@@ -119,6 +135,29 @@ export default function PerfilPage() {
     if (error) { setRecErro(error.message); return }
     setRecMsg('Saque solicitado. O pagamento será feito no PIX informado em breve.')
     setRec(await getRecompensa(userId!))
+  }
+
+  async function trocarAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; e.target.value = ''
+    if (!f) return
+    setErro(''); setMsg(''); setAvatarBusy(true)
+    try {
+      const blob = await comprimirAvatar(f)
+      const path = `${userId}/avatar.jpg`
+      const { error: upErr } = await supabase.storage.from('avatars')
+        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
+      if (upErr) throw upErr
+      const base = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+      const url = `${base}?v=${Date.now()}`   // cache-busting: caminho fixo, conteúdo novo
+      const { error: dbErr } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', userId!)
+      if (dbErr) throw dbErr
+      setAvatarUrl(url)
+      setMsg('Foto de perfil atualizada.')
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : 'Falha ao enviar a foto. Tente novamente.')
+    } finally {
+      setAvatarBusy(false)
+    }
   }
 
   async function salvar() {
@@ -169,6 +208,17 @@ export default function PerfilPage() {
         {/* Dados */}
         {aba === 'dados' && (
         <section>
+          <div className="flex items-center gap-4 mb-5">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-cream border border-line shrink-0 grid place-items-center">
+              {avatarUrl
+                ? <img src={avatarUrl} alt="Foto de perfil" className="w-full h-full object-cover" />
+                : <span className="text-2xl text-muted">{(nome || email || '?').trim().charAt(0).toUpperCase()}</span>}
+            </div>
+            <label className={`${btnGhostCls} cursor-pointer ${avatarBusy ? 'opacity-60 pointer-events-none' : ''}`}>
+              {avatarBusy ? 'Enviando…' : avatarUrl ? 'Trocar foto' : 'Adicionar foto'}
+              <input type="file" accept="image/*" className="hidden" onChange={trocarAvatar} disabled={avatarBusy} />
+            </label>
+          </div>
           <div className="space-y-3">
             <div>
               <label className="text-xs text-muted">E-mail</label>
