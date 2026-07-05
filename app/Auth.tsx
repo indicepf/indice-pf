@@ -106,7 +106,12 @@ export default function AuthControls() {
         {user ? (
           <div className="relative">
             <button onClick={() => setMenu(m => !m)}
-              className="text-sm px-3 py-1.5 rounded-md hover:bg-panel transition-colors">
+              className="flex items-center gap-2 text-sm px-2 py-1 rounded-md hover:bg-panel transition-colors">
+              {profile?.avatar_url
+                ? <img src={profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-line" />
+                : <span className="w-7 h-7 rounded-full bg-cream border border-line grid place-items-center text-xs text-muted">
+                    {((profile?.nome || user.email || '?').trim().charAt(0) || '?').toUpperCase()}
+                  </span>}
               {profile?.nome ? profile.nome.split(' ')[0] : (user.email ?? 'Conta')} ▾
             </button>
             {menu && (
