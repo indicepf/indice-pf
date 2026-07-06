@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Índice PF — Sugestões de Layout (UX/UI)</title>
+<style>
+  :root {
+    --cream:   #faf7f2;
+    --panel:   #ffffff;
+    --ink:     #1a1a1a;
+    --muted:   #6b6b6b;
+    --line:    #e7e0d6;
+    --paprika: #c0492b;
+    --olive:   #4a5d23;
+  }
+  body { font-family: Georgia, "Times New Roman", serif; color: var(--ink); margin: 0; line-height: 1.55; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.7rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 28px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 { font-size: 1.2rem; font-weight: bold; margin-top: 48px; padding-bottom: 4px; border-bottom: 1px solid #ccc; }
+  h3 { font-size: 1.02rem; font-weight: bold; margin-top: 26px; }
+  p { margin: 11px 0; }
+  ul { margin: 12px 0; padding-left: 22px; }
+  li { margin: 6px 0; }
+  code { font-family: "Courier New", monospace; background: #f2f2f2; border: 1px solid #ddd; padding: 1px 5px; font-size: 0.85em; }
+  pre { background: #f7f5f0; border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; border: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.88rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid var(--ink); }
+  .note { border: 1px solid var(--ink); padding: 14px 16px; margin: 20px 0; background: #fbfaf7; }
+  .note p:first-child { margin-top: 0; } .note p:last-child { margin-bottom: 0; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .rec { display: inline-block; font-family: Helvetica, Arial, sans-serif; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--olive); color: var(--olive); border-radius: 4px; padding: 1px 6px; vertical-align: middle; }
+  footer { margin-top: 64px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+
+  /* ---- área de preview: reproduz o visual do app ---- */
+  .preview {
+    background: var(--cream); border: 1px solid var(--line); border-radius: 8px;
+    margin: 14px 0 6px; overflow: hidden;
+    font-family: Helvetica, Arial, sans-serif;
+  }
+  .preview .bar { border-bottom: 1px solid var(--line); padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+  .preview .titulo { font-family: Georgia, serif; font-size: 1.15rem; }
+  .cap { font-family: Helvetica, Arial, sans-serif; font-size: 0.78rem; color: var(--muted); margin: 4px 0 0; }
+
+  /* variante atual */
+  .v-atual { font-size: 0.83rem; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0; font-family: inherit; }
+  .v-atual:hover { color: var(--ink); }
+
+  /* A — chip com borda */
+  .v-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.8rem; color: var(--muted); background: transparent;
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px;
+    cursor: pointer; font-family: inherit; transition: color .15s, border-color .15s, background .15s;
+  }
+  .v-chip:hover { color: var(--ink); border-color: #d5cbbb; background: #ffffff88; }
+  .v-chip:focus-visible { outline: 2px solid var(--paprika); outline-offset: 2px; }
+  .v-chip svg { width: 13px; height: 13px; }
+
+  /* B — círculo só com ícone */
+  .v-circ {
+    width: 34px; height: 34px; display: inline-grid; place-items: center;
+    border: 1px solid var(--line); border-radius: 999px; background: transparent;
+    color: var(--muted); cursor: pointer; transition: color .15s, border-color .15s, background .15s;
+  }
+  .v-circ:hover { color: var(--ink); border-color: #d5cbbb; background: #ffffff88; }
+  .v-circ:focus-visible { outline: 2px solid var(--paprika); outline-offset: 2px; }
+  .v-circ svg { width: 15px; height: 15px; }
+
+  /* C — trilha (breadcrumb) */
+  .v-bc { font-size: 0.83rem; color: var(--muted); display: inline-flex; align-items: baseline; gap: 8px; }
+  .v-bc a { color: var(--muted); text-decoration: none; border: none; cursor: pointer; background: none; padding: 0; font-family: Georgia, serif; font-size: 0.95rem; }
+  .v-bc a:hover { color: var(--paprika); }
+  .v-bc .sep { color: #c9c0b2; }
+  .v-bc .aqui { color: var(--ink); font-family: Georgia, serif; font-size: 1.15rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Índice PF — Sugestões de Layout (UX/UI)</h1>
+  <p class="subtitle">Propostas para elevar o padrão visual do app, começando pelo botão "voltar". Os exemplos abaixo são renderizados com a paleta real do app (<code>globals.css</code>).</p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#voltar">O botão "voltar": diagnóstico e 3 variantes</a></li>
+      <li><a href="#cabecalho">Cabeçalho padronizado entre as páginas</a></li>
+      <li><a href="#hierarquia">Hierarquia de botões</a></li>
+      <li><a href="#detalhes">Detalhes que fazem o padrão ouro</a></li>
+      <li><a href="#implementacao">Ordem de implementação sugerida</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="voltar">1. O botão "voltar": diagnóstico e 3 variantes</h2>
+
+  <h3>1.1 Como está hoje</h3>
+  <div class="preview">
+    <div class="bar">
+      <button class="v-atual">← voltar</button>
+      <span class="titulo">Administração</span>
+    </div>
+  </div>
+  <p class="cap">Reprodução do cabeçalho atual de /admin, /perfil e /contribuir.</p>
+
+  <p>Problemas do formato atual:</p>
+  <ul>
+    <li><strong>Sem affordance</strong> — é texto puro, sem borda nem área definida; não parece clicável até passar o mouse.</li>
+    <li><strong>Alvo de toque pequeno</strong> — no celular a área clicável é menor que o mínimo recomendado (44×44px, guia da Apple/WCAG).</li>
+    <li><strong>Seta em caractere de texto</strong> ("←") — renderiza com peso e alinhamento diferentes conforme a fonte/sistema, o que dá o aspecto genérico.</li>
+    <li><strong>Inconsistência entre telas</strong> — hoje existem três variações: "← voltar", "voltar ao índice" e "Voltar ao início", cada uma com estilo próprio.</li>
+    <li><strong>Sem estado de foco</strong> — navegação por teclado não mostra onde o foco está.</li>
+  </ul>
+
+  <h3>1.2 Variante A — chip com borda <span class="rec">recomendada</span></h3>
+  <div class="preview">
+    <div class="bar">
+      <button class="v-chip">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 L5 8 L10 13"/></svg>
+        Início
+      </button>
+      <span class="titulo">Administração</span>
+    </div>
+  </div>
+  <p class="cap">Chip arredondado com borda <code>--line</code>, ícone SVG e rótulo do destino ("Início"), não da ação ("voltar").</p>
+  <ul>
+    <li>A borda dá affordance sem pesar; segue o mesmo desenho dos filtros de período da home (7d/15d/30d…), então não introduz linguagem nova.</li>
+    <li>Rótulo "Início" diz <em>para onde</em> vai — mais informativo que "voltar", que depende do histórico do navegador.</li>
+    <li>Ícone em SVG com <code>stroke</code> alinha com qualquer fonte e tem peso consistente.</li>
+    <li>Padding gera alvo de toque adequado; <code>focus-visible</code> com anel paprika resolve teclado.</li>
+  </ul>
+
+  <h3>1.3 Variante B — círculo só com ícone</h3>
+  <div class="preview">
+    <div class="bar">
+      <button class="v-circ" aria-label="Voltar ao início">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 L5 8 L10 13"/></svg>
+      </button>
+      <span class="titulo">Administração</span>
+    </div>
+  </div>
+  <p class="cap">Botão circular 34px só com a seta; <code>aria-label</code> para leitores de tela.</p>
+  <ul>
+    <li>Mais discreto e compacto; funciona bem no celular.</li>
+    <li>Contra: sem rótulo, o destino fica implícito — exige que o padrão se repita em todas as telas para virar convenção.</li>
+  </ul>
+
+  <h3>1.4 Variante C — trilha (breadcrumb) com a marca</h3>
+  <div class="preview">
+    <div class="bar">
+      <span class="v-bc"><a>Índice PF</a><span class="sep">/</span><span class="aqui">Administração</span></span>
+    </div>
+  </div>
+  <p class="cap">A marca "Índice PF" vira o link de volta; o título da página vem depois da barra.</p>
+  <ul>
+    <li>Elimina o botão: a própria marca leva ao início, convenção universal na web.</li>
+    <li>Dá contexto de localização ("estou dentro do Índice PF → Administração").</li>
+    <li>Contra: o alvo de toque é o texto da marca; menos óbvio para quem procura um "voltar" explícito no celular.</li>
+  </ul>
+
+  <div class="note">
+    <p><strong>Recomendação:</strong> variante <strong>A</strong> como botão padrão nas três telas (/admin, /perfil, /contribuir),
+    com o mesmo componente compartilhado (ex.: <code>components/BotaoInicio.tsx</code>). Nas telas de estado
+    (acesso negado, senha redefinida, "Obrigado!"), usar o mesmo chip — some a variação "voltar ao índice"/"Voltar ao início".
+    A variante C pode ser combinada com a A no futuro, se o app ganhar mais níveis de navegação.</p>
+  </div>
+
+  <p>Código de referência da variante A (Tailwind, tokens do app):</p>
+  <pre><code>&lt;button onClick={() =&gt; router.push('/')}
+  className="inline-flex items-center gap-1.5 text-sm text-muted border border-line
+             rounded-full px-3 py-1.5 hover:text-ink hover:bg-white/60 transition
+             focus-visible:outline-2 focus-visible:outline-paprika focus-visible:outline-offset-2"&gt;
+  &lt;svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor"
+       strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"&gt;
+    &lt;path d="M10 3 L5 8 L10 13" /&gt;
+  &lt;/svg&gt;
+  Início
+&lt;/button&gt;</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="cabecalho">2. Cabeçalho padronizado entre as páginas</h2>
+  <p>Hoje cada página monta o próprio cabeçalho, com pequenas diferenças de espaçamento e composição. Um componente único de cabeçalho interno (voltar + título + ação opcional à direita) garante:</p>
+  <ul>
+    <li>Mesma altura e alinhamento em /admin, /perfil, /contribuir e /evolucao.</li>
+    <li>O botão "Início" sempre no mesmo lugar — memória muscular do usuário.</li>
+    <li>Um só lugar para ajustar quando o design evoluir.</li>
+  </ul>
+  <table>
+    <tr><th>Página</th><th>Hoje</th><th>Proposto</th></tr>
+    <tr><td>/admin</td><td>"← voltar" + título</td><td>chip Início + título + (abas abaixo, como está)</td></tr>
+    <tr><td>/perfil</td><td>"← voltar" + título + Sair</td><td>chip Início + título + Sair à direita</td></tr>
+    <tr><td>/contribuir</td><td>"← voltar" + título</td><td>chip Início + título</td></tr>
+    <tr><td>/evolucao, /contribuidores</td><td>link "Início" próprio</td><td>mesmo chip</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="hierarquia">3. Hierarquia de botões</h2>
+  <p>Definir três níveis e usar sempre os mesmos, em vez de estilos caso a caso:</p>
+  <table>
+    <tr><th>Nível</th><th>Visual</th><th>Uso</th></tr>
+    <tr><td><strong>Primário</strong></td><td>fundo paprika, texto claro</td><td>a ação principal da tela (Enviar contribuição, Salvar, Aprovar)</td></tr>
+    <tr><td><strong>Secundário</strong></td><td>borda <code>--line</code>, fundo transparente (o chip da seção 1)</td><td>navegação e ações de apoio (Início, Exportar, Carregar mais)</td></tr>
+    <tr><td><strong>Terciário</strong></td><td>texto <code>--muted</code>, sem borda</td><td>ações discretas dentro de listas (editar, fontes, histórico)</td></tr>
+  </table>
+  <p>Regra prática: no máximo um botão primário visível por bloco de tela. Destrutivas (Excluir, Rejeitar) mantêm o vermelho, sempre no nível secundário ou terciário — nunca competindo com o primário.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="detalhes">4. Detalhes que fazem o padrão ouro</h2>
+  <ul>
+    <li><strong>Estados de foco visíveis</strong> — <code>focus-visible</code> com anel paprika em todo elemento interativo (hoje só alguns têm). Custo baixo, ganho grande em acessibilidade.</li>
+    <li><strong>Alvos de toque ≥ 44px</strong> — botões de texto pequenos (editar, excluir, fontes) ganham padding vertical no mobile.</li>
+    <li><strong>Ícones em SVG, nunca caracteres</strong> — trocar "←", "×", "▾" por SVGs de traço 1.5–1.8px; é o que separa visual "de sistema" de visual desenhado.</li>
+    <li><strong>Skeleton no carregamento</strong> — a home mostra "Carregando o Índice PF…" centralizado; um esqueleto do layout (bloco do índice + mapa + tabela em cinza pulsante) percebe-se como mais rápido e evita salto de layout.</li>
+    <li><strong>Estados vazios com próxima ação</strong> — "Nenhuma contribuição pendente." pode oferecer o que fazer a seguir (ex.: link para a aba Aprovadas), em vez de só constatar o vazio.</li>
+    <li><strong>Transições curtas e únicas</strong> — padronizar <code>transition</code> em 150ms para cor/borda; nada de animar tamanho ou posição em elementos de leitura.</li>
+    <li><strong>Números tabulares em toda coluna numérica</strong> — a classe <code>.tnum</code> já existe; aplicar também nas tabelas do admin e do histórico.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="implementacao">5. Ordem de implementação sugerida</h2>
+  <table>
+    <tr><th>Etapa</th><th>Entrega</th><th>Esforço</th></tr>
+    <tr><td>1</td><td>Componente <code>BotaoInicio</code> (variante A) substituindo os três "voltar" e as variações das telas de estado</td><td>pequeno</td></tr>
+    <tr><td>2</td><td>Cabeçalho interno compartilhado nas 4 páginas</td><td>pequeno</td></tr>
+    <tr><td>3</td><td>Hierarquia de botões (primário/secundário/terciário) aplicada no admin e no contribuir</td><td>médio</td></tr>
+    <tr><td>4</td><td>Focus states + alvos de toque + ícones SVG</td><td>médio</td></tr>
+    <tr><td>5</td><td>Skeleton de carregamento da home e estados vazios</td><td>médio</td></tr>
+  </table>
+
+  <footer>Sugestões de layout do aplicativo <code>indice-pf</code>. Os previews usam os tokens reais de <code>app/globals.css</code>; o código de referência usa as classes Tailwind do projeto.</footer>
+</div>
+</body>
+</html>
