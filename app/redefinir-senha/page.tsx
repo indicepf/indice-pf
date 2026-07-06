@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import BotaoInicio from '../BotaoInicio'
 
 export default function RedefinirSenhaPage() {
   const router = useRouter()
@@ -47,7 +48,7 @@ export default function RedefinirSenhaPage() {
             <p className="text-sm text-muted mt-2 leading-relaxed">
               Link inválido ou expirado. Volte ao início e use “Esqueci minha senha” para receber um novo.
             </p>
-            <button onClick={() => router.push('/')} className={btnCls}>Voltar ao início</button>
+            <BotaoInicio className="mt-4" />
           </>
         ) : (
           <>

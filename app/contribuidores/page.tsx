@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getTopContribuidores, type Contribuidor } from '@/lib/queries'
 import AuthControls from '../Auth'
 import RequireAdmin from '../RequireAdmin'
+import BotaoInicio from '../BotaoInicio'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const rotuloMes = (m: string) => { const [a, mm] = m.split('-'); return `${MESES[Number(mm) - 1]}/${a}` }
@@ -36,7 +37,7 @@ function ContribuidoresInner() {
             <p className="text-xs text-muted mt-1">quem mais contribui com preços</p>
           </div>
           <div className="flex items-center gap-4 flex-wrap justify-end">
-            <a href="/" className="text-sm text-muted hover:text-ink">Início</a>
+            <BotaoInicio />
             <AuthControls />
           </div>
         </div>

@@ -13,6 +13,7 @@ import {
 import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
 import { capturarContexto, resumoDispositivo } from '@/lib/contexto'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
+import BotaoInicio, { chip } from '../BotaoInicio'
 import Painel from './Painel'
 import Auditoria from './Auditoria'
 import SuperAcoes from './SuperAcoes'
@@ -253,7 +254,7 @@ export default function AdminPage() {
         <div>
           <h1 className="font-[family-name:var(--font-serif)] text-2xl mb-2">Acesso restrito</h1>
           <p className="text-sm text-muted mb-4">Esta área é só para moderadores.</p>
-          <button onClick={() => router.push('/')} className="text-sm text-paprika hover:underline">voltar ao índice</button>
+          <BotaoInicio />
         </div>
       </main>
     )
@@ -278,7 +279,7 @@ export default function AdminPage() {
     <main className="min-h-screen">
       <header className="border-b border-line sticky top-0 bg-cream/90 backdrop-blur z-10">
         <div className="max-w-3xl mx-auto px-6 pt-4 flex items-center gap-3">
-          <button onClick={() => router.push('/')} className="text-sm text-muted hover:text-ink">← voltar</button>
+          <BotaoInicio />
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Administração</h1>
         </div>
         <div className="max-w-3xl mx-auto px-6 mt-3">
@@ -352,7 +353,7 @@ export default function AdminPage() {
         ))}
         {itens.length > visiveisMod && (
           <button onClick={() => setVisiveisMod(v => v + 20)}
-            className="w-full text-sm text-paprika border border-line rounded-md py-2 hover:bg-cream transition">
+            className={`${chip} w-full justify-center py-2`}>
             Carregar mais ({itens.length - visiveisMod} restantes)
           </button>
         )}
@@ -458,7 +459,7 @@ export default function AdminPage() {
           <div className="flex items-center justify-center gap-3 pt-2">
             {aprovadas.length < aprTotal ? (
               <button onClick={() => carregarAprovadas(true)} disabled={aprBusy}
-                className="text-sm text-paprika border border-line rounded-md px-4 py-2 hover:bg-cream transition disabled:opacity-60">
+                className={`${chip} px-4 py-2 disabled:opacity-60`}>
                 {aprBusy ? 'Carregando…' : `Carregar mais (${aprTotal - aprovadas.length} restantes)`}
               </button>
             ) : null}
@@ -762,7 +763,7 @@ export default function AdminPage() {
           })}
           {manuaisFiltrados.length > visiveisPrecos && (
             <button onClick={() => setVisiveisPrecos(v => v + 20)}
-              className="w-full text-sm text-paprika border border-line rounded-md py-2 hover:bg-cream transition">
+              className={`${chip} w-full justify-center py-2`}>
               Ver mais ({manuaisFiltrados.length - visiveisPrecos} restantes)
             </button>
           )}

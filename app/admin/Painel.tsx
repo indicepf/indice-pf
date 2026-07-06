@@ -327,7 +327,7 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
             ['usuario', 'regiao', 'ingrediente', 'preco', 'peso_g', 'mercado', 'cidade', 'status', 'data'],
             ...contribs.map(c => [perfis[c.user_id]?.nome ?? '', perfis[c.user_id]?.regiao ?? '', c.ingredientes?.nome ?? nomeIng[c.ingrediente_id ?? -1] ?? '', c.preco, c.peso_g, c.mercado, c.cidade, c.status, new Date(c.criado_em).toLocaleDateString('pt-BR')]),
           ])}
-          className="text-xs text-paprika hover:underline ml-auto self-center">Exportar CSV</button>
+          className="text-xs text-muted border border-line rounded-full px-2.5 py-1 hover:text-ink hover:bg-white/60 transition ml-auto self-center">Exportar CSV</button>
       </div>
 
       {/* USUÁRIOS */}

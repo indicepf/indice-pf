@@ -10,6 +10,7 @@ import { brl } from '@/lib/format'
 import type { ItemDetalhe, Fonte } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
 import BotaoExportar from './BotaoExportar'
+import BotaoInicio from '../BotaoInicio'
 import InfoTip from '../InfoTip'
 import AuthControls from '../Auth'
 import RequireAdmin from '../RequireAdmin'
@@ -184,7 +185,7 @@ function EvolucaoInner() {
             <p className="text-xs text-muted mt-1">histórico do custo do prato feito</p>
           </div>
           <div className="flex items-center gap-4 flex-wrap justify-end">
-            <a href="/" className="text-sm text-muted hover:text-ink">Início</a>
+            <BotaoInicio />
             <span className="text-sm text-paprika border-b-2 border-paprika pb-0.5">Histórico</span>
             <AuthControls />
           </div>
