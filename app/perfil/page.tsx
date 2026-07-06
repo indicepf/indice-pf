@@ -10,6 +10,7 @@ import {
 } from '@/lib/queries'
 import { REGIOES, SEXOS, idade, mascararTel, telValido, mascararCpf, cpfValido, brl, SAQUE_MINIMO } from '@/lib/format'
 import type { Profile, Contribuicao } from '@/lib/types'
+import BotaoInicio, { chip } from '../BotaoInicio'
 
 type MeuSaque = { id: number; valor: number; status: string; criado_em: string; pago_em: string | null }
 const SAQUE_STATUS: Record<string, { txt: string; cls: string }> = {
@@ -188,10 +189,10 @@ export default function PerfilPage() {
     <main className="min-h-screen">
       <header className="border-b border-line sticky top-0 bg-cream/90 backdrop-blur z-10">
         <div className="max-w-lg mx-auto px-6 py-4 flex items-center gap-3">
-          <button onClick={() => router.push('/')} className="text-sm text-muted hover:text-ink">← voltar</button>
+          <BotaoInicio />
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Meu perfil</h1>
           <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
-            className="text-sm text-muted hover:text-ink ml-auto">Sair</button>
+            className={`${chip} ml-auto`}>Sair</button>
         </div>
       </header>
 
@@ -379,7 +380,7 @@ export default function PerfilPage() {
                 })}
                 {contribs.length > visiveis && (
                   <button onClick={() => setVisiveis(v => v + 10)}
-                    className="w-full text-sm text-paprika border border-line rounded-md py-2 hover:bg-cream transition mt-1">
+                    className={`${chip} w-full justify-center py-2 mt-1`}>
                     Ver mais ({contribs.length - visiveis} restantes)
                   </button>
                 )}

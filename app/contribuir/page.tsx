@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getIngredientes } from '@/lib/queries'
 import { rotuloQtd, exemploQtd } from '@/lib/format'
 import type { Ing } from '@/lib/types'
+import BotaoInicio from '../BotaoInicio'
 
 const TIPOS_LOJA = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência']
 const MAX_FOTOS = 10
@@ -209,7 +210,7 @@ export default function ContribuirPage() {
     <main className="min-h-screen">
       <header className="border-b border-line sticky top-0 bg-cream/90 backdrop-blur z-10">
         <div className="max-w-lg mx-auto px-6 py-4 flex items-center gap-3">
-          <button onClick={() => router.push('/')} className="text-sm text-muted hover:text-ink">← voltar</button>
+          <BotaoInicio />
           <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Contribuir com preços</h1>
         </div>
       </header>
@@ -233,7 +234,7 @@ export default function ContribuirPage() {
                 className="text-sm border border-paprika text-paprika px-4 py-2 rounded-md hover:bg-paprika hover:text-white transition">
                 Enviar mais
               </button>
-              <button onClick={() => router.push('/')} className={btnInline}>Voltar ao índice</button>
+              <BotaoInicio />
             </div>
           </div>
         ) : (
@@ -380,4 +381,3 @@ function ContextoLocal({ coord, pegarLocal, geoMsg, endereco }: {
 
 const inputCls = 'w-full bg-cream border border-line rounded-md px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
 const btnFull = 'w-full bg-paprika text-white rounded-md px-3 py-3 text-sm font-medium hover:brightness-95 transition mt-5 disabled:opacity-60'
-const btnInline = 'text-sm bg-paprika text-white px-4 py-2 rounded-md hover:brightness-95 transition'
