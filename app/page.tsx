@@ -9,6 +9,13 @@ import { getDishCostsRange, getSnapshotsNovos, getAllDetalhes, getAllFontes, get
 import { MODOS, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
 import type { ModoKey, OrdemKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
+function mediana(v: number[]) {
+  if (!v.length) return 0
+  const s = [...v].sort((a, b) => a - b)
+  const meio = Math.floor(s.length / 2)
+  return s.length % 2 ? s[meio] : (s[meio - 1] + s[meio]) / 2
+}
+
 // mapa real do Brasil (d3/react-simple-maps) — só no cliente
 const MapaBrasil = dynamic(() => import('./MapaBrasil'), {
   ssr: false,
@@ -63,21 +70,18 @@ export default function Dashboard() {
     custos.forEach(c => { (acc[c.pratos.regiao] ||= []).push(c.custo_total) })
     return REGIOES.map(r => {
       const arr = acc[r] || []
-      const media = arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0
-      return { regiao: r, media: media * fator, n: arr.length }
+      // mediana (mesma estatística do índice) para o valor da região bater com o índice filtrado
+      return { regiao: r, media: mediana(arr) * fator, n: arr.length }
     })
   }, [custos, fator])
 
   // pratos do índice: filtrados pela(s) região(ões) selecionada(s) — o índice e a
   // contagem seguem o mesmo recorte da lista/mapa.
   const custosRegiao = useMemo(() => regioes.size ? custos.filter(c => regioes.has(c.pratos.regiao)) : custos, [custos, regioes])
-  const indiceNacional = useMemo(() => {
-    if (!custosRegiao.length) return 0
-    const v = custosRegiao.map(c => c.custo_total).sort((a, b) => a - b)
-    const meio = Math.floor(v.length / 2)
-    const mediana = v.length % 2 ? v[meio] : (v[meio - 1] + v[meio]) / 2
-    return mediana * fator
-  }, [custosRegiao, fator])
+  const indiceNacional = useMemo(
+    () => mediana(custosRegiao.map(c => c.custo_total)) * fator,
+    [custosRegiao, fator]
+  )
 
   const lista = useMemo(() => {
     let l = custos
@@ -130,7 +134,7 @@ export default function Dashboard() {
               </p>
               <p className="text-xs text-muted mt-2">mediana de {custosRegiao.length} pratos · {MODOS.find(m => m.key === modo)!.nota}</p>
               <p className="text-sm text-muted mt-4 max-w-sm leading-relaxed">
-                A cor de cada região indica o custo médio do prato feito ali. Clique numa região para destacá-la
+                A cor de cada região indica o custo mediano do prato feito ali. Clique numa região para destacá-la
                 e filtrar os pratos; clique de novo ou use o filtro da lista para voltar.
               </p>
               {isAdmin && (
