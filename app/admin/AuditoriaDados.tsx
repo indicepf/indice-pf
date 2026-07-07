@@ -40,7 +40,7 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted">
+      <p className="text-sm text-dim">
         Auditoria da coleta (só superusuário). Variações fortes ajudam a achar preço errado (ex.: um produto pronto no
         lugar do ingrediente). Abra o ingrediente, confira as fontes e <strong>exclua a entrada ruim</strong> — a mediana
         e o índice são recalculados na hora.
@@ -49,13 +49,13 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
       {/* variações fortes */}
       <div>
         <h3 className="text-sm font-medium mb-2">Variações fortes (&gt;30%) entre as duas últimas coletas</h3>
-        {loading ? <p className="text-sm text-muted">Carregando…</p>
-          : !fortes.length ? <p className="text-sm text-muted">Nenhuma variação acima de 30%.</p>
+        {loading ? <p className="text-sm text-dim">Carregando…</p>
+          : !fortes.length ? <p className="text-sm text-dim">Nenhuma variação acima de 30%.</p>
           : (
-            <div className="border border-line rounded-lg bg-panel overflow-x-auto">
+            <div className="border border-border rounded-lg bg-surface overflow-x-auto">
               <table className="w-full text-sm min-w-[34rem]">
                 <thead>
-                  <tr className="text-left text-[0.65rem] uppercase tracking-wide text-muted border-b border-line">
+                  <tr className="text-left text-[0.65rem] uppercase tracking-wide text-dim border-b border-border">
                     <th className="font-medium px-3 py-2">Ingrediente</th>
                     <th className="font-medium px-3 py-2 text-right">Anterior</th>
                     <th className="font-medium px-3 py-2 text-right">Atual</th>
@@ -65,12 +65,12 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
                 </thead>
                 <tbody>
                   {fortes.map(v => (
-                    <tr key={v.id} className="border-t border-line/60">
-                      <td className="px-3 py-2">{v.nome} <span className="text-[0.65rem] text-muted">/{v.label}</span></td>
-                      <td className="px-3 py-2 text-right tnum text-muted">{brl(v.medAnt)}</td>
+                    <tr key={v.id} className="border-t border-border/60">
+                      <td className="px-3 py-2">{v.nome} <span className="text-[0.65rem] text-dim">/{v.label}</span></td>
+                      <td className="px-3 py-2 text-right tnum text-dim">{brl(v.medAnt)}</td>
                       <td className="px-3 py-2 text-right tnum">{brl(v.medAtual)}</td>
-                      <td className={`px-3 py-2 text-right tnum font-medium ${v.delta > 0 ? 'text-red-600' : 'text-olive'}`}>{v.delta > 0 ? '+' : ''}{(v.delta * 100).toFixed(0)}%</td>
-                      <td className="px-3 py-2 text-right"><button onClick={() => abrir(v.id, v.nome)} className="text-xs text-paprika hover:underline">ver entradas</button></td>
+                      <td className={`px-3 py-2 text-right tnum font-medium ${v.delta > 0 ? 'text-danger' : 'text-ok'}`}>{v.delta > 0 ? '+' : ''}{(v.delta * 100).toFixed(0)}%</td>
+                      <td className="px-3 py-2 text-right"><button onClick={() => abrir(v.id, v.nome)} className="text-xs text-accent hover:underline">ver entradas</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -83,12 +83,12 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
       <div>
         <h3 className="text-sm font-medium mb-2">Inspecionar qualquer ingrediente</h3>
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar ingrediente…"
-          className="bg-cream border border-line rounded-md px-3 py-1.5 text-sm w-full sm:w-72 focus:outline-none focus:border-paprika" />
+          className="bg-surface-2 border border-border rounded-md px-3 py-1.5 text-sm w-full sm:w-72 focus:outline-none focus:border-accent" />
         {ingsBusca.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {ingsBusca.map(i => (
               <button key={i.id} onClick={() => { abrir(i.id, i.nome); setBusca('') }}
-                className="text-xs border border-line rounded-md px-2.5 py-1 hover:border-paprika transition">{i.nome}</button>
+                className="text-xs border border-border rounded-md px-2.5 py-1 hover:border-accent transition">{i.nome}</button>
             ))}
           </div>
         )}
@@ -99,20 +99,20 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium">Entradas online de {sel.nome} (última coleta)</h3>
-            <button onClick={() => setSel(null)} className="text-xs text-muted hover:text-ink">fechar</button>
+            <button onClick={() => setSel(null)} className="text-xs text-dim hover:text-ink">fechar</button>
           </div>
-          {msg && <p className="text-xs text-olive mb-2">{msg}</p>}
-          {!entradas.length ? <p className="text-sm text-muted">Sem entradas online nesta coleta.</p> : (
+          {msg && <p className="text-xs text-ok mb-2">{msg}</p>}
+          {!entradas.length ? <p className="text-sm text-dim">Sem entradas online nesta coleta.</p> : (
             <div className="space-y-2">
               {entradas.map(e => (
-                <div key={e.id} className="border border-line rounded-md bg-panel px-3 py-2.5 flex items-center gap-3">
+                <div key={e.id} className="border border-border rounded-md bg-surface px-3 py-2.5 flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <a href={e.link || undefined} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-paprika truncate block">{e.titulo}</a>
-                    <p className="text-xs text-muted">{e.loja} · {e.exibicao}</p>
+                    <a href={e.link || undefined} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-accent truncate block">{e.titulo}</a>
+                    <p className="text-xs text-dim">{e.loja} · {e.exibicao}</p>
                   </div>
-                  <span className="text-sm tnum text-paprika shrink-0">{e.preco_bruto != null ? brl(Number(e.preco_bruto)) : '—'}</span>
+                  <span className="text-sm tnum text-accent shrink-0">{e.preco_bruto != null ? brl(Number(e.preco_bruto)) : '—'}</span>
                   <button disabled={busy} onClick={() => excluir(e)}
-                    className="text-xs border border-red-200 text-red-600 px-2.5 py-1 rounded-md hover:bg-red-50 transition disabled:opacity-60 shrink-0">excluir</button>
+                    className="text-xs border border-danger/30 text-danger px-2.5 py-1 rounded-md hover:bg-danger/5 transition disabled:opacity-60 shrink-0">excluir</button>
                 </div>
               ))}
             </div>
