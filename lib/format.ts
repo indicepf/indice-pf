@@ -1,23 +1,52 @@
-export const MODOS = [
+// Níveis de preço (merge V0 × mockup V1): keys da V0 preservadas (estado,
+// calibração); nomenclatura do mockup nos labels. "Indústria" fica
+// indisponível até haver dado ou percentual definido (decisão D5 do plano).
+export type NivelPreco = {
+	key: string;
+	label: string;
+	grupo: "consumidor" | "atacarejo" | "industria";
+	desc: number; // desconto sobre o preço online (0–1)
+	nota: string;
+	disponivel: boolean;
+};
+
+export const NIVEIS_PRECO: readonly NivelPreco[] = [
 	{
 		key: "online",
-		label: "Online",
+		label: "Consumidor — online",
+		grupo: "consumidor",
 		desc: 0.0,
 		nota: "preço coletado no varejo online",
+		disponivel: true,
 	},
 	{
 		key: "mercado",
-		label: "Mercado",
+		label: "Consumidor — mercado",
+		grupo: "consumidor",
 		desc: 0.1,
 		nota: "estimativa −10% sobre o online",
+		disponivel: true,
 	},
 	{
 		key: "atacarejo",
 		label: "Atacarejo",
+		grupo: "atacarejo",
 		desc: 0.22,
 		nota: "estimativa −22% sobre o online",
+		disponivel: true,
+	},
+	{
+		key: "industria",
+		label: "Indústria",
+		grupo: "industria",
+		desc: 0,
+		nota: "em breve",
+		disponivel: false,
 	},
 ] as const;
+
+// alias de transição (V0) — só os níveis disponíveis; remover na Fase 11
+export const MODOS = NIVEIS_PRECO.filter((n) => n.disponivel);
 
 export const REGIOES = [
 	"Sul",
