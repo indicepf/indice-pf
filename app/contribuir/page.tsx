@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getIngredientes } from '@/lib/queries'
 import { rotuloQtd, exemploQtd } from '@/lib/format'
 import type { Ing } from '@/lib/types'
+import { Button, Input, Select } from '@/components/ui'
 import BotaoInicio from '../BotaoInicio'
 
 const TIPOS_LOJA = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência']
@@ -201,37 +202,37 @@ export default function ContribuirPage() {
     } finally { setBusy(false); setProgresso('') }
   }
 
-  if (userId === undefined) return <main className="min-h-screen grid place-items-center text-muted text-sm">Carregando…</main>
+  if (userId === undefined) return <main className="min-h-screen grid place-items-center text-dim text-sm">Carregando…</main>
   if (!userId) return null
 
   const unidadeSingle = ings.find(i => String(i.id) === ingredienteId)?.unidade ?? null
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-line sticky top-0 bg-cream/90 backdrop-blur z-10">
+      <header className="border-b border-border sticky top-0 bg-surface/80 backdrop-blur z-10">
         <div className="max-w-lg mx-auto px-6 py-4 flex items-center gap-3">
           <BotaoInicio />
-          <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Contribuir com preços</h1>
+          <h1 className="text-xl font-bold tracking-tight ml-1">Contribuir com preços</h1>
         </div>
       </header>
 
       <div className="max-w-lg mx-auto px-6 py-8">
         {resultado ? (
           <div className="text-center py-10">
-            <h2 className="font-[family-name:var(--font-serif)] text-2xl mb-2">Obrigado!</h2>
-            <p className="text-sm text-muted leading-relaxed mb-2 max-w-xs mx-auto">
+            <h2 className="text-2xl font-bold tracking-tight mb-2">Obrigado!</h2>
+            <p className="text-sm text-dim leading-relaxed mb-2 max-w-xs mx-auto">
               <strong>{resultado.enviadas}</strong> contribuição(ões) enviada(s) e <strong>em análise</strong>.
               Quando aprovadas, ajudam a calibrar o índice — e contam para a sua recompensa.
             </p>
             {(resultado.dups > 0 || resultado.falhas > 0) && (
-              <p className="text-xs text-muted mb-6">
+              <p className="text-xs text-dim mb-6">
                 {resultado.dups > 0 && <>{resultado.dups} já enviada(s) antes (ignorada[s]). </>}
                 {resultado.falhas > 0 && <>{resultado.falhas} falhou/falharam no envio.</>}
               </p>
             )}
             <div className="flex gap-3 justify-center mt-6">
               <button onClick={() => setResultado(null)}
-                className="text-sm border border-paprika text-paprika px-4 py-2 rounded-md hover:bg-paprika hover:text-white transition">
+                className="text-sm border border-accent text-accent px-4 py-2 rounded-[var(--r-sm)] hover:bg-accent hover:text-white transition cursor-pointer">
                 Enviar mais
               </button>
               <BotaoInicio />
@@ -240,10 +241,10 @@ export default function ContribuirPage() {
         ) : (
           <>
             {/* seletor de modo */}
-            <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm mb-5">
+            <div className="inline-flex border border-border rounded-[var(--r-sm)] overflow-hidden bg-surface text-sm mb-5">
               {([['single', 'Uma foto'], ['lote', 'Lote (várias)']] as [Modo, string][]).map(([k, label]) => (
                 <button key={k} onClick={() => { setModo(k); setErro('') }}
-                  className={`px-4 py-1.5 transition-colors ${modo === k ? 'bg-paprika text-white' : 'text-muted hover:text-ink'}`}>
+                  className={`px-4 py-1.5 transition-colors cursor-pointer ${modo === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>
                   {label}
                 </button>
               ))}
@@ -251,13 +252,13 @@ export default function ContribuirPage() {
 
             {modo === 'single' ? (
               <>
-                <p className="text-sm text-muted mb-4">Fotografe o produto com a etiqueta de preço visível. Só a foto e a localização são obrigatórias — os demais campos ajudam, mas são opcionais.</p>
+                <p className="text-sm text-dim mb-4">Fotografe o produto com a etiqueta de preço visível. Só a foto e a localização são obrigatórias — os demais campos ajudam, mas são opcionais.</p>
 
                 <label className="block">
-                  <div className="aspect-[4/3] rounded-lg border-2 border-dashed border-line bg-panel grid place-items-center overflow-hidden cursor-pointer hover:border-paprika transition-colors">
+                  <div className="aspect-[4/3] rounded-[var(--r)] border-2 border-dashed border-border-2 bg-surface grid place-items-center overflow-hidden cursor-pointer hover:border-accent transition-colors">
                     {preview
                       ? <img src={preview} alt="prévia" className="w-full h-full object-cover" />
-                      : <div className="text-center text-muted text-sm px-4">
+                      : <div className="text-center text-dim text-sm px-4">
                           <p className="font-medium text-ink">Toque para fotografar</p>
                           <p className="mt-1 text-xs">Enquadre o produto e a etiqueta de preço juntos, bem iluminado.</p>
                         </div>}
@@ -266,44 +267,44 @@ export default function ContribuirPage() {
                 </label>
 
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <label className="text-xs text-muted">Ingrediente (opcional)
-                    <select value={ingredienteId} onChange={e => setIngredienteId(e.target.value)} className={inputCls}>
+                  <label className="text-xs text-dim">Ingrediente (opcional)
+                    <Select value={ingredienteId} onChange={e => setIngredienteId(e.target.value)}>
                       <option value="">Selecione…</option>
                       {ings.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}
-                    </select>
+                    </Select>
                   </label>
-                  <label className="text-xs text-muted">Tipo de loja (opcional)
-                    <select value={tipoLoja} onChange={e => setTipoLoja(e.target.value)} className={inputCls}>
+                  <label className="text-xs text-dim">Tipo de loja (opcional)
+                    <Select value={tipoLoja} onChange={e => setTipoLoja(e.target.value)}>
                       <option value="">Selecione…</option>
                       {TIPOS_LOJA.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    </Select>
                   </label>
-                  <label className="text-xs text-muted">Preço (R$, opcional)
-                    <input value={preco} onChange={e => setPreco(e.target.value)} inputMode="decimal" placeholder="0,00" className={inputCls} />
+                  <label className="text-xs text-dim">Preço (R$, opcional)
+                    <Input value={preco} onChange={e => setPreco(e.target.value)} inputMode="decimal" placeholder="0,00" />
                   </label>
-                  <label className="text-xs text-muted">{rotuloQtd(unidadeSingle)} (opcional)
-                    <input value={pesoG} onChange={e => setPesoG(e.target.value)} inputMode="decimal" placeholder={exemploQtd(unidadeSingle)} className={inputCls} />
+                  <label className="text-xs text-dim">{rotuloQtd(unidadeSingle)} (opcional)
+                    <Input value={pesoG} onChange={e => setPesoG(e.target.value)} inputMode="decimal" placeholder={exemploQtd(unidadeSingle)} />
                   </label>
-                  <label className="text-xs text-muted col-span-2">Marca (opcional — deixe vazio se não tiver)
-                    <input value={marca} onChange={e => setMarca(e.target.value)} placeholder="ex: Ancelli, Tio João…" className={inputCls} />
+                  <label className="text-xs text-dim col-span-2">Marca (opcional — deixe vazio se não tiver)
+                    <Input value={marca} onChange={e => setMarca(e.target.value)} placeholder="ex: Ancelli, Tio João…" />
                   </label>
-                  <label className="text-xs text-muted col-span-2">Mercado / rede (opcional)
-                    <input value={mercado} onChange={e => setMercado(e.target.value)} placeholder="ex: Assaí, Carrefour…" className={inputCls} />
+                  <label className="text-xs text-dim col-span-2">Mercado / rede (opcional)
+                    <Input value={mercado} onChange={e => setMercado(e.target.value)} placeholder="ex: Assaí, Carrefour…" />
                   </label>
-                  <label className="text-xs text-muted col-span-2">Cidade (opcional)
-                    <input value={cidade} onChange={e => setCidade(e.target.value)} className={inputCls} />
+                  <label className="text-xs text-dim col-span-2">Cidade (opcional)
+                    <Input value={cidade} onChange={e => setCidade(e.target.value)} />
                   </label>
                 </div>
 
                 <ContextoLocal {...{ coord, pegarLocal, geoMsg, endereco }} />
 
-                {erro && <p className="text-sm text-red-600 mt-4">{erro}</p>}
-                <button disabled={busy} onClick={enviarSingle} className={btnFull}>{busy ? 'Enviando…' : 'Enviar contribuição'}</button>
-                <p className="text-[0.7rem] text-muted mt-3 text-center">Sua contribuição passa por análise antes de entrar no índice.</p>
+                {erro && <p className="text-sm text-danger mt-4">{erro}</p>}
+                <Button full disabled={busy} onClick={enviarSingle} className="mt-5">{busy ? 'Enviando…' : 'Enviar contribuição'}</Button>
+                <p className="text-[0.7rem] text-dim mt-3 text-center">Sua contribuição passa por análise antes de entrar no índice.</p>
               </>
             ) : (
               <>
-                <p className="text-sm text-muted mb-4">
+                <p className="text-sm text-dim mb-4">
                   Anexe <strong>todas as fotos de uma vez</strong> (como no WhatsApp). Registre a localização, o mercado e o
                   tipo <strong>uma vez</strong> — valem para todas. Ingrediente e preço ficam para a moderação. Cada foto vira uma contribuição.
                 </p>
@@ -311,7 +312,7 @@ export default function ContribuirPage() {
                 {fotos.length > 0 && (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3">
                     {fotos.map((f, idx) => (
-                      <div key={idx} className="relative aspect-square rounded-md overflow-hidden border border-line">
+                      <div key={idx} className="relative aspect-square rounded-[var(--r-sm)] overflow-hidden border border-border">
                         <img src={f.preview} alt={`foto ${idx + 1}`} className="w-full h-full object-cover" />
                         <button onClick={() => removerFoto(idx)}
                           className="absolute top-1 right-1 bg-ink/70 text-white w-5 h-5 rounded-full text-xs leading-none grid place-items-center hover:bg-ink">×</button>
@@ -322,38 +323,38 @@ export default function ContribuirPage() {
 
                 {fotos.length < MAX_FOTOS && (
                   <label className="block">
-                    <div className="rounded-lg border-2 border-dashed border-line bg-panel py-6 grid place-items-center cursor-pointer hover:border-paprika transition-colors text-center">
+                    <div className="rounded-[var(--r)] border-2 border-dashed border-border-2 bg-surface py-6 grid place-items-center cursor-pointer hover:border-accent transition-colors text-center">
                       <p className="font-medium text-ink text-sm">+ Anexar fotos</p>
-                      <p className="text-xs text-muted mt-1">Selecione várias de uma vez — até {MAX_FOTOS} por lote ({fotos.length}/{MAX_FOTOS})</p>
+                      <p className="text-xs text-dim mt-1">Selecione várias de uma vez — até {MAX_FOTOS} por lote ({fotos.length}/{MAX_FOTOS})</p>
                     </div>
                     <input type="file" accept="image/*" multiple className="hidden" onChange={adicionarFotos} />
                   </label>
                 )}
 
-                <div className="mt-6 border-t border-line pt-5">
-                  <p className="text-xs uppercase tracking-wide text-muted mb-3">Vale para todas as fotos</p>
+                <div className="mt-6 border-t border-border pt-5">
+                  <p className="text-xs uppercase tracking-wide text-dim mb-3">Vale para todas as fotos</p>
                   <ContextoLocal {...{ coord, pegarLocal, geoMsg, endereco }} />
                   <div className="grid grid-cols-2 gap-3 mt-3">
-                    <label className="text-xs text-muted">Tipo de loja (opcional)
-                      <select value={tipoLoja} onChange={e => setTipoLoja(e.target.value)} className={inputCls}>
+                    <label className="text-xs text-dim">Tipo de loja (opcional)
+                      <Select value={tipoLoja} onChange={e => setTipoLoja(e.target.value)}>
                         <option value="">Selecione…</option>
                         {TIPOS_LOJA.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
+                      </Select>
                     </label>
-                    <label className="text-xs text-muted">Cidade (opcional)
-                      <input value={cidade} onChange={e => setCidade(e.target.value)} className={inputCls} />
+                    <label className="text-xs text-dim">Cidade (opcional)
+                      <Input value={cidade} onChange={e => setCidade(e.target.value)} />
                     </label>
-                    <label className="text-xs text-muted col-span-2">Mercado / rede (opcional)
-                      <input value={mercado} onChange={e => setMercado(e.target.value)} placeholder="ex: Assaí, Carrefour…" className={inputCls} />
+                    <label className="text-xs text-dim col-span-2">Mercado / rede (opcional)
+                      <Input value={mercado} onChange={e => setMercado(e.target.value)} placeholder="ex: Assaí, Carrefour…" />
                     </label>
                   </div>
                 </div>
 
-                {erro && <p className="text-sm text-red-600 mt-4">{erro}</p>}
-                <button disabled={busy || !fotos.length} onClick={enviarLote} className={btnFull}>
+                {erro && <p className="text-sm text-danger mt-4">{erro}</p>}
+                <Button full disabled={busy || !fotos.length} onClick={enviarLote} className="mt-5">
                   {busy ? (progresso || 'Enviando…') : `Enviar ${fotos.length || ''} contribuição${fotos.length === 1 ? '' : 'ões'}`.trim()}
-                </button>
-                <p className="text-[0.7rem] text-muted mt-3 text-center">Cada foto entra como uma contribuição e passa por análise antes do índice.</p>
+                </Button>
+                <p className="text-[0.7rem] text-dim mt-3 text-center">Cada foto entra como uma contribuição e passa por análise antes do índice.</p>
               </>
             )}
           </>
@@ -369,15 +370,12 @@ function ContextoLocal({ coord, pegarLocal, geoMsg, endereco }: {
   return (
     <div className="mt-4 text-xs">
       <button type="button" onClick={pegarLocal}
-        className={`font-medium ${coord ? 'text-olive' : 'text-paprika hover:underline'}`}>
+        className={`font-medium cursor-pointer ${coord ? 'text-ok' : 'text-accent hover:underline'}`}>
         {coord ? '✓ local registrado' : '+ registrar localização (obrigatório)'}
       </button>
-      {!coord && <p className="text-muted mt-2">A localização é obrigatória — usamos a coordenada e a data para validar onde o preço foi coletado.</p>}
-      {geoMsg && <p className="text-amber-700 mt-2">{geoMsg}</p>}
-      {endereco && <p className="text-muted mt-2 leading-snug">Local: {endereco}</p>}
+      {!coord && <p className="text-dim mt-2">A localização é obrigatória — usamos a coordenada e a data para validar onde o preço foi coletado.</p>}
+      {geoMsg && <p className="text-warn mt-2">{geoMsg}</p>}
+      {endereco && <p className="text-dim mt-2 leading-snug">Local: {endereco}</p>}
     </div>
   )
 }
-
-const inputCls = 'w-full bg-cream border border-line rounded-md px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
-const btnFull = 'w-full bg-paprika text-white rounded-md px-3 py-3 text-sm font-medium hover:brightness-95 transition mt-5 disabled:opacity-60'
