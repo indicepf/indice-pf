@@ -955,3 +955,42 @@ export async function getUsoPorIngrediente(): Promise<Record<number, number>> {
   Object.entries(sets).forEach(([k, v]) => { out[+k] = v.size })
   return out
 }
+
+// ── Home V1 (Fase 5) ─────────────────────────────────────────────────────────
+
+// contagens reais exibidas no hero (nada de números de marketing)
+export type StatsPublicas = { pratos: number; ingredientes: number; contribuicoesAprovadas: number }
+export async function getStatsPublicas(): Promise<StatsPublicas> {
+  const [p, i, c] = await Promise.all([
+    supabase.from('pratos').select('id', { count: 'exact', head: true }),
+    supabase.from('ingredientes').select('id', { count: 'exact', head: true }).eq('ativo', true),
+    supabase.from('contribuicoes').select('id', { count: 'exact', head: true }).eq('status', 'aprovada'),
+  ])
+  return { pratos: p.count ?? 0, ingredientes: i.count ?? 0, contribuicoesAprovadas: c.count ?? 0 }
+}
+
+// custo de cada prato em cada coleta do modelo novo — base do gráfico do
+// índice, dos movers e das sparklines da home (derivações no cliente)
+export type SeriePratos = {
+  snaps: { id: number; data: string }[]                  // ascendente
+  pratos: { id: number; nome: string; regiao: string }[]
+  custos: Record<number, (number | null)[]>              // pratoId → custo por coleta
+}
+export async function getSeriePratos(): Promise<SeriePratos> {
+  const snaps = [...(await getSnapshotsNovos())].reverse()
+  if (!snaps.length) return { snaps: [], pratos: [], custos: {} }
+  const idx = new Map(snaps.map((s, i) => [s.id, i]))
+  const rows = await fetchAll<any>(() => supabase.from('custos_pratos')
+    .select('snapshot_id, prato_id, custo_total, pratos(id, nome, regiao)')
+    .in('snapshot_id', snaps.map(s => s.id)))
+  const pratos = new Map<number, { id: number; nome: string; regiao: string }>()
+  const custos: Record<number, (number | null)[]> = {}
+  for (const r of rows) {
+    const p = r.pratos
+    if (p && !pratos.has(p.id)) pratos.set(p.id, { id: p.id, nome: p.nome, regiao: p.regiao })
+    const arr = (custos[r.prato_id] ||= Array(snaps.length).fill(null))
+    const i = idx.get(r.snapshot_id)
+    if (i != null) arr[i] = Number(r.custo_total)
+  }
+  return { snaps, pratos: [...pratos.values()], custos }
+}
