@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { Button, Card, Input } from '@/components/ui'
 import BotaoInicio from '../BotaoInicio'
 
 export default function RedefinirSenhaPage() {
@@ -37,38 +38,35 @@ export default function RedefinirSenhaPage() {
 
   return (
     <main className="min-h-screen grid place-items-center px-4">
-      <div className="bg-panel border border-line rounded-xl p-6 max-w-sm w-full shadow-sm">
-        <h1 className="font-[family-name:var(--font-serif)] text-xl mb-1">Redefinir senha</h1>
+      <Card className="p-6 max-w-sm w-full">
+        <h1 className="text-xl font-bold tracking-tight mb-1">Redefinir senha</h1>
         {ok ? (
-          <p className="text-sm text-olive mt-2">Senha alterada. Redirecionando…</p>
+          <p className="text-sm text-ok mt-2">Senha alterada. Redirecionando…</p>
         ) : pronto === null ? (
-          <p className="text-sm text-muted mt-2">Verificando o link…</p>
+          <p className="text-sm text-dim mt-2">Verificando o link…</p>
         ) : !pronto ? (
           <>
-            <p className="text-sm text-muted mt-2 leading-relaxed">
+            <p className="text-sm text-dim mt-2 leading-relaxed">
               Link inválido ou expirado. Volte ao início e use “Esqueci minha senha” para receber um novo.
             </p>
             <BotaoInicio className="mt-4" />
           </>
         ) : (
           <>
-            <p className="text-sm text-muted mb-4">Escolha uma nova senha para sua conta.</p>
-            <label className="text-xs text-muted">Nova senha</label>
-            <input type="password" value={senha} onChange={e => setSenha(e.target.value)} autoFocus
-              placeholder="mínimo 6 caracteres" className={inputCls} />
-            <label className="text-xs text-muted mt-3 block">Confirmar senha</label>
-            <input type="password" value={confirma} onChange={e => setConfirma(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && salvar()} className={inputCls} />
-            {erro && <p className="text-xs text-red-600 mt-2">{erro}</p>}
-            <button disabled={busy} onClick={salvar} className={btnCls}>
+            <p className="text-sm text-dim mb-4">Escolha uma nova senha para sua conta.</p>
+            <label className="text-xs text-dim">Nova senha</label>
+            <Input type="password" value={senha} onChange={e => setSenha(e.target.value)} autoFocus
+              placeholder="mínimo 6 caracteres" />
+            <label className="text-xs text-dim mt-3 block">Confirmar senha</label>
+            <Input type="password" value={confirma} onChange={e => setConfirma(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && salvar()} />
+            {erro && <p className="text-xs text-danger mt-2">{erro}</p>}
+            <Button full disabled={busy} onClick={salvar} className="mt-4">
               {busy ? 'Salvando…' : 'Salvar nova senha'}
-            </button>
+            </Button>
           </>
         )}
-      </div>
+      </Card>
     </main>
   )
 }
-
-const inputCls = 'w-full bg-cream border border-line rounded-md px-3 py-2 text-sm focus:outline-none focus:border-paprika mt-1'
-const btnCls = 'w-full bg-paprika text-white rounded-md px-3 py-2.5 text-sm font-medium hover:brightness-95 transition mt-4 disabled:opacity-60'
