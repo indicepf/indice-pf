@@ -267,10 +267,11 @@ export default function Dashboard() {
               <Card className="p-4">
                 <p className="text-[0.7rem] uppercase tracking-[0.12em] text-dim">
                   {regioes.size === 0 ? 'Índice PF nacional' : regioes.size === 1 ? `Índice — ${[...regioes][0]}` : `Índice — ${regioes.size} regiões`}
+                  {nivel.desc > 0 && <span className="text-warn"> · {nivel.label} (−{Math.round(nivel.desc * 100)}% estimado)</span>}
                 </p>
                 <p className="text-3xl font-bold tracking-tight text-accent tnum mt-1">{brl(indiceNacional)}</p>
                 <p className="text-xs text-dim mt-1.5">
-                  mediana de {custosRegiao.length} pratos
+                  mediana de {custosRegiao.length} pratos · {nivel.nota}
                   {deltaIndice != null && (
                     <span className="tnum font-medium" style={{ color: deltaIndice > 0 ? COR_ALTA : COR_QUEDA }}>
                       {' '}· {deltaIndice > 0 ? '+' : ''}{deltaIndice.toFixed(1)}% vs coleta anterior
