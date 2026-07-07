@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { inputBase } from '@/components/ui'
 import dynamic from 'next/dynamic'
 import {
   getPainelContribuicoes, getPerfis, getUsoPorIngrediente, getLatestSnapshot,
@@ -10,27 +11,25 @@ import {
 } from '@/lib/queries'
 import { capturarContexto } from '@/lib/contexto'
 import { brl, idade, SEXOS, unidadeCurta } from '@/lib/format'
+import { baixarCSV } from '@/lib/exportar'
+import { ACCENT, CORES_REGIAO, FAINT } from '@/lib/theme'
 import type { Ing } from '@/lib/types'
 
 const MapaLocal = dynamic(() => import('../MapaLocal'), {
   ssr: false,
-  loading: () => <div className="h-[420px] rounded-lg border border-line grid place-items-center text-muted text-sm">carregando mapa…</div>,
+  loading: () => <div className="h-[420px] rounded-lg border border-border grid place-items-center text-dim text-sm">carregando mapa…</div>,
 })
 
-// cores por região (mesma ordem de REGIOES)
-const CORES_REGIAO: Record<string, string> = {
-  'Sul': '#2563eb', 'Sudeste': '#c0492b', 'Centro-oeste': '#ca8a04', 'Nordeste': '#16a34a', 'Norte': '#9333ea',
-}
 const sexoLabel = (v: string | null) => SEXOS.find(s => s.value === v)?.label ?? '—'
 function dias(iso: string | null): number | null {
   if (!iso) return null
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
 }
 function frescor(d: number | null): { txt: string; cls: string } {
-  if (d == null) return { txt: 'nunca', cls: 'text-red-600 border-red-200 bg-red-50' }
-  if (d <= 5) return { txt: `há ${d}d`, cls: 'text-olive border-olive/30 bg-olive/5' }
-  if (d <= 30) return { txt: `há ${d}d`, cls: 'text-muted border-line' }
-  return { txt: `há ${d}d`, cls: 'text-red-600 border-red-200 bg-red-50' }
+  if (d == null) return { txt: 'nunca', cls: 'text-danger border-danger/30 bg-danger/5' }
+  if (d <= 5) return { txt: `há ${d}d`, cls: 'text-ok border-ok/30 bg-ok/5' }
+  if (d <= 30) return { txt: `há ${d}d`, cls: 'text-dim border-border' }
+  return { txt: `há ${d}d`, cls: 'text-danger border-danger/30 bg-danger/5' }
 }
 function rsKgDe(c: PainelContrib, ings: Ing[]): number | null {
   const ing = ings.find(i => i.id === c.ingrediente_id)
@@ -46,7 +45,7 @@ function FormEdicao({ edit, setEdit, ings, salvando, onSalvar }: {
 }) {
   const rk = rsKgDe(edit, ings)
   return (
-    <div className="border border-line rounded-lg bg-panel p-3 space-y-3">
+    <div className="border border-border rounded-lg bg-surface p-3 space-y-3">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
         <label>Ingrediente
           <select value={edit.ingrediente_id ?? ''} onChange={e => setEdit(v => v && ({ ...v, ingrediente_id: e.target.value ? Number(e.target.value) : null }))} className={inputCls}>
@@ -71,21 +70,14 @@ function FormEdicao({ edit, setEdit, ings, salvando, onSalvar }: {
         </label>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        <button onClick={onSalvar} disabled={salvando} className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">{salvando ? 'Salvando…' : 'Salvar'}</button>
-        <button onClick={() => setEdit(null)} className="text-sm border border-line text-muted px-3 py-1.5 rounded-md hover:bg-cream transition">Cancelar</button>
-        <span className={`text-xs px-2 py-1 rounded ${rk == null ? 'text-muted' : rk > 100 ? 'bg-paprika/10 text-paprika font-medium' : 'text-muted'}`}>{rk == null ? 'não calibra o índice' : `${brl(rk)}/kg${rk > 100 ? ' · confira' : ''}`}</span>
-        <span className="text-[0.6rem] uppercase tracking-wide text-muted ml-auto">{edit.status}</span>
+        <button onClick={onSalvar} disabled={salvando} className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">{salvando ? 'Salvando…' : 'Salvar'}</button>
+        <button onClick={() => setEdit(null)} className="text-sm border border-border text-dim px-3 py-1.5 rounded-md hover:bg-surface-2 transition">Cancelar</button>
+        <span className={`text-xs px-2 py-1 rounded ${rk == null ? 'text-dim' : rk > 100 ? 'bg-accent/10 text-accent font-medium' : 'text-dim'}`}>{rk == null ? 'não calibra o índice' : `${brl(rk)}/kg${rk > 100 ? ' · confira' : ''}`}</span>
+        <span className="text-[0.6rem] uppercase tracking-wide text-dim ml-auto">{edit.status}</span>
       </div>
     </div>
   )
 }
-function baixarCSV(nome: string, linhas: (string | number | null)[][]) {
-  const csv = linhas.map(l => l.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = nome; a.click(); URL.revokeObjectURL(url)
-}
-
 export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: boolean }) {
   const [contribs, setContribs] = useState<PainelContrib[] | null>(null)
   const [perfis, setPerfis] = useState<Record<string, PerfilBasico>>({})
@@ -210,7 +202,7 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
     window.location.reload()
   }
 
-  if (!contribs) return <p className="text-sm text-muted text-center py-16">Carregando painel…</p>
+  if (!contribs) return <p className="text-sm text-dim text-center py-16">Carregando painel…</p>
 
   // ── detalhe de um usuário ───────────────────────────────────────────────────
   if (userSel) {
@@ -220,33 +212,33 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
     const rj = cs.filter(c => c.status === 'rejeitada').length
     const taxa = ap + rj > 0 ? Math.round((ap / (ap + rj)) * 100) : null
     const pontos = cs.filter(c => c.lat != null && c.lng != null).map(c => ({
-      lat: c.lat as number, lng: c.lng as number, color: CORES_REGIAO[p?.regiao ?? ''] ?? '#c0492b',
+      lat: c.lat as number, lng: c.lng as number, color: CORES_REGIAO[p?.regiao ?? ''] ?? ACCENT,
       label: `${c.ingredientes?.nome || c.produto || 'Produto'}${c.preco != null ? ` — ${brl(Number(c.preco))}` : ''}`,
     }))
     return (
       <div className="space-y-5">
-        <button onClick={() => setUserSel(null)} className="text-sm text-paprika hover:underline">← todos os usuários</button>
-        <div className="border border-line rounded-lg bg-panel p-4">
+        <button onClick={() => setUserSel(null)} className="text-sm text-accent hover:underline">← todos os usuários</button>
+        <div className="border border-border rounded-lg bg-surface p-4">
           <p className="font-medium text-lg">{p?.nome || 'Usuário sem nome'}</p>
           <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-2 text-sm mt-3">
-            <div><dt className="text-xs text-muted">Região</dt><dd>{p?.regiao || '—'}</dd></div>
-            <div><dt className="text-xs text-muted">Sexo</dt><dd>{sexoLabel(p?.sexo ?? null)}</dd></div>
-            <div><dt className="text-xs text-muted">Idade</dt><dd>{idade(p?.data_nascimento) ?? '—'}{idade(p?.data_nascimento) != null ? ' anos' : ''}</dd></div>
-            <div><dt className="text-xs text-muted">Telefone</dt><dd>{p?.telefone || '—'}</dd></div>
-            <div><dt className="text-xs text-muted">Contribuições</dt><dd>{cs.length}</dd></div>
-            <div><dt className="text-xs text-muted">Aprovadas</dt><dd className="text-olive">{ap}</dd></div>
-            <div><dt className="text-xs text-muted">Rejeitadas</dt><dd className="text-red-600">{rj}</dd></div>
-            <div><dt className="text-xs text-muted">Taxa de aprovação</dt><dd>{taxa != null ? `${taxa}%` : '—'}</dd></div>
+            <div><dt className="text-xs text-dim">Região</dt><dd>{p?.regiao || '—'}</dd></div>
+            <div><dt className="text-xs text-dim">Sexo</dt><dd>{sexoLabel(p?.sexo ?? null)}</dd></div>
+            <div><dt className="text-xs text-dim">Idade</dt><dd>{idade(p?.data_nascimento) ?? '—'}{idade(p?.data_nascimento) != null ? ' anos' : ''}</dd></div>
+            <div><dt className="text-xs text-dim">Telefone</dt><dd>{p?.telefone || '—'}</dd></div>
+            <div><dt className="text-xs text-dim">Contribuições</dt><dd>{cs.length}</dd></div>
+            <div><dt className="text-xs text-dim">Aprovadas</dt><dd className="text-ok">{ap}</dd></div>
+            <div><dt className="text-xs text-dim">Rejeitadas</dt><dd className="text-danger">{rj}</dd></div>
+            <div><dt className="text-xs text-dim">Taxa de aprovação</dt><dd>{taxa != null ? `${taxa}%` : '—'}</dd></div>
           </dl>
           {souSuper && (
-            <div className="mt-3 pt-3 border-t border-line flex items-center gap-2 flex-wrap">
+            <div className="mt-3 pt-3 border-t border-border flex items-center gap-2 flex-wrap">
               <button onClick={() => setEditPerfil(editPerfil?.id === userSel ? null : { ...(p ?? { id: userSel, nome: null, regiao: null, telefone: null, sexo: null, data_nascimento: null, is_admin: false, is_super: false }) })}
-                className="text-sm border border-line text-muted px-3 py-1.5 rounded-md hover:bg-cream transition">
+                className="text-sm border border-border text-dim px-3 py-1.5 rounded-md hover:bg-surface-2 transition">
                 {editPerfil?.id === userSel ? 'Cancelar' : 'Editar perfil'}
               </button>
               <button onClick={() => excluirPerfil(userSel)}
-                className="text-sm border border-red-200 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-50 transition">Excluir perfil</button>
-              {editMsg && <span className="text-xs text-muted">{editMsg}</span>}
+                className="text-sm border border-danger/30 text-danger px-3 py-1.5 rounded-md hover:bg-danger/5 transition">Excluir perfil</button>
+              {editMsg && <span className="text-xs text-dim">{editMsg}</span>}
             </div>
           )}
           {souSuper && editPerfil?.id === userSel && (
@@ -267,7 +259,7 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
                 <input type="checkbox" checked={!!editPerfil.is_super} onChange={e => setEditPerfil(v => v && ({ ...v, is_super: e.target.checked }))} /> superusuário
               </label>
               <button onClick={() => salvarPerfil(editPerfil)}
-                className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition col-span-2 sm:col-span-1 self-end">Salvar perfil</button>
+                className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition col-span-2 sm:col-span-1 self-end">Salvar perfil</button>
             </div>
           )}
         </div>
@@ -276,23 +268,23 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
           <div className="flex items-center gap-3">
             {recalcDirty && (
               <button onClick={recalcEdit} disabled={salvandoEdit}
-                className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+                className="text-sm bg-ok text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
                 {salvandoEdit ? 'Recalculando…' : 'Recalcular custos do índice'}
               </button>
             )}
-            {editMsg && <span className="text-xs text-muted">{editMsg}</span>}
+            {editMsg && <span className="text-xs text-dim">{editMsg}</span>}
           </div>
         )}
         <div className="space-y-2">
           {cs.map(c => edit?.id === c.id ? (
             <FormEdicao key={c.id} edit={edit} setEdit={setEdit} ings={ings} salvando={salvandoEdit} onSalvar={salvarEdit} />
           ) : (
-            <div key={c.id} className="flex items-center gap-3 border border-line rounded-md p-2 bg-panel text-sm">
+            <div key={c.id} className="flex items-center gap-3 border border-border rounded-md p-2 bg-surface text-sm">
               <span className="flex-1 min-w-0 truncate">{c.ingredientes?.nome || c.produto || 'Produto'}</span>
               <span className="tnum">{c.preco != null ? brl(Number(c.preco)) : '—'}</span>
-              <span className="text-xs text-muted shrink-0">{new Date(c.criado_em).toLocaleDateString('pt-BR')}{c.cidade ? ` · ${c.cidade}` : ''}</span>
-              <span className="text-[0.6rem] uppercase tracking-wide text-muted shrink-0">{c.status}</span>
-              <button onClick={() => { setEdit({ ...c }); setEditMsg('') }} className="text-xs text-paprika hover:underline shrink-0">editar</button>
+              <span className="text-xs text-dim shrink-0">{new Date(c.criado_em).toLocaleDateString('pt-BR')}{c.cidade ? ` · ${c.cidade}` : ''}</span>
+              <span className="text-[0.6rem] uppercase tracking-wide text-dim shrink-0">{c.status}</span>
+              <button onClick={() => { setEdit({ ...c }); setEditMsg('') }} className="text-xs text-accent hover:underline shrink-0">editar</button>
             </div>
           ))}
         </div>
@@ -314,40 +306,42 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
 
       {/* sub-abas */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm">
+        <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface text-sm">
           {([['usuarios', 'Usuários'], ['mapa', 'Mapa'], ['ingredientes', 'Ingredientes']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setSub(k)}
-              className={`px-4 py-2 font-medium transition-colors ${sub === k ? 'bg-paprika text-white' : 'text-muted hover:bg-cream'}`}>
+              className={`px-4 py-2 font-medium transition-colors ${sub === k ? 'bg-accent text-white' : 'text-dim hover:bg-surface-2'}`}>
               {label}
             </button>
           ))}
         </div>
         <button
-          onClick={() => baixarCSV('contribuicoes.csv', [
-            ['usuario', 'regiao', 'ingrediente', 'preco', 'peso_g', 'mercado', 'cidade', 'status', 'data'],
-            ...contribs.map(c => [perfis[c.user_id]?.nome ?? '', perfis[c.user_id]?.regiao ?? '', c.ingredientes?.nome ?? nomeIng[c.ingrediente_id ?? -1] ?? '', c.preco, c.peso_g, c.mercado, c.cidade, c.status, new Date(c.criado_em).toLocaleDateString('pt-BR')]),
-          ])}
-          className="text-xs text-muted border border-line rounded-full px-2.5 py-1 hover:text-ink hover:bg-white/60 transition ml-auto self-center">Exportar CSV</button>
+          onClick={() => baixarCSV('contribuicoes.csv', contribs.map(c => ({
+            usuario: perfis[c.user_id]?.nome ?? '', regiao: perfis[c.user_id]?.regiao ?? '',
+            ingrediente: c.ingredientes?.nome ?? nomeIng[c.ingrediente_id ?? -1] ?? '',
+            preco: c.preco, peso_g: c.peso_g, mercado: c.mercado, cidade: c.cidade,
+            status: c.status, data: new Date(c.criado_em).toLocaleDateString('pt-BR'),
+          })))}
+          className="text-xs text-dim border border-border rounded-full px-2.5 py-1 hover:text-ink hover:bg-white/60 transition ml-auto self-center">Exportar CSV</button>
       </div>
 
       {/* USUÁRIOS */}
       {sub === 'usuarios' && (
         <div className="space-y-2">
-          {!usuarios.length && <p className="text-sm text-muted">Nenhuma contribuição ainda.</p>}
+          {!usuarios.length && <p className="text-sm text-dim">Nenhuma contribuição ainda.</p>}
           {usuarios.map(u => (
             <button key={u.id} onClick={() => setUserSel(u.id)}
-              className="w-full text-left border border-line rounded-lg bg-panel p-3 hover:bg-cream transition flex items-center gap-3">
+              className="w-full text-left border border-border rounded-lg bg-surface p-3 hover:bg-surface-2 transition flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{perfis[u.id]?.nome || 'Usuário sem nome'}
-                  <span className="text-xs text-muted font-normal"> · {perfis[u.id]?.regiao || 'região —'}</span>
+                  <span className="text-xs text-dim font-normal"> · {perfis[u.id]?.regiao || 'região —'}</span>
                 </p>
-                <p className="text-xs text-muted truncate">{u.cidades.join(', ') || 'sem cidade'} · última {new Date(u.ultima).toLocaleDateString('pt-BR')}</p>
+                <p className="text-xs text-dim truncate">{u.cidades.join(', ') || 'sem cidade'} · última {new Date(u.ultima).toLocaleDateString('pt-BR')}</p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-sm tnum"><span className="font-medium">{u.count}</span> contrib.</p>
-                <p className="text-xs text-muted"><span className="text-olive">{u.aprovadas}✓</span> {u.rejeitadas > 0 && <span className="text-red-600">{u.rejeitadas}✗</span>} {u.pendentes > 0 && <span>{u.pendentes}⋯</span>}</p>
+                <p className="text-xs text-dim"><span className="text-ok">{u.aprovadas}✓</span> {u.rejeitadas > 0 && <span className="text-danger">{u.rejeitadas}✗</span>} {u.pendentes > 0 && <span>{u.pendentes}⋯</span>}</p>
               </div>
-              <span className="text-muted">›</span>
+              <span className="text-dim">›</span>
             </button>
           ))}
         </div>
@@ -357,7 +351,7 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
       {sub === 'mapa' && (() => {
         const pontos = contribs.filter(c => c.lat != null && c.lng != null).map(c => ({
           lat: c.lat as number, lng: c.lng as number,
-          color: CORES_REGIAO[perfis[c.user_id]?.regiao ?? ''] ?? '#9ca3af',
+          color: CORES_REGIAO[perfis[c.user_id]?.regiao ?? ''] ?? FAINT,
           label: `${c.ingredientes?.nome || c.produto || 'Produto'}${c.preco != null ? ` — ${brl(Number(c.preco))}` : ''}${c.cidade ? ` · ${c.cidade}` : ''}`,
         }))
         return (
@@ -366,9 +360,9 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
               {Object.entries(CORES_REGIAO).map(([r, cor]) => (
                 <span key={r} className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-full" style={{ background: cor }} />{r}</span>
               ))}
-              <span className="text-muted">{pontos.length} pontos · zoom para ver as ruas</span>
+              <span className="text-dim">{pontos.length} pontos · zoom para ver as ruas</span>
             </div>
-            {pontos.length ? <MapaLocal points={pontos} height="460px" /> : <p className="text-sm text-muted">Nenhuma contribuição com localização.</p>}
+            {pontos.length ? <MapaLocal points={pontos} height="460px" /> : <p className="text-sm text-dim">Nenhuma contribuição com localização.</p>}
           </div>
         )
       })()}
@@ -392,22 +386,22 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
             <div className="flex items-center gap-3">
               {recalcDirty && (
                 <button onClick={recalcEdit} disabled={salvandoEdit}
-                  className="text-sm bg-olive text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+                  className="text-sm bg-ok text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
                   {salvandoEdit ? 'Recalculando…' : 'Recalcular custos do índice'}
                 </button>
               )}
-              {editMsg && <span className="text-xs text-muted">{editMsg}</span>}
+              {editMsg && <span className="text-xs text-dim">{editMsg}</span>}
             </div>
           )}
 
           {/* o que falta — priorizado por impacto */}
           {cobertura.faltam.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium mb-2">Sem contribuições <span className="text-muted font-normal">— priorizado por impacto (nº de pratos)</span></h3>
+              <h3 className="text-sm font-medium mb-2">Sem contribuições <span className="text-dim font-normal">— priorizado por impacto (nº de pratos)</span></h3>
               <div className="flex flex-wrap gap-2">
                 {cobertura.faltam.map(x => (
-                  <span key={x.ing.id} className="text-xs border border-red-200 bg-red-50 text-red-700 rounded-md px-2 py-1">
-                    {x.ing.nome} <span className="text-red-400">· {x.uso} prato{x.uso === 1 ? '' : 's'}</span>
+                  <span key={x.ing.id} className="text-xs border border-danger/30 bg-danger/5 text-red-700 rounded-md px-2 py-1">
+                    {x.ing.nome} <span className="text-danger/70">· {x.uso} prato{x.uso === 1 ? '' : 's'}</span>
                   </span>
                 ))}
               </div>
@@ -416,36 +410,36 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
 
           {/* com contribuições */}
           <div>
-            <h3 className="text-sm font-medium mb-2">Com contribuições <span className="text-muted font-normal">— {cobertura.cobertos.length} itens</span></h3>
+            <h3 className="text-sm font-medium mb-2">Com contribuições <span className="text-dim font-normal">— {cobertura.cobertos.length} itens</span></h3>
             <div className="space-y-2">
               {cobertura.cobertos.map(x => {
                 const f = frescor(dias(x.ultima))
                 const aberto = ingAberto === x.ing.id
                 return (
-                  <div key={x.ing.id} className="border border-line rounded-lg bg-panel">
-                    <button onClick={() => setIngAberto(aberto ? null : x.ing.id)} className="w-full flex items-center gap-3 p-3 text-left hover:bg-cream transition rounded-lg">
+                  <div key={x.ing.id} className="border border-border rounded-lg bg-surface">
+                    <button onClick={() => setIngAberto(aberto ? null : x.ing.id)} className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-2 transition rounded-lg">
                       <span className="flex-1 min-w-0 truncate text-sm font-medium">{x.ing.nome}</span>
-                      <span className="text-xs text-muted">{x.uso} prato{x.uso === 1 ? '' : 's'}</span>
+                      <span className="text-xs text-dim">{x.uso} prato{x.uso === 1 ? '' : 's'}</span>
                       <span className="text-sm tnum">{x.n}×</span>
                       <span className={`text-[0.6rem] uppercase tracking-wide border rounded px-1.5 py-0.5 ${f.cls}`}>{f.txt}</span>
-                      <span className="text-muted text-xs">{aberto ? '−' : '+'}</span>
+                      <span className="text-dim text-xs">{aberto ? '−' : '+'}</span>
                     </button>
                     {aberto && (
-                      <div className="px-3 pb-3 border-t border-line/60 space-y-2 pt-2">
+                      <div className="px-3 pb-3 border-t border-border/60 space-y-2 pt-2">
                         {x.cs.map(c => edit?.id === c.id ? (
                           <FormEdicao key={c.id} edit={edit} setEdit={setEdit} ings={ings} salvando={salvandoEdit} onSalvar={salvarEdit} />
                         ) : (
                           <div key={c.id} className="flex items-center gap-3 text-xs py-1">
-                            <span className="text-muted shrink-0">{new Date(c.criado_em).toLocaleDateString('pt-BR')}</span>
+                            <span className="text-dim shrink-0">{new Date(c.criado_em).toLocaleDateString('pt-BR')}</span>
                             <span className="tnum">{c.preco != null ? brl(Number(c.preco)) : '—'}</span>
-                            <span className="text-muted truncate min-w-0 flex-1">{c.mercado || '—'}{c.cidade ? ` · ${c.cidade}` : ''}</span>
-                            <span className="text-[0.6rem] uppercase tracking-wide text-muted shrink-0">{c.status}</span>
-                            <button onClick={() => { setEdit({ ...c }); setEditMsg('') }} className="text-paprika hover:underline shrink-0">editar</button>
+                            <span className="text-dim truncate min-w-0 flex-1">{c.mercado || '—'}{c.cidade ? ` · ${c.cidade}` : ''}</span>
+                            <span className="text-[0.6rem] uppercase tracking-wide text-dim shrink-0">{c.status}</span>
+                            <button onClick={() => { setEdit({ ...c }); setEditMsg('') }} className="text-accent hover:underline shrink-0">editar</button>
                           </div>
                         ))}
                         {souSuper && (
                           <button onClick={() => excluirIngrediente(x.ing.id, x.ing.nome)}
-                            className="text-xs text-red-600 hover:underline">excluir ingrediente</button>
+                            className="text-xs text-danger hover:underline">excluir ingrediente</button>
                         )}
                       </div>
                     )}
@@ -462,12 +456,12 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
 
 function Card({ titulo, valor, sub }: { titulo: string; valor: string; sub?: string }) {
   return (
-    <div className="border border-line rounded-lg bg-panel p-3">
-      <p className="text-xs text-muted">{titulo}</p>
-      <p className="font-[family-name:var(--font-serif)] text-2xl tnum mt-0.5">{valor}</p>
-      {sub && <p className="text-xs text-muted mt-0.5">{sub}</p>}
+    <div className="border border-border rounded-lg bg-surface p-3">
+      <p className="text-xs text-dim">{titulo}</p>
+      <p className="font-bold tracking-tight text-2xl tnum mt-0.5">{valor}</p>
+      {sub && <p className="text-xs text-dim mt-0.5">{sub}</p>}
     </div>
   )
 }
 
-const inputCls = 'w-full bg-cream border border-line rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
+const inputCls = inputBase

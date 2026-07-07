@@ -1,14 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { inputBase } from '@/components/ui'
 import { getAuditLog, getLogins, superExcluir, type AuditRow, type LoginRow } from '@/lib/queries'
 import { capturarContexto, resumoDispositivo } from '@/lib/contexto'
 
 const TABELAS = ['contribuicoes', 'pagamentos', 'profiles', 'precos_manuais_hist', 'ingredientes']
 const ACAO_CLS: Record<string, string> = {
-  INSERT: 'text-olive border-olive/30 bg-olive/5',
-  UPDATE: 'text-muted border-line',
-  DELETE: 'text-red-600 border-red-200 bg-red-50',
+  INSERT: 'text-ok border-ok/30 bg-ok/5',
+  UPDATE: 'text-dim border-border',
+  DELETE: 'text-danger border-danger/30 bg-danger/5',
 }
 export function mapaLink(lat: number | null, lng: number | null) {
   if (lat == null || lng == null) return null
@@ -55,10 +56,10 @@ export default function Auditoria({ souSuper }: { souSuper: boolean }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-4 border-b border-line">
+      <div className="flex items-center gap-4 border-b border-border">
         {([['alteracoes', 'Alterações'], ['logins', 'Logins']] as const).map(([k, label]) => (
           <button key={k} onClick={() => setSub(k)}
-            className={`text-sm pb-2 -mb-px border-b-2 transition ${sub === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+            className={`text-sm pb-2 -mb-px border-b-2 transition ${sub === k ? 'border-accent text-ink' : 'border-transparent text-dim hover:text-ink'}`}>
             {label}
           </button>
         ))}
@@ -85,13 +86,13 @@ export default function Auditoria({ souSuper }: { souSuper: boolean }) {
               <input type="date" value={desde} onChange={e => setDesde(e.target.value)} className={inputCls} />
             </label>
             <button onClick={carregar} disabled={busy}
-              className="text-sm bg-paprika text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+              className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
               {busy ? 'Filtrando…' : 'Aplicar'}
             </button>
           </div>
 
-          {rows === null ? <p className="text-sm text-muted">Carregando…</p>
-            : !rows.length ? <p className="text-sm text-muted text-center py-8">Nenhuma alteração para este filtro.</p>
+          {rows === null ? <p className="text-sm text-dim">Carregando…</p>
+            : !rows.length ? <p className="text-sm text-dim text-center py-8">Nenhuma alteração para este filtro.</p>
             : (
               <div className="space-y-2">
                 {rows.map(r => {
@@ -100,24 +101,24 @@ export default function Auditoria({ souSuper }: { souSuper: boolean }) {
                     : diffCampos(r.dados_antes, null)
                   const ab = aberto === r.id
                   return (
-                    <div key={r.id} className="border border-line rounded-lg bg-panel">
-                      <button onClick={() => setAberto(ab ? null : r.id)} className="w-full min-w-0 flex items-center gap-2 p-3 text-left hover:bg-cream transition rounded-lg text-sm">
+                    <div key={r.id} className="border border-border rounded-lg bg-surface">
+                      <button onClick={() => setAberto(ab ? null : r.id)} className="w-full min-w-0 flex items-center gap-2 p-3 text-left hover:bg-surface-2 transition rounded-lg text-sm">
                         <span className={`text-[0.6rem] uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${ACAO_CLS[r.acao] || ''}`}>{r.acao}</span>
                         <span className="font-medium shrink-0">{r.tabela}</span>
-                        <span className="text-muted shrink-0">#{r.registro_id ?? '—'}</span>
-                        <span className="text-muted ml-auto text-xs truncate min-w-0">{r.ator_nome} · {new Date(r.criado_em).toLocaleString('pt-BR')}</span>
-                        <span className="text-muted text-xs shrink-0">{ab ? '−' : '+'}</span>
+                        <span className="text-dim shrink-0">#{r.registro_id ?? '—'}</span>
+                        <span className="text-dim ml-auto text-xs truncate min-w-0">{r.ator_nome} · {new Date(r.criado_em).toLocaleString('pt-BR')}</span>
+                        <span className="text-dim text-xs shrink-0">{ab ? '−' : '+'}</span>
                       </button>
                       {ab && (
-                        <div className="px-3 pb-3 border-t border-line/60 pt-2">
-                          {!campos.length ? <p className="text-xs text-muted">Sem diferenças registradas.</p> : (
+                        <div className="px-3 pb-3 border-t border-border/60 pt-2">
+                          {!campos.length ? <p className="text-xs text-dim">Sem diferenças registradas.</p> : (
                             <table className="w-full text-xs">
-                              <thead><tr className="text-left text-muted"><th className="font-medium py-1">Campo</th><th className="font-medium py-1">Antes</th><th className="font-medium py-1">Depois</th></tr></thead>
+                              <thead><tr className="text-left text-dim"><th className="font-medium py-1">Campo</th><th className="font-medium py-1">Antes</th><th className="font-medium py-1">Depois</th></tr></thead>
                               <tbody>
                                 {campos.map(c => (
-                                  <tr key={c.campo} className="border-t border-line/60 align-top">
+                                  <tr key={c.campo} className="border-t border-border/60 align-top">
                                     <td className="py-1 pr-2 font-medium">{c.campo}</td>
-                                    <td className="py-1 pr-2 text-muted break-all">{val(c.antes)}</td>
+                                    <td className="py-1 pr-2 text-dim break-all">{val(c.antes)}</td>
                                     <td className="py-1 break-all">{val(c.depois)}</td>
                                   </tr>
                                 ))}
@@ -129,19 +130,19 @@ export default function Auditoria({ souSuper }: { souSuper: boolean }) {
                     </div>
                   )
                 })}
-                {rows.length === 500 && <p className="text-xs text-muted text-center">Mostrando as 500 mais recentes.</p>}
+                {rows.length === 500 && <p className="text-xs text-dim text-center">Mostrando as 500 mais recentes.</p>}
               </div>
             )}
         </div>
       ) : (
         <div>
-          {logins === null ? <p className="text-sm text-muted">Carregando…</p>
-            : !logins.length ? <p className="text-sm text-muted text-center py-8">Nenhum login registrado ainda.</p>
+          {logins === null ? <p className="text-sm text-dim">Carregando…</p>
+            : !logins.length ? <p className="text-sm text-dim text-center py-8">Nenhum login registrado ainda.</p>
             : (
-              <div className="border border-line rounded-lg bg-panel overflow-x-auto">
+              <div className="border border-border rounded-lg bg-surface overflow-x-auto">
                 <table className="w-full text-sm min-w-[36rem]">
                   <thead>
-                    <tr className="text-left text-muted border-b border-line">
+                    <tr className="text-left text-dim border-b border-border">
                       <th className="font-medium px-3 py-2">Usuário</th>
                       <th className="font-medium px-3 py-2">Dispositivo</th>
                       <th className="font-medium px-3 py-2">Local</th>
@@ -153,17 +154,17 @@ export default function Auditoria({ souSuper }: { souSuper: boolean }) {
                     {logins.map(l => {
                       const link = mapaLink(l.lat, l.lng)
                       return (
-                        <tr key={l.id} className="border-t border-line/60">
+                        <tr key={l.id} className="border-t border-border/60">
                           <td className="px-3 py-2 truncate max-w-[10rem]">{l.nome || '—'}</td>
-                          <td className="px-3 py-2 text-muted" title={l.dispositivo || ''}>{resumoDispositivo(l.dispositivo)}</td>
+                          <td className="px-3 py-2 text-dim" title={l.dispositivo || ''}>{resumoDispositivo(l.dispositivo)}</td>
                           <td className="px-3 py-2">{link ? <>
-                            <a href={link} target="_blank" rel="noopener noreferrer" className="text-paprika hover:underline">ver no mapa</a>
-                            <span className="text-[0.6rem] text-muted ml-1">{l.precisao != null ? 'GPS' : 'aprox.'}</span>
-                          </> : <span className="text-muted">—</span>}</td>
-                          <td className="px-3 py-2 text-muted">{new Date(l.criado_em).toLocaleString('pt-BR')}</td>
+                            <a href={link} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">ver no mapa</a>
+                            <span className="text-[0.6rem] text-dim ml-1">{l.precisao != null ? 'GPS' : 'aprox.'}</span>
+                          </> : <span className="text-dim">—</span>}</td>
+                          <td className="px-3 py-2 text-dim">{new Date(l.criado_em).toLocaleString('pt-BR')}</td>
                           {souSuper && (
                             <td className="px-3 py-2 text-right">
-                              <button onClick={() => excluirLogin(l.id)} className="text-xs text-red-600 hover:underline">excluir</button>
+                              <button onClick={() => excluirLogin(l.id)} className="text-xs text-danger hover:underline">excluir</button>
                             </td>
                           )}
                         </tr>
@@ -179,4 +180,4 @@ export default function Auditoria({ souSuper }: { souSuper: boolean }) {
   )
 }
 
-const inputCls = 'w-full bg-cream border border-line rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
+const inputCls = inputBase
