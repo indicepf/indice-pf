@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { getTopContribuidores, type Contribuidor } from '@/lib/queries'
+import { Card, Select } from '@/components/ui'
 import AuthControls from '../Auth'
 import RequireAdmin from '../RequireAdmin'
 import BotaoInicio from '../BotaoInicio'
@@ -30,11 +31,11 @@ function ContribuidoresInner() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-line bg-cream/80 backdrop-blur sticky top-0 z-20">
+      <header className="border-b border-border bg-surface/80 backdrop-blur sticky top-0 z-20">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
           <div>
-            <a href="/" className="font-[family-name:var(--font-serif)] text-2xl leading-none hover:text-paprika transition-colors">Índice PF</a>
-            <p className="text-xs text-muted mt-1">quem mais contribui com preços</p>
+            <a href="/" className="text-2xl font-bold tracking-tight leading-none hover:text-accent transition-colors">Índice PF</a>
+            <p className="text-xs text-dim mt-1">quem mais contribui com preços</p>
           </div>
           <div className="flex items-center gap-4 flex-wrap justify-end">
             <BotaoInicio />
@@ -46,24 +47,23 @@ function ContribuidoresInner() {
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-5">
         <div className="flex items-end justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="font-[family-name:var(--font-serif)] text-2xl">Top 10 contribuidores</h1>
-            <p className="text-sm text-muted mt-1">Ranking do mês por contribuições aprovadas. Atualiza sozinho a cada mês.</p>
+            <h1 className="text-2xl font-bold tracking-tight">Top 10 contribuidores</h1>
+            <p className="text-sm text-dim mt-1">Ranking do mês por contribuições aprovadas. Atualiza sozinho a cada mês.</p>
           </div>
-          <label className="text-xs text-muted">Mês
-            <select value={mes} onChange={e => setMes(e.target.value)}
-              className="block bg-cream border border-line rounded-md px-2.5 py-2 text-sm mt-1 focus:outline-none focus:border-paprika cursor-pointer">
+          <label className="text-xs text-dim">Mês
+            <Select value={mes} onChange={e => setMes(e.target.value)} className="block w-auto">
               {meses.map(m => <option key={m} value={m}>{rotuloMes(m)}</option>)}
-            </select>
+            </Select>
           </label>
         </div>
 
-        {loading ? <p className="text-sm text-muted py-6">Carregando…</p>
-          : !lista.length ? <p className="text-sm text-muted py-6">Nenhuma contribuição aprovada em {rotuloMes(mes)}.</p>
+        {loading ? <p className="text-sm text-dim py-6">Carregando…</p>
+          : !lista.length ? <p className="text-sm text-dim py-6">Nenhuma contribuição aprovada em {rotuloMes(mes)}.</p>
           : (
-            <div className="border border-line rounded-lg bg-panel overflow-x-auto">
+            <Card className="overflow-x-auto">
               <table className="w-full text-sm min-w-[32rem]">
                 <thead>
-                  <tr className="text-left text-[0.65rem] uppercase tracking-wide text-muted border-b border-line">
+                  <tr className="text-left text-[0.65rem] uppercase tracking-wide text-dim border-b border-border">
                     <th className="font-medium px-3 py-2">#</th>
                     <th className="font-medium px-3 py-2">Contribuidor</th>
                     <th className="font-medium px-3 py-2 text-right">Entradas</th>
@@ -74,20 +74,20 @@ function ContribuidoresInner() {
                 </thead>
                 <tbody>
                   {lista.map((c, i) => (
-                    <tr key={c.user_id} className="border-t border-line/60">
-                      <td className="px-3 py-2 tnum text-muted">{i + 1}º</td>
+                    <tr key={c.user_id} className="border-t border-border/60">
+                      <td className="px-3 py-2 tnum text-dim">{i + 1}º</td>
                       <td className="px-3 py-2 font-medium">{i === 0 ? '🥇 ' : i === 1 ? '🥈 ' : i === 2 ? '🥉 ' : ''}{c.nome}</td>
-                      <td className="px-3 py-2 text-right tnum text-paprika font-medium">{c.entradas}</td>
-                      <td className="px-3 py-2 text-right tnum text-muted">{c.ingredientes}</td>
-                      <td className="px-3 py-2 text-muted">{[c.cidade, c.uf].filter(Boolean).join(' · ') || '—'}</td>
-                      <td className="px-3 py-2 text-muted">{c.ultima ? new Date(c.ultima).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="px-3 py-2 text-right tnum text-accent font-medium">{c.entradas}</td>
+                      <td className="px-3 py-2 text-right tnum text-dim">{c.ingredientes}</td>
+                      <td className="px-3 py-2 text-dim">{[c.cidade, c.uf].filter(Boolean).join(' · ') || '—'}</td>
+                      <td className="px-3 py-2 text-dim">{c.ultima ? new Date(c.ultima).toLocaleDateString('pt-BR') : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Card>
           )}
-        <p className="text-xs text-muted">Benefícios para os mais dedicados vêm por aí.</p>
+        <p className="text-xs text-dim">Benefícios para os mais dedicados vêm por aí.</p>
       </div>
     </main>
   )
