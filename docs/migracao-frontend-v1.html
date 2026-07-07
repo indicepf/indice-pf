@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Índice PF — Plano de Migração do Frontend (V0 → V1 "by Infinity")</title>
+<style>
+  body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 0; line-height: 1.55; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.6rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 36px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 { font-size: 1.15rem; font-weight: bold; margin-top: 48px; padding-bottom: 4px; border-bottom: 1px solid #ccc; }
+  h3 { font-size: 1rem; font-weight: bold; margin-top: 28px; }
+  h4 { font-size: 0.95rem; font-weight: bold; margin-top: 20px; }
+  p { margin: 12px 0; }
+  code { font-family: "Courier New", monospace; background: #f2f2f2; border: 1px solid #ddd; padding: 1px 5px; font-size: 0.88em; }
+  pre { background: #f7f7f7; border: 1px solid #ddd; padding: 14px; overflow-x: auto; font-size: 0.85rem; font-family: "Courier New", monospace; }
+  pre code { background: none; border: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.88rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  ol.steps { padding-left: 22px; }
+  ol.steps li { margin: 10px 0; }
+  ul li { margin: 6px 0; }
+  .note { border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0; background: #fbfaf7; }
+  .note p:first-child { margin-top: 0; }
+  .note p:last-child { margin-bottom: 0; }
+  .decisao { border-left: 4px solid #c98500; background: #fdf8ee; padding: 10px 14px; margin: 14px 0; font-family: Helvetica, Arial, sans-serif; font-size: 0.9rem; }
+  .fase { border: 1px solid #d7d0c4; border-radius: 8px; padding: 6px 20px 16px; margin: 22px 0; background: #fdfcfa; }
+  .fase h3 { margin-top: 16px; }
+  .risco { font-family: Helvetica, Arial, sans-serif; font-size: 0.85rem; color: #7a3020; }
+  .verif { font-family: Helvetica, Arial, sans-serif; font-size: 0.85rem; color: #2f5d33; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .toc li { margin: 3px 0; }
+  .novo { color: #2f6f8b; font-weight: bold; font-size: 0.8em; font-family: Helvetica, Arial, sans-serif; }
+  footer { margin-top: 56px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Plano de Migração do Frontend — V0 (atual) → V1 ("Índice PF by Infinity")</h1>
+  <p class="subtitle">Passo a passo para adotar a proposta <code>indice-pf-ads2.html</code> sem quebrar as funcionalidades em produção. Baseado na leitura direta do código atual e do mockup.</p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#contexto">Contexto e escopo</a></li>
+      <li><a href="#comparativo">Comparativo: app atual × proposta</a></li>
+      <li><a href="#principios">Princípios da migração</a></li>
+      <li><a href="#fases">As 11 fases</a></li>
+      <li><a href="#decisoes">Pontos de decisão pendentes (D1–D12)</a></li>
+      <li><a href="#rollout">Dependências e estratégia de rollout</a></li>
+      <li><a href="#regressao">Checklist de regressão final</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================ 1. CONTEXTO ============================ -->
+  <h2 id="contexto">1. Contexto e escopo</h2>
+
+  <h3>1.1 O que é a proposta</h3>
+  <p>
+    O arquivo <code>indice-pf-ads2.html</code> (334 KB, HTML único, auto-contido) é um protótipo de alta fidelidade
+    do novo frontend, batizado <strong>"Índice PF by Infinity"</strong>. Fatos verificados na leitura do arquivo:
+  </p>
+  <ul>
+    <li><strong>100% estático:</strong> zero requisições de rede, sem bibliotecas externas (sem React/CDN). Gráficos são SVG gerado por JS inline.</li>
+    <li><strong>Dados sintéticos:</strong> os nomes de pratos (100), produtos (47) e regiões (5) estão embarcados em <code>window.PF_EMBED</code>, mas todos os preços e variações são gerados no navegador por um gerador pseudoaleatório determinístico (52 semanas de série falsa). Nenhum número de preço do mockup é real.</li>
+    <li><strong>Estrutura:</strong> site público (home/dashboard, Metodologia, Planos, Sobre), login e cadastro em páginas dedicadas, app logado com sidebar (Meu painel, Enviar preços, Meus envios, Índice completo, Plano &amp; assinatura, Checkout, Configurações).</li>
+    <li><strong>Monetização:</strong> plano Premium a R$ 99,99/mês (checkout com Pix/cartão simulados), conteúdo bloqueado por assinatura (tabela de produtos por região, export, detalhe por produto) e 6 tipos de slot de publicidade (retângulo no hero, lateral, billboard, leaderboard, native in-feed e um "chart gate" — anúncio que cobre o gráfico até ser fechado).</li>
+    <li><strong>Não cobre:</strong> mapa do Brasil (região vira botões/pílulas), telas de admin/moderação, backend, autenticação real, pagamento real, dark mode, rotas reais.</li>
+  </ul>
+
+  <h3>1.2 Decisões já tomadas</h3>
+  <table>
+    <tr><th>#</th><th>Decisão</th></tr>
+    <tr><td>1</td><td><strong>Escopo completo:</strong> a migração inclui o visual novo E a implementação real de Premium (assinatura + checkout) e publicidade — não é só redesign.</td></tr>
+    <tr><td>2</td><td><strong>Mapa do Brasil sai da home</strong> (segue o mockup; região vira pills). O componente <code>MapaBrasil.tsx</code> continua existindo para a aba Mapa do Histórico. O <code>MapaLocal.tsx</code> (Leaflet, pontos de contribuição) fica onde está.</td></tr>
+    <tr><td>3</td><td><strong>Níveis de preço = merge dos dois lados:</strong> os dados atuais (Online raspado / Mercado −10% / Atacarejo −22%) são mantidos e recebem a nomenclatura do mockup (Consumidor / Atacarejo / Indústria) numa estrutura extensível. "Indústria" entra desabilitado ("em breve") até existir dado ou percentual definido (ver D5).</td></tr>
+    <tr><td>4</td><td><strong>Só dados reais:</strong> gráficos mostram as coletas que existem (a série cresce a cada coleta dos dias 1 e 15); o hero usa contagens reais (100 pratos, 111 ingredientes, 5 regiões, nº de coletas, contribuições aprovadas). Nada de "+2.400 colaboradores" ou séries de 52 semanas inventadas.</td></tr>
+  </table>
+
+  <h3>1.3 O que não pode quebrar</h3>
+  <p>
+    Tudo que está em produção continua funcionando durante e depois da migração: autenticação completa (login,
+    cadastro, completar perfil com telefone validado, reset de senha, <code>registrarLogin</code> com GPS/dispositivo),
+    contribuição de fotos (single e lote, compressão, dedup por hash, Nominatim, Storage), moderação no
+    <code>/admin</code>, saques PIX, preços manuais, recálculo de custos, auditoria, trilhas de super, export CSV/XLSX,
+    PWA e todas as políticas de RLS.
+  </p>
+
+  <!-- ============================ 2. COMPARATIVO ============================ -->
+  <h2 id="comparativo">2. Comparativo: app atual × proposta</h2>
+
+  <h3>2.1 Design system</h3>
+  <table>
+    <tr><th></th><th>Atual (V0)</th><th>Proposta (V1)</th></tr>
+    <tr><td>Tom visual</td><td>Sóbrio, "universo alimentício"</td><td>SaaS/fintech claro, cantos arredondados, gradientes</td></tr>
+    <tr><td>Fundo</td><td><code>--cream #faf7f2</code></td><td><code>--bg #f4f6fb</code> / <code>--surface #ffffff</code></td></tr>
+    <tr><td>Texto</td><td><code>--ink #1a1a1a</code> / <code>--muted #6b6b6b</code></td><td><code>--ink #12203a</code> / <code>--dim #6b7a93</code> / <code>--faint #9aa7bd</code></td></tr>
+    <tr><td>Bordas</td><td><code>--line #e7e0d6</code></td><td><code>--border #e2e8f2</code> / <code>#d3dbe8</code> / <code>#c2ccdd</code></td></tr>
+    <tr><td>Acentos</td><td><code>--paprika #c0492b</code> / <code>--olive #4a5d23</code></td><td>Gradiente de marca: magenta <code>#8D4CB2</code> → roxo <code>#6954BD</code> → azul <code>#0069D4</code> → ciano <code>#00A7E2</code> → verde <code>#20C58C</code></td></tr>
+    <tr><td>Semânticas</td><td>Classes Tailwind cruas (<code>text-red-600</code> etc.)</td><td>ok <code>#12b76a</code> · warn <code>#f59e0b</code> · danger <code>#ef4444</code> · info <code>#0ea5e9</code></td></tr>
+    <tr><td>Convenção de variação</td><td>—</td><td><strong>Alta de preço = vermelho, queda = verde</strong></td></tr>
+    <tr><td>Fontes</td><td>Lora (títulos, serif) + Inter (dados)</td><td>Só Inter (pesos 750–800 em títulos, letter-spacing negativo)</td></tr>
+    <tr><td>Raios/sombras</td><td>Padrão Tailwind</td><td>Raios 9/13/18/26px, escala de sombras + sombra de marca azul</td></tr>
+    <tr><td>Onde vive</td><td>7 tokens em <code>app/globals.css</code> (<code>@theme inline</code>, Tailwind v4) + paletas hardcoded em 5 arquivos de gráfico/mapa</td><td>Tokens completos em <code>globals.css</code> + paletas centralizadas em <code>lib/theme.ts</code> <span class="novo">NOVO</span></td></tr>
+  </table>
+
+  <h3>2.2 Navegação e telas</h3>
+  <table>
+    <tr><th>Tela do mockup</th><th>Equivalente atual</th><th>Ação na migração</th></tr>
+    <tr><td>Home / dashboard público (filtros + KPIs + gráficos + movers + tabela de pratos + tabela produtos×região)</td><td><code>app/page.tsx</code> (índice, mapa, tabela de pratos, gaveta de detalhe)</td><td>Reescrever (Fase 5). Mapa sai; drill-down vira modal.</td></tr>
+    <tr><td>Metodologia / Planos / Sobre</td><td>Não existem</td><td>Criar (Fase 3), com conteúdo real (D2, D3).</td></tr>
+    <tr><td>Login / Cadastro em páginas (2 colunas)</td><td>Modal <code>app/Auth.tsx</code> no cabeçalho</td><td>Migrar para <code>/entrar</code> e <code>/cadastro</code> (Fase 4), preservando toda a lógica.</td></tr>
+    <tr><td>App logado com sidebar</td><td>Não existe (páginas soltas)</td><td>Criar shell <code>(app)</code> (Fase 6).</td></tr>
+    <tr><td>Meu painel</td><td>Não existe</td><td>Criar <code>/painel</code> (Fase 6), com stats reais do usuário.</td></tr>
+    <tr><td>Enviar preços (stepper + drag-drop)</td><td><code>/contribuir</code></td><td>Re-skin; lógica intacta (Fase 6).</td></tr>
+    <tr><td>Meus envios</td><td>Aba Contribuições do <code>/perfil</code></td><td>Extrair para <code>/meus-envios</code> (Fase 6).</td></tr>
+    <tr><td>Configurações</td><td>Abas Dados/Recompensas do <code>/perfil</code></td><td>Extrair para <code>/configuracoes</code>; <code>/perfil</code> vira redirect (Fase 6).</td></tr>
+    <tr><td>Índice completo (logado)</td><td>Não existe</td><td>Criar <code>/indice</code> reusando os componentes da home (Fase 6, D8).</td></tr>
+    <tr><td>Plano &amp; assinatura / Checkout Premium</td><td>Não existem</td><td>Criar (Fases 7–8) com gateway real.</td></tr>
+    <tr><td>Slots de publicidade</td><td>Não existem</td><td>Criar sistema de house ads (Fase 9).</td></tr>
+    <tr><td>Modal de compartilhamento (card social/e-mail)</td><td>Não existe</td><td>Criar com <code>next/og</code> (Fase 10, opcional).</td></tr>
+    <tr><td>— (sem tela no mockup)</td><td><code>/admin</code> (9 abas), <code>/evolucao</code> (Histórico, 5 abas), <code>/contribuidores</code>, <code>/redefinir-senha</code></td><td><strong>Permanecem</strong>, apenas re-estilizados (Fase 2). Sem mudança funcional.</td></tr>
+  </table>
+
+  <h3>2.3 Divergências de dados (mockup × realidade)</h3>
+  <table>
+    <tr><th>Mockup</th><th>Realidade</th><th>Tratamento</th></tr>
+    <tr><td>47 "produtos rastreados"</td><td>111 ingredientes no catálogo</td><td>Usar 111 (ou os agrupamentos reais por categoria).</td></tr>
+    <tr><td>Séries semanais de 52 pontos</td><td>~2–3 coletas no modelo novo (21/06, 01/07…), cadência dias 1 e 15</td><td>Gráficos honestos com os pontos existentes, dots visíveis e nota "série em construção — coletas nos dias 1 e 15".</td></tr>
+    <tr><td>"+1 mi dados/semana", "+2.400 colaboradores", "18k fotos/mês", "±5% de margem"</td><td>Números não correspondem a nada medido</td><td>Substituir por contagens reais consultadas do banco (Fase 5).</td></tr>
+    <tr><td>Níveis Consumidor/Atacarejo/Indústria</td><td>Online / Mercado (−10%) / Atacarejo (−22%)</td><td>Merge (decisão 3): estrutura <code>NIVEIS_PRECO</code> extensível; Indústria desabilitada (D5).</td></tr>
+    <tr><td>Status de envio "em análise / aceita / recusada"</td><td><code>contribuicoes.status</code>: pendente / aprovada / rejeitada</td><td>Só rótulo de exibição; valores do banco não mudam.</td></tr>
+  </table>
+
+  <!-- ============================ 3. PRINCÍPIOS ============================ -->
+  <h2 id="principios">3. Princípios da migração</h2>
+  <ul>
+    <li><strong>Fases sequenciais e mergeáveis.</strong> Cada fase = 1 ou mais PRs, cada PR deployável em produção sem quebrar nada. O app fica visualmente "híbrido" por pouco tempo, porque as Fases 1–2 já trocam a base visual de todas as telas.</li>
+    <li><strong>Fluxo por PR</strong> (o mesmo já usado no projeto): <code>branch</code> → <code>npx tsc --noEmit</code> → <code>npm run dev</code> + verificação manual → PR → preview Vercel → merge em <code>main</code> (produção).</li>
+    <li><strong>Lógica de dados não muda.</strong> <code>lib/queries.ts</code> (blend de preços, medianas, janelas, calibração) é reaproveitado integralmente; a migração adiciona 3 queries novas e não altera as existentes.</li>
+    <li><strong>Convenção nova de organização:</strong> componentes compartilhados saem de <code>app/</code> para <code>components/</code> (pasta já existe, vazia): <code>components/ui/</code>, <code>components/site/</code>, <code>components/shell/</code>, <code>components/dashboard/</code>, <code>components/ads/</code>, <code>components/premium/</code>.</li>
+    <li><strong>Aliases para transição de tokens:</strong> os nomes antigos (<code>cream</code>, <code>paprika</code>, <code>line</code>…) viram aliases dos valores novos na Fase 1, então nenhuma classe espalhada quebra; a renomeação acontece arquivo a arquivo conforme cada tela é tocada, e os aliases são removidos na Fase 11.</li>
+    <li><strong>Sem números inventados.</strong> Percentuais, taxas de gateway e metas comerciais entram no documento apenas como pontos de decisão (seção 5).</li>
+  </ul>
+
+  <!-- ============================ 4. FASES ============================ -->
+  <h2 id="fases">4. As 11 fases</h2>
+
+  <div class="fase">
+  <h3>Fase 1 — Fundação do design system (1 PR pequeno)</h3>
+  <p><strong>Objetivo:</strong> trocar a "pele" do app inteiro num único PR, sem tocar em nenhuma página, aproveitando que todas as telas consomem os tokens de <code>globals.css</code>.</p>
+  <h4>Mudanças</h4>
+  <ul>
+    <li><code>app/globals.css</code>: novo bloco <code>:root</code> com os tokens do mockup — <code>--bg #f4f6fb</code>, <code>--surface #ffffff</code>, <code>--surface-2 #f7f9fc</code>, <code>--ink #12203a</code>, <code>--ink-2 #3f4d66</code>, <code>--dim #6b7a93</code>, <code>--faint #9aa7bd</code>, <code>--border #e2e8f2</code>, <code>--ok #12b76a</code>, <code>--warn #f59e0b</code>, <code>--danger #ef4444</code>, <code>--info #0ea5e9</code>, stops da marca <code>--brand-1…5</code> (#8D4CB2, #6954BD, #0069D4, #00A7E2, #20C58C), <code>--grad-marca</code>, raios (<code>--r-sm 9px</code>, <code>--r 13px</code>, <code>--r-lg 18px</code>, <code>--r-xl 26px</code>) e escala de sombras.</li>
+    <li><strong>Aliases dos nomes antigos</strong> no mesmo arquivo: <code>--cream: var(--bg)</code>, <code>--panel: var(--surface)</code>, <code>--muted: var(--dim)</code>, <code>--line: var(--border)</code>, <code>--paprika: var(--brand-3)</code> (acento primário — confirmar em D1), <code>--olive: var(--ok)</code>. O <code>@theme inline</code> expõe nomes novos e aliases — todas as classes <code>bg-cream</code>/<code>text-paprika</code>/<code>border-line</code> espalhadas passam a renderizar o visual novo sem editar nenhum componente.</li>
+    <li><code>app/layout.tsx</code>: remover <code>Lora</code>, manter só <code>Inter</code>; <code>--font-serif: var(--font-sans)</code> como alias temporário (os usos de <code>font-serif</code> passam a renderizar Inter sem quebrar; limpeza nas fases seguintes).</li>
+    <li><code>lib/theme.ts</code> <span class="novo">NOVO</span>: fonte única das cores de gráfico — <code>CHART_SERIES</code> (categóricas derivadas dos 5 stops da marca), <code>CORES_REGIAO</code> (região → cor), <code>COR_ALTA</code> (= danger) / <code>COR_QUEDA</code> (= ok), escala sequencial. Nesta fase só cria; os consumidores migram nas Fases 2 e 5.</li>
+    <li><code>app/manifest.ts</code>: <code>theme_color</code> <code>#c0492b</code> → cor de marca nova; <code>background_color</code> → <code>#f4f6fb</code>.</li>
+    <li><code>app/opengraph-image.tsx</code> e ícone: podem esperar a arte final do logo infinito (Fase 11).</li>
+  </ul>
+  <p class="risco"><strong>Risco:</strong> contraste/semântica em telas antigas (paprika→azul muda a leitura de alguns badges). Nenhuma mudança funcional.</p>
+  <p class="verif"><strong>Verificação:</strong> <code>tsc --noEmit</code>; abrir as 8 rotas no preview (<code>/</code>, <code>/evolucao</code>, <code>/contribuidores</code>, <code>/admin</code>, <code>/contribuir</code>, <code>/perfil</code>, <code>/redefinir-senha</code>, <code>/api/geo</code> intocada) e checar legibilidade.</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 2 — Biblioteca de componentes UI + re-skin das telas internas (4 PRs)</h3>
+  <p><strong>Objetivo:</strong> criar os componentes compartilhados, eliminar as constantes <code>inputCls/btnCls/selCls</code> repetidas em ~11 arquivos e re-estilizar as telas que o mockup não cobre (<code>/admin</code>, <code>/evolucao</code>, <code>/contribuidores</code>, <code>/perfil</code>, <code>/contribuir</code>, <code>/redefinir-senha</code>) — <strong>sem mudança funcional</strong>.</p>
+  <h4>Componentes a criar em <code>components/ui/</code> <span class="novo">NOVO</span></h4>
+  <p><code>Button</code> (primary/gradiente, secondary, ghost, danger), <code>Input</code>, <code>Select</code>, <code>Textarea</code>, <code>Card</code>, <code>Badge</code> (ok/warn/danger/neutro/premium), <code>Modal</code> (extraído do padrão de <code>ModalFontes.tsx</code>/<code>DetalhePrato.tsx</code>), <code>Tabs</code> (extraído do padrão de abas de <code>/evolucao</code> e <code>/admin</code>), <code>Table</code> (wrapper com <code>.tnum</code> e ordenação opcional), <code>Pill</code> (filtros de região/nível — usado na Fase 5), <code>Spinner</code>/<code>Skeleton</code>, e um barrel <code>index.ts</code>.</p>
+  <h4>Divisão em PRs</h4>
+  <ol class="steps">
+    <li><code>components/ui</code> + re-skin de <code>/contribuidores</code> e <code>/redefinir-senha</code> (telas pequenas validam a biblioteca).</li>
+    <li>Re-skin de <code>/perfil</code> e <code>/contribuir</code>.</li>
+    <li>Re-skin de <code>/admin</code> (<code>page.tsx</code> + <code>Painel</code>, <code>Auditoria</code>, <code>StatusColeta</code>, <code>AuditoriaDados</code>, <code>SuperAcoes</code>).</li>
+    <li>Re-skin de <code>/evolucao</code> (+ <code>TabelaIngredientes</code>, <code>BotaoExportar</code>).</li>
+  </ol>
+  <h4>Limpezas aproveitadas em cada PR (dívidas já mapeadas)</h4>
+  <ul>
+    <li><code>mediana()</code> duplicada em <code>app/page.tsx</code> e <code>app/evolucao/page.tsx</code> → mover para <code>lib/stats.ts</code> <span class="novo">NOVO</span> (a de <code>lib/queries.ts</code> é interna, não exportada).</li>
+    <li><code>baixarCSV</code> reescrito em <code>app/admin/Painel.tsx</code> → usar <code>lib/exportar.ts</code>.</li>
+    <li><code>fmtData</code> duplicado em <code>app/ModalFontes.tsx</code> → usar <code>lib/format.ts</code>.</li>
+    <li>Paletas hardcoded → <code>lib/theme.ts</code>: <code>CORES_GRUPO</code>/<code>COR</code>/<code>CORES_REG</code> em <code>evolucao/page.tsx</code>, <code>CORES_REGIAO</code> em <code>admin/Painel.tsx</code>.</li>
+  </ul>
+  <p class="risco"><strong>Risco:</strong> regressão de comportamento em formulários do admin (moderação, saques, preços manuais) e no fluxo de contribuição durante o re-skin.</p>
+  <p class="verif"><strong>Verificação por PR:</strong> <code>tsc --noEmit</code>; no preview, moderar 1 contribuição de teste, editar um preço manual, exportar CSV/XLSX no Histórico, enviar 1 contribuição de teste.</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 3 — Arquitetura de navegação: site público + route groups (1 PR)</h3>
+  <p><strong>Objetivo:</strong> montar o esqueleto de navegação do mockup sem mexer no conteúdo das páginas. Route groups do App Router <strong>não mudam URLs</strong>.</p>
+  <h4>Mudanças</h4>
+  <ul>
+    <li>Mover <code>app/page.tsx</code> → <code>app/(site)/page.tsx</code>; criar <code>app/(site)/layout.tsx</code> <span class="novo">NOVO</span> com header público sticky (nav Índice / Metodologia / Planos / Sobre + Entrar / Criar conta) e footer.</li>
+    <li>Criar <code>app/(app)/layout.tsx</code> <span class="novo">NOVO</span> (inicialmente passthrough; o shell com sidebar entra na Fase 6) e mover para lá <code>/perfil</code>, <code>/contribuir</code>, <code>/admin</code>, <code>/evolucao</code>, <code>/contribuidores</code>.</li>
+    <li><code>components/site/Header.tsx</code>, <code>components/site/Footer.tsx</code>, <code>components/site/Logo.tsx</code> <span class="novo">NOVOS</span> (logo infinito SVG com gradiente; usa <code>useAuth</code> para mostrar atalho ao app quando logado).</li>
+    <li>Páginas estáticas novas: <code>app/(site)/metodologia/page.tsx</code> — com as fontes de dados <strong>reais</strong> do app (varejo online raspado via SerpAPI, leituras manuais, contribuições de campo com foto, calibração campo × online), não as 6 fontes fictícias do mockup (D2); <code>app/(site)/planos/page.tsx</code> (Gratuito × Premium; CTA aponta para <code>/cadastro</code> até a Fase 8); <code>app/(site)/sobre/page.tsx</code> (ecossistema Infinity — textos e links reais, D3).</li>
+    <li><code>app/BotaoInicio.tsx</code> deixa de ser necessário (o header assume a navegação); remover quando o último consumidor for migrado.</li>
+    <li>Atenção aos imports relativos dos arquivos movidos (<code>./Auth</code>, <code>./MapaBrasil</code>, <code>./brazil-uf-topo.json</code>, <code>./DetalhePrato</code> etc.).</li>
+  </ul>
+  <p class="risco"><strong>Risco:</strong> import quebrado por movimentação de arquivos — o maior desta fase.</p>
+  <p class="verif"><strong>Verificação:</strong> <code>tsc --noEmit</code> <em>e</em> <code>npm run build</code> obrigatórios; testar as 8 rotas + deep-link <code>/redefinir-senha</code> (o fluxo PASSWORD_RECOVERY depende de URL estável — o path não muda).</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 4 — Auth em páginas dedicadas (1–2 PRs)</h3>
+  <p><strong>Objetivo:</strong> migrar o modal <code>app/Auth.tsx</code> (233 linhas) para páginas no layout 2 colunas do mockup, <strong>preservando integralmente</strong>: completar-perfil (nome, telefone validado por <code>telValido</code>, região — <code>perfilCompleto()</code> de <code>app/useAuth.ts</code>), <code>registrarLogin</code> com contexto GPS/dispositivo (<code>lib/contexto.ts</code>) e o fluxo de recuperação de senha.</p>
+  <h4>Mudanças</h4>
+  <ul>
+    <li><code>lib/auth-actions.ts</code> <span class="novo">NOVO</span>: <code>entrar()</code>, <code>cadastrar()</code>, <code>enviarResetSenha()</code>, <code>completarPerfil()</code> — lógica extraída de <code>Auth.tsx</code>, incluindo a chamada a <code>registrarLogin</code> pós-login. Extrair primeiro permite modal e páginas coexistirem durante a transição.</li>
+    <li><code>app/(auth)/layout.tsx</code> <span class="novo">NOVO</span> (2 colunas com painel de gradiente), <code>app/(auth)/entrar/page.tsx</code>, <code>app/(auth)/cadastro/page.tsx</code>, <code>app/(auth)/esqueci-senha/page.tsx</code>, <code>app/(auth)/completar-perfil/page.tsx</code> <span class="novo">NOVOS</span>.</li>
+    <li>Guard de perfil incompleto: <code>user &amp;&amp; !perfilCompleto(profile)</code> redireciona para <code>/completar-perfil</code> a partir de <code>/contribuir</code>, <code>/perfil</code> e do shell <code>(app)</code>.</li>
+    <li>Header público passa a linkar <code>/entrar</code> e <code>/cadastro</code>; <code>&lt;AuthControls /&gt;</code> sai da home; <code>app/Auth.tsx</code> é deletado ao final; <code>/redefinir-senha</code> só re-skin.</li>
+    <li><strong>Login social (Google/Apple) do mockup: não lançar agora</strong> (exige configurar OAuth providers no Supabase; Apple exige conta de developer paga). Fica como melhoria posterior (D4).</li>
+  </ul>
+  <p class="risco"><strong>Risco:</strong> é o fluxo mais sensível do app — qualquer quebra impede login/cadastro.</p>
+  <p class="verif"><strong>Verificação (ponta a ponta no preview):</strong> cadastro novo com telefone validado → completar perfil → logout → login (conferir linha nova em <code>login_log</code> com GPS/dispositivo) → esqueci senha → e-mail → <code>/redefinir-senha</code> → login com a senha nova. Testar sessão persistida (refresh de página logada).</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 5 — Home nova (dashboard público) — 2 a 3 PRs</h3>
+  <p><strong>Objetivo:</strong> reescrever <code>app/(site)/page.tsx</code> no layout do mockup. É o maior bloco do projeto; dividir em: <strong>5a</strong> filtros + KPIs + tabela de pratos, <strong>5b</strong> gráficos + movers, <strong>5c</strong> tabela de produtos por região (premium-locked visual).</p>
+
+  <h4>5.0 — Níveis de preço extensíveis (pré-requisito, em <code>lib/format.ts</code>)</h4>
+  <p>Substituir <code>MODOS</code> por uma estrutura que mescla os dois lados (decisão 3), preservando as keys atuais (compatíveis com o estado e com a calibração):</p>
+  <pre><code>export type NivelPreco = {
+  key: string; label: string;
+  grupo: 'consumidor' | 'atacarejo' | 'industria';
+  desconto: number | null;   // sobre o preço online
+  nota: string; disponivel: boolean;
+}
+export const NIVEIS_PRECO: readonly NivelPreco[] = [
+  { key: 'online',    label: 'Consumidor — online',  grupo: 'consumidor', desconto: 0,    nota: 'preço coletado no varejo online', disponivel: true },
+  { key: 'mercado',   label: 'Consumidor — mercado', grupo: 'consumidor', desconto: 0.10, nota: 'estimativa −10% sobre o online',  disponivel: true },
+  { key: 'atacarejo', label: 'Atacarejo',            grupo: 'atacarejo',  desconto: 0.22, nota: 'estimativa −22% sobre o online',  disponivel: true },
+  { key: 'industria', label: 'Indústria',            grupo: 'industria',  desconto: null, nota: 'em breve',                        disponivel: false },
+]
+// alias de transição:
+export const MODOS = NIVEIS_PRECO.filter(n =&gt; n.disponivel)</code></pre>
+  <p>A UI renderiza <code>disponivel: false</code> como pill desabilitada "em breve". O percentual (ou fonte de dado) da Indústria é decisão pendente (D5) — sem ela o nível fica desabilitado, coerente com a decisão "só dados reais".</p>
+
+  <h4>5.1 — Mapeamento bloco do mockup → dados reais</h4>
+  <table>
+    <tr><th>Bloco</th><th>Fonte de dados / implementação</th></tr>
+    <tr><td>Painel de filtros (busca com chips, nível de preço, <strong>região em pills</strong>, período com presets, comparar com anterior, selects de prato/produto)</td><td>Estado local; <code>REGIOES</code> e <code>NIVEIS_PRECO</code> de <code>lib/format.ts</code>; pratos de <code>getDishCostsRange</code>; ingredientes de <code>getIngredientes</code>. As pills multi-região reproduzem o comportamento multi-seleção do mapa atual. Período livre continua admin-only (comportamento atual); público usa presets sobre os snapshots existentes. <strong><code>MapaBrasil</code> sai da home</strong> (import dinâmico removido; o componente segue vivo para a aba Mapa do Histórico).</td></tr>
+    <tr><td>Hero stats</td><td><strong>Reais:</strong> 100 pratos, 111 ingredientes, 5 regiões, nº de coletas (<code>getSnapshotsNovos().length</code>), contribuições aprovadas — query nova <code>getStatsPublicas()</code> <span class="novo">NOVA</span> (counts com <code>head: true</code>).</td></tr>
+    <tr><td>3 KPI cards</td><td>Índice atual (mediana do último snapshot via <code>getDishCostsRange</code> + <code>mediana</code> de <code>lib/stats.ts</code>); variação vs. coleta anterior (2 últimos de <code>getSnapshotsNovos</code> — exibir "—" quando só houver 1 coleta no recorte); 3º KPI a definir (D6).</td></tr>
+    <tr><td>Gráfico de linha do índice (com legenda clicável e comparação)</td><td>Recharts (não o SVG manual do mockup). Query nova <code>getSerieIndicePublica(regioes?)</code> <span class="novo">NOVA</span> em <code>lib/queries.ts</code> — versão enxuta de <code>getEvolucao</code> (que é admin e carrega blend/online/manual/calibração): série de medianas por snapshot, geral + por região. Com 2–3 pontos, usar dots visíveis e a nota "série em construção — coletas nos dias 1 e 15".</td></tr>
+    <tr><td>Gráfico por região</td><td>Mesma <code>getSerieIndicePublica</code> (dimensão região) ou barras do último snapshot por região (agregação que a home atual já faz em <code>useMemo regionais</code>). Cores de <code>CORES_REGIAO</code> (<code>lib/theme.ts</code>).</td></tr>
+    <tr><td>Movers (maiores altas/quedas com sparklines)</td><td>Query nova <code>getMoversPratos(n)</code> <span class="novo">NOVA</span> comparando <code>custos_pratos</code> dos 2 últimos snapshots (análoga a <code>getVariacoesFortes</code>, que é por ingrediente). Sparkline com a série por prato de <code>getDishCostsRange</code>. Alta = <code>--danger</code>, queda = <code>--ok</code>.</td></tr>
+    <tr><td>Tabela de pratos (ordenável, filtrável, sparklines, drill-down)</td><td>Lógica atual da home (busca/ordenação) + <code>getAllDetalhes</code> / <code>getAllFontes</code> / <code>getAllFontesManuais</code>. Drill-down: a gaveta <code>DetalhePrato.tsx</code> vira <code>Modal</code> (Fase 2), mantendo breakdown de ingredientes, etiquetas de origem e <code>ModalFontes</code>. Mover <code>DetalhePrato.tsx</code>, <code>ModalFontes.tsx</code>, <code>InfoTip.tsx</code> para <code>components/dashboard/</code>.</td></tr>
+    <tr><td>Tabela de produtos por região (premium)</td><td>Query nova <code>getPrecosIngredientesPorRegiao(snapshotId)</code> <span class="novo">NOVA</span> — <code>getDetalheIngredientes</code> não segmenta por região; a dimensão regional do mesmo ingrediente vem das contribuições de campo (mesma base da calibração). Com poucas contribuições a tabela fica esparsa — comportamento a definir (D7). Nesta fase o overlay premium é <strong>visual</strong> com CTA para <code>/planos</code>; o gating real entra na Fase 8.</td></tr>
+    <tr><td>Slots de anúncio</td><td>Ficam para a Fase 9 (a home nova já reserva os espaços no layout).</td></tr>
+  </table>
+  <h4>Arquivos</h4>
+  <p>Reescrita de <code>app/(site)/page.tsx</code>; novos <code>components/dashboard/{PainelFiltros, KpiCards, GraficoIndice, GraficoRegioes, Movers, TabelaPratos, TabelaProdutosRegiao, Sparkline}.tsx</code>; <code>lib/queries.ts</code> +3 funções; <code>lib/format.ts</code> (<code>NIVEIS_PRECO</code>); <code>lib/stats.ts</code>.</p>
+  <p class="risco"><strong>Risco:</strong> é a rota mais vista e o maior risco de regressão de números (índice, descontos, multi-região).</p>
+  <p class="verif"><strong>Verificação:</strong> comparação <strong>lado a lado</strong> com a home antiga no preview — mesmos snapshots devem produzir exatamente os mesmos valores (índice, custo por prato, breakdown, fontes) em cada nível de preço e em cada combinação de regiões; toggle de nível recalcula com o mesmo <code>fator = 1 − desconto</code>; filtro admin de período segue funcionando. Manter a home antiga em produção até o PR final da fase estar aprovado no preview.</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 6 — App logado: shell + telas (2 PRs)</h3>
+  <p><strong>Objetivo:</strong> dar vida ao <code>app/(app)/layout.tsx</code>: sidebar (Meu painel, Enviar preços, Meus envios, Índice completo, Plano &amp; assinatura, Configurações; Histórico / Ranking / Administração visíveis por papel) + topbar (breadcrumbs + pill do plano). Gate de sessão no layout (redirect para <code>/entrar</code>).</p>
+  <h4>Mapeamento de telas</h4>
+  <table>
+    <tr><th>Tela</th><th>Rota</th><th>Origem</th></tr>
+    <tr><td>Meu painel</td><td><code>/painel</code> <span class="novo">NOVA</span></td><td>Saudação + stats reais do usuário (<code>getMinhasContribuicoes</code>, <code>getRecompensa</code>) + atalhos.</td></tr>
+    <tr><td>Enviar preços</td><td><code>/contribuir</code> (mantida)</td><td>Re-skin com stepper/drag-drop do mockup; <strong>zero mudança</strong> na lógica (compressão, hash, Storage, Nominatim, lote).</td></tr>
+    <tr><td>Meus envios</td><td><code>/meus-envios</code> <span class="novo">NOVA</span></td><td>Extraída do <code>/perfil</code>: lista de contribuições com status + <code>MapaLocal</code> (Leaflet permanece).</td></tr>
+    <tr><td>Configurações</td><td><code>/configuracoes</code> <span class="novo">NOVA</span></td><td>Extraída do <code>/perfil</code>: dados pessoais + recompensa/PIX/saque. <code>/perfil</code> vira redirect (não quebrar links existentes).</td></tr>
+    <tr><td>Índice completo</td><td><code>/indice</code> <span class="novo">NOVA</span> (D8)</td><td>Reusa os componentes de <code>components/dashboard/</code> dentro do shell; é onde os extras premium (export, detalhe por produto) aparecem.</td></tr>
+    <tr><td>Plano &amp; assinatura</td><td><code>/plano</code></td><td>Placeholder nesta fase; conteúdo na Fase 8.</td></tr>
+    <tr><td>Histórico / Ranking / Admin</td><td><code>/evolucao</code>, <code>/contribuidores</code>, <code>/admin</code> (mantidas)</td><td>Entram na sidebar por papel. <code>RequireAdmin</code> e o gate próprio do admin intactos.</td></tr>
+  </table>
+  <p class="risco"><strong>Risco:</strong> quebra dos fluxos de contribuição e saque durante a extração do <code>/perfil</code>.</p>
+  <p class="verif"><strong>Verificação:</strong> contribuição single e lote ponta a ponta; solicitar saque em Configurações; guard de perfil incompleto; deep-link em cada rota do shell sem sessão redireciona para <code>/entrar</code>.</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 7 — Premium: banco + gateway + primeiras rotas server-side (2 PRs + migração SQL)</h3>
+  <p><strong>Objetivo:</strong> infraestrutura real de assinatura. É a primeira vez que o projeto terá rotas de API server-side com service role — hoje tudo é client-side com anon key + RLS.</p>
+  <h4>7.1 Banco (novo arquivo em <code>Migration Supabase/</code>)</h4>
+  <ul>
+    <li>Tabela <code>assinaturas</code>: <code>id</code>, <code>user_id → profiles</code>, <code>gateway</code>, <code>gateway_customer_id</code>, <code>gateway_subscription_id</code>, <code>status</code> (<code>pendente | ativa | inadimplente | cancelada</code>), <code>plano</code>, <code>valor</code>, <code>periodo_fim</code>, <code>criado_em</code>, <code>atualizado_em</code>. <strong>RLS:</strong> usuário lê a própria (<code>auth.uid() = user_id</code>); <strong>escrita só via service role</strong> (nenhuma policy de insert/update para <code>authenticated</code>).</li>
+    <li>Função <code>is_premium(uid uuid) returns boolean</code> (SECURITY DEFINER, STABLE): existe assinatura <code>status = 'ativa'</code> com <code>periodo_fim &gt; now()</code>. Usada dentro de policies e exposta como RPC.</li>
+    <li>Tabela <code>webhook_eventos</code> (<code>gateway</code>, <code>evento_id</code> unique, <code>payload jsonb</code>, <code>processado_em</code>) para idempotência de webhooks.</li>
+  </ul>
+  <h4>7.2 Gateway de pagamento — recomendação: Asaas (confirmar em D9)</h4>
+  <p>
+    Critério objetivo entre as opções brasileiras: o Asaas oferece assinatura recorrente nativa cobrando por
+    <strong>Pix e cartão no mesmo objeto de assinatura</strong>; Stripe no Brasil aceita Pix só em cobrança avulsa
+    (recorrência exige cartão); Mercado Pago (preapproval) centra a recorrência em cartão/saldo; Pagar.me orienta
+    recorrência a cartão/boleto e a integração é mais voltada a plataformas. Checkout por link/QR gerado no servidor
+    reduz a superfície de PCI no frontend. <strong>Taxas e prazos de repasse não estão neste documento de propósito</strong> —
+    comparação comercial é decisão do responsável (D9). O desenho é agnóstico: trocar de gateway altera apenas
+    <code>lib/server/gateway.ts</code> e a rota de webhook.
+  </p>
+  <h4>7.3 Server-side (padrão novo no projeto)</h4>
+  <ul>
+    <li>Env vars (Vercel Production + Preview; <code>.env.local</code> em dev): <code>SUPABASE_SERVICE_ROLE_KEY</code>, <code>ASAAS_API_KEY</code>, <code>ASAAS_WEBHOOK_TOKEN</code>, <code>NEXT_PUBLIC_SITE_URL</code>. As três primeiras <strong>nunca</strong> com prefixo <code>NEXT_PUBLIC_</code>.</li>
+    <li><code>lib/server/supabase-admin.ts</code> <span class="novo">NOVO</span>: client com service role + <code>import 'server-only'</code> (adicionar o pacote <code>server-only</code>) — impede import acidental em componente de cliente.</li>
+    <li><code>lib/server/gateway.ts</code> <span class="novo">NOVO</span>: wrapper do Asaas (criar cliente, criar/cancelar/consultar assinatura).</li>
+    <li><code>app/api/assinatura/route.ts</code> <span class="novo">NOVO</span> (POST cria/cancela): como o app não tem SSR de auth, o cliente envia <code>Authorization: Bearer &lt;access_token&gt;</code> da sessão Supabase e a rota valida com <code>supabaseAdmin.auth.getUser(token)</code> antes de agir.</li>
+    <li><code>app/api/webhooks/asaas/route.ts</code> <span class="novo">NOVO</span>: valida o header de token do webhook, grava em <code>webhook_eventos</code> (ignora duplicado), atualiza <code>assinaturas</code> (pagamento confirmado → ativa/estende <code>periodo_fim</code>; falha/estorno → inadimplente; cancelamento → cancelada) e registra em <code>audit_log</code>.</li>
+  </ul>
+  <h4>7.4 Gating — cliente E servidor</h4>
+  <ul>
+    <li>Cliente: estender <code>app/useAuth.ts</code> com <code>isPremium</code> (RPC <code>is_premium</code> ou select em <code>assinaturas</code>); a UI esconde/trava recursos.</li>
+    <li>Servidor (gating de verdade): <strong>os dados hoje são todos legíveis com a anon key via RLS pública — um overlay de CSS não protege nada.</strong> O que for premium-de-dados (tabela de produtos por região, export logado, detalhe por produto) passa a ser servido por view/tabela com policy <code>is_premium(auth.uid())</code>, ou por rota de API que verifica a assinatura. A lista exata do que é premium é decisão pendente (D10); o índice e os pratos permanecem públicos.</li>
+  </ul>
+  <p class="risco"><strong>Risco:</strong> exposição de service role/API key se env vars forem mal configuradas; webhook processado em duplicidade sem a tabela de idempotência.</p>
+  <p class="verif"><strong>Verificação:</strong> sandbox do Asaas ponta a ponta no preview (criar assinatura de teste → webhook chega → <code>is_premium</code> vira true → recurso destrava); simular falha de pagamento; conferir no console do browser que a anon key <strong>não</strong> lê os dados premium.</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 8 — Checkout + telas de plano (1–2 PRs)</h3>
+  <ul>
+    <li><code>app/(app)/assinar/page.tsx</code> <span class="novo">NOVA</span>: checkout do mockup — métodos de pagamento, Pix com QR retornado pelo gateway, resumo do pedido, estados pendente/confirmado (polling ou Supabase Realtime na tabela <code>assinaturas</code>).</li>
+    <li><code>app/(app)/plano/page.tsx</code>: status da assinatura, próxima cobrança, cancelar.</li>
+    <li><code>components/premium/PremiumGate.tsx</code> <span class="novo">NOVO</span>: overlay cadeado + CTA, reutilizável — ativado na tabela de produtos por região (home e <code>/indice</code>) e no export logado.</li>
+    <li><code>/planos</code> público passa a apontar o CTA para <code>/assinar</code>; a pill do plano na topbar mostra Gratuito/Premium.</li>
+  </ul>
+  <p class="verif"><strong>Verificação:</strong> fluxo completo em sandbox nos dois métodos (Pix e cartão); cancelamento; usuário premium vê tudo destravado; free vê CTA; inadimplência trava de volta.</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 9 — Publicidade (1–2 PRs + migração SQL)</h3>
+  <p><strong>Recomendação: começar com house ads geridos no Supabase</strong>, com arquitetura pronta para plugar rede de terceiros depois (D11). Motivos: o tráfego atual não sustenta rede de anúncios; house ads atendem o caso do mockup ("Anuncie para quem decide a compra de alimentos") e viram produto comercial próprio; o componente de slot abstrai a origem — um adapter de terceiros no futuro não muda as páginas.</p>
+  <h4>Modelagem (novo arquivo em <code>Migration Supabase/</code>)</h4>
+  <ul>
+    <li>Tabela <code>anuncios</code>: <code>id</code>, <code>slot</code>, <code>titulo</code>, <code>imagem_url</code> (Storage), <code>link</code>, <code>ativo</code>, <code>inicio</code>, <code>fim</code>, <code>peso</code>, <code>anunciante</code>. RLS: select público dos ativos no período; escrita admin.</li>
+    <li>Tabela <code>anuncio_eventos</code>: <code>anuncio_id</code>, <code>tipo</code> (<code>imp | click</code>), <code>criado_em</code>, <code>pagina</code>. RLS: insert público, leitura só admin.</li>
+  </ul>
+  <h4>Frontend</h4>
+  <ul>
+    <li><code>components/ads/AdSlot.tsx</code> <span class="novo">NOVO</span>: recebe <code>slot</code>, sorteia criativo ativo por peso, registra impressão/clique, fallback = house ad institucional. <strong>Assinante premium não vê anúncios</strong> (checagem <code>isPremium</code> no próprio slot).</li>
+    <li>Slots posicionados: hero (<code>(site)/page.tsx</code>), lateral do painel de filtros, billboard entre seções, leaderboard pré-tabela, native row in-feed na <code>TabelaPratos</code>.</li>
+    <li><code>lib/queries.ts</code>: <code>getAnuncioParaSlot</code>, <code>registrarEventoAd</code> <span class="novo">NOVAS</span>.</li>
+    <li>Nova aba "Anúncios" no <code>/admin</code>: CRUD de criativos + métricas de impressão/clique.</li>
+  </ul>
+  <div class="note">
+    <p><strong>Chart-gate (anúncio que cobre o gráfico): recomendação é NÃO lançar.</strong> É o padrão mais agressivo
+    do mockup, cobre exatamente o conteúdo-núcleo do produto e conflita com a venda do Premium. Se for aprovado mesmo
+    assim (D12), implementar com frequency cap (1×/sessão via localStorage) e nunca para assinantes.</p>
+  </div>
+  <p class="verif"><strong>Verificação:</strong> impressões/cliques aparecem em <code>anuncio_eventos</code>; premium não vê slots; slot sem criativo ativo mostra o fallback.</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 10 — Compartilhamento social (opcional, 1 PR)</h3>
+  <p>
+    Reaproveita o padrão já existente de <code>app/opengraph-image.tsx</code> (<code>ImageResponse</code> / <code>next/og</code>,
+    que já roda no projeto): criar <code>app/api/card/route.tsx</code> <span class="novo">NOVA</span> que gera o PNG do card
+    (índice atual, variação, gráfico simplificado, marca) parametrizado por querystring, e
+    <code>components/dashboard/ShareModal.tsx</code> <span class="novo">NOVO</span> com preview (a própria URL da imagem),
+    botões copiar/baixar/compartilhar (Web Share API). Só dados públicos; sem service role.
+  </p>
+  <p class="verif"><strong>Verificação:</strong> card renderiza com os dados do último snapshot; conferir peso e tempo de resposta da função.</p>
+  </div>
+
+  <div class="fase">
+  <h3>Fase 11 — Polimento e regressão final (1 PR)</h3>
+  <ul>
+    <li>Remover os aliases de token de <code>globals.css</code> (<code>cream/panel/muted/line/paprika/olive</code>) quando <code>grep</code> não retornar mais usos; remover o alias <code>MODOS</code> de <code>lib/format.ts</code>; remover o alias <code>--font-serif</code>.</li>
+    <li>Marca final: <code>opengraph-image.tsx</code>, ícone, <code>manifest.ts</code> com o logo infinito definitivo; revisar PWA (<code>RegistrarSW</code> intacto).</li>
+    <li>Rodar o checklist de regressão completo (seção 7) no preview e repetir em produção após o merge.</li>
+  </ul>
+  </div>
+
+  <!-- ============================ 5. DECISÕES ============================ -->
+  <h2 id="decisoes">5. Pontos de decisão pendentes (D1–D12)</h2>
+  <p>Cada item abaixo bloqueia apenas a parte indicada — as demais fases seguem sem ele. Nada aqui foi assumido no plano.</p>
+  <div class="decisao"><strong>D1 · Fase 1.</strong> Acento primário de UI (botões, links, foco): o mockup sugere o azul <code>#0069D4</code>. Confirmar; e definir se o gradiente completo aparece só em marca/hero ou também em botões primários.</div>
+  <div class="decisao"><strong>D2 · Fase 3.</strong> Texto da página Metodologia: o mockup lista 6 fontes de dados que não correspondem às reais. O documento propõe descrever as fontes verdadeiras (scraping SerpAPI, leituras manuais, contribuições de campo, calibração). Validar o texto.</div>
+  <div class="decisao"><strong>D3 · Fase 3.</strong> Página Sobre: fornecer textos e links reais do ecossistema Infinity (Rede Food Service, Seasoning, Ponto Food) — no mockup os links não têm destino.</div>
+  <div class="decisao"><strong>D4 · Fase 4.</strong> Login social (Google/Apple): recomendação é lançar sem (e-mail + senha, como hoje) e tratar como melhoria posterior. Google exige projeto no console GCP; Apple exige conta de developer paga.</div>
+  <div class="decisao"><strong>D5 · Fase 5.</strong> Nível "Indústria": definir o percentual de desconto (ou a fonte de dado) com o sócio. Até lá a pill fica desabilitada com "em breve".</div>
+  <div class="decisao"><strong>D6 · Fase 5.</strong> Terceiro KPI da home (os dois primeiros são índice atual e variação vs. coleta anterior): prato mais caro/barato? nº de coletas? contribuições aprovadas?</div>
+  <div class="decisao"><strong>D7 · Fase 5.</strong> Tabela de produtos por região com dado esparso (a dimensão regional vem das contribuições de campo): mostrar "sem dado" por célula, ou estrear só com a coluna Online nacional + regiões onde há dado?</div>
+  <div class="decisao"><strong>D8 · Fase 6.</strong> "Índice completo" do app logado: rota própria <code>/indice</code> dentro do shell (recomendado) ou item da sidebar apontando para a home pública?</div>
+  <div class="decisao"><strong>D9 · Fase 7.</strong> Gateway de pagamento: recomendação técnica é Asaas (recorrência nativa com Pix + cartão). Confirmar após comparação comercial de taxas e prazos de repasse — números ficaram fora deste documento de propósito.</div>
+  <div class="decisao"><strong>D10 · Fase 7.</strong> Lista exata do que é premium. O mockup indica: tabela de produtos por região, export no app logado e detalhe por produto. Índice e pratos permanecem públicos. Confirmar a lista.</div>
+  <div class="decisao"><strong>D11 · Fase 9.</strong> Publicidade: house ads primeiro (recomendado) ou rede de terceiros desde já? Se rede, qual e em quais slots?</div>
+  <div class="decisao"><strong>D12 · Fase 9.</strong> Chart-gate (anúncio cobrindo o gráfico): recomendação é não lançar. Decidir explicitamente; se aprovado, com frequency cap e nunca para assinantes.</div>
+
+  <!-- ============================ 6. ROLLOUT ============================ -->
+  <h2 id="rollout">6. Dependências e estratégia de rollout</h2>
+  <pre><code>F1 tokens ─► F2 componentes + re-skin ─► F3 navegação ─► F4 auth ─► F5 home ─► F6 shell logado
+                                                                                    │
+                                              F7 premium infra ◄────────────────────┘
+                                                    │
+                                              F8 checkout ─► F9 ads ─► F10 share ─► F11 polimento</code></pre>
+  <ul>
+    <li><strong>F1–F2</strong> são de risco baixo e entregam o visual novo cedo em todas as telas — evita meses de convivência de dois designs.</li>
+    <li><strong>F3–F4</strong> mexem em estrutura, não em lógica de dados.</li>
+    <li><strong>F5</strong> concentra o risco de regressão de números — mitigado pela comparação lado a lado com a home antiga no preview, mantendo a antiga em produção até o PR final da fase.</li>
+    <li><strong>F7–F8</strong> são aditivos: nada existente depende deles.</li>
+    <li><strong>F9–F10</strong> são plugáveis a qualquer momento após F5.</li>
+    <li><strong>Branch/preview:</strong> uma branch por PR a partir de <code>main</code>; o preview do Vercel é o ambiente de validação. Atenção: <strong>o preview aponta para o MESMO Supabase de produção</strong> — testes de escrita sempre com contas de teste; para F7/F8, usar o sandbox do gateway com env vars distintas entre Preview e Production no Vercel.</li>
+    <li><strong>Sem feature flags formais:</strong> a granularidade das fases + preview cobre a necessidade; a exceção é a F5 (home antiga preservada até o fim da fase).</li>
+  </ul>
+
+  <!-- ============================ 7. REGRESSÃO ============================ -->
+  <h2 id="regressao">7. Checklist de regressão final</h2>
+  <p>Rodar no preview antes do merge da Fase 11 e repetir em produção depois.</p>
+  <ol class="steps">
+    <li><strong>Público:</strong> home (níveis de preço, pills de região, busca, ordenação, drill-down de prato, fontes online + manuais), Metodologia, Planos, Sobre, header/footer, links por papel.</li>
+    <li><strong>Auth:</strong> cadastro (telefone validado) → completar perfil → login (linha nova em <code>login_log</code> com GPS/dispositivo) → esqueci senha → <code>/redefinir-senha</code> → logout → sessão persistida após refresh.</li>
+    <li><strong>Contribuição:</strong> envio single e lote (compressão, dedup por hash, Nominatim, upload Storage) → aparece em Meus envios como pendente.</li>
+    <li><strong>Admin:</strong> moderação aprova (RPC <code>aprovar_contribuicao</code>) → recompensa creditada; preços manuais (salvar/limpar/histórico); recalcular custos; auditoria e ações do super; saques (solicitar em Configurações → marcar pago no admin).</li>
+    <li><strong>Histórico <code>/evolucao</code>:</strong> 5 abas funcionais, export CSV/XLSX; <code>/contribuidores</code> com ranking.</li>
+    <li><strong>Premium:</strong> assinar em sandbox (Pix e cartão) → destravar → cancelar → inadimplência trava; anon key não lê dados premium.</li>
+    <li><strong>Ads:</strong> impressão/clique registrados; premium sem anúncios; fallback do slot vazio.</li>
+    <li><strong>Build e PWA:</strong> <code>tsc --noEmit</code> e <code>npm run build</code> limpos; PWA instala; OG image correta.</li>
+  </ol>
+
+  <footer>Plano de migração do frontend do projeto <code>indice-pf</code> — V0 → V1 "by Infinity". Gerado a partir da leitura direta do código atual e do mockup <code>indice-pf-ads2.html</code>.</footer>
+</div>
+</body>
+</html>
