@@ -91,7 +91,7 @@ export default function PerfilPage() {
   // dados carregam FORA do callback de auth (chamar supabase lá dentro deadlocka)
   useEffect(() => {
     if (userId === undefined) return
-    if (userId === null) { router.replace('/'); return }
+    if (userId === null) { router.replace('/entrar?next=%2Fperfil'); return }
     let cancelado = false
     ;(async () => {
       const [p, cs, r, dr, sq] = await Promise.all([
