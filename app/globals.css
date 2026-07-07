@@ -1,29 +1,115 @@
 @import "tailwindcss";
 
 :root {
-  --cream:   #faf7f2;  /* fundo */
-  --panel:   #ffffff;  /* cartões */
-  --ink:     #1a1a1a;  /* texto */
-  --muted:   #6b6b6b;  /* texto secundário */
-  --line:    #e7e0d6;  /* bordas */
-  --paprika: #c0492b;  /* acento quente */
-  --olive:   #4a5d23;  /* acento secundário */
+  /* ===== tokens V1 (design system "by Infinity" — valores do mockup) ===== */
+
+  /* marca (gradiente magenta → verde) */
+  --magenta:     #8D4CB2;
+  --roxo:        #6954BD;
+  --azul:        #0069D4;
+  --azul-ink:    #0062EA;
+  --ciano:       #00A7E2;
+  --ciano-2:     #00C8FF;
+  --verde-ciano: #00BAAD;
+  --verde:       #20C58C;
+  --verde-2:     #37CE89;
+  --grad-marca: linear-gradient(100deg, var(--magenta), var(--roxo) 22%, var(--azul) 46%, var(--ciano) 70%, var(--verde) 100%);
+  --grad-azul:  linear-gradient(120deg, var(--azul), var(--ciano));
+  --grad-cta:   linear-gradient(120deg, var(--azul-ink), var(--ciano) 60%, var(--verde-ciano));
+
+  /* acento primário de UI (D1: azul da marca; gradiente só em marca/hero) */
+  --accent: var(--azul);
+
+  /* superfícies */
+  --bg:        #f4f6fb;
+  --bg-2:      #eef1f8;
+  --surface:   #ffffff;
+  --surface-2: #f7f9fc;
+  --surface-3: #eef2f8;
+
+  /* bordas */
+  --border:        #e2e8f2;
+  --border-2:      #d3dbe8;
+  --border-strong: #c2ccdd;
+
+  /* texto */
+  --ink:   #12203a;
+  --ink-2: #3f4d66;
+  --dim:   #6b7a93;
+  --faint: #9aa7bd;
+
+  /* semânticas */
+  --ok:        #12b76a;
+  --ok-bg:     #e6f9f0;
+  --warn:      #f59e0b;
+  --warn-bg:   #fef4e2;
+  --danger:    #ef4444;
+  --danger-bg: #fdecec;
+  --info:      #0ea5e9;
+  --info-bg:   #e5f6fe;
+
+  /* raios e sombras (usar via rounded-[var(--r)] / shadow-[var(--shadow)]) */
+  --r-sm: 9px;
+  --r:    13px;
+  --r-lg: 18px;
+  --r-xl: 26px;
+  --shadow-xs:    0 1px 2px rgba(18, 32, 58, .06);
+  --shadow:       0 4px 16px rgba(18, 32, 58, .08);
+  --shadow-md:    0 10px 30px rgba(18, 32, 58, .10);
+  --shadow-lg:    0 24px 60px rgba(18, 32, 58, .16);
+  --shadow-brand: 0 10px 26px rgba(0, 105, 212, .28);
+
+  /* ===== aliases da V0 — mantêm as classes antigas (bg-cream, text-paprika…)
+     funcionando durante a migração; remover na Fase 11 ===== */
+  --cream:   var(--bg);
+  --panel:   var(--surface);
+  --muted:   var(--dim);
+  --line:    var(--border);
+  --paprika: var(--accent);
+  --olive:   var(--ok);
+
+  /* serif da V0 aponta para a sans (Lora saiu na V1; limpeza na Fase 11) */
+  --font-serif: var(--font-sans);
 }
 
 @theme inline {
+  /* tokens V1 */
+  --color-bg:        var(--bg);
+  --color-bg-2:      var(--bg-2);
+  --color-surface:   var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border:    var(--border);
+  --color-border-2:  var(--border-2);
+  --color-ink:       var(--ink);
+  --color-ink-2:     var(--ink-2);
+  --color-dim:       var(--dim);
+  --color-faint:     var(--faint);
+  --color-accent:    var(--accent);
+  --color-ok:        var(--ok);
+  --color-warn:      var(--warn);
+  --color-danger:    var(--danger);
+  --color-info:      var(--info);
+  --color-brand-magenta: var(--magenta);
+  --color-brand-roxo:    var(--roxo);
+  --color-brand-azul:    var(--azul);
+  --color-brand-ciano:   var(--ciano);
+  --color-brand-verde:   var(--verde);
+
+  /* aliases V0 */
   --color-cream:   var(--cream);
   --color-panel:   var(--panel);
-  --color-ink:     var(--ink);
   --color-muted:   var(--muted);
   --color-line:    var(--line);
   --color-paprika: var(--paprika);
   --color-olive:   var(--olive);
+
   --font-sans:  var(--font-sans);
   --font-serif: var(--font-serif);
 }
 
 body {
-  background: var(--cream);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
@@ -31,4 +117,4 @@ body {
 /* números em variante tabular para alinhamento em tabelas */
 .tnum { font-variant-numeric: tabular-nums; }
 
-::selection { background: #c0492b22; }
+::selection { background: #0069d422; }
