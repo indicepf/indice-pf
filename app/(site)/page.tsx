@@ -8,13 +8,15 @@ import DetalhePrato from '../DetalhePrato'
 import { useAuth } from '../useAuth'
 import {
   getDishCostsRange, getSnapshotsNovos, getAllDetalhes, getAllFontes, getAllFontesManuais,
-  getStatsPublicas, getSeriePratos, type FonteManual, type StatsPublicas, type SeriePratos,
+  getStatsPublicas, getSeriePratos, getPrecosPorRegiao,
+  type FonteManual, type StatsPublicas, type SeriePratos, type ProdutoRegiao,
 } from '@/lib/queries'
 import { NIVEIS_PRECO, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
 import { mediana } from '@/lib/stats'
 import { ACCENT, CORES_REGIAO, COR_ALTA, COR_QUEDA, DIM } from '@/lib/theme'
 import { Badge, Card, Input, Select } from '@/components/ui'
 import Sparkline from '@/components/dashboard/Sparkline'
+import TabelaProdutosRegiao from '@/components/dashboard/TabelaProdutosRegiao'
 import type { ModoKey, OrdemKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
@@ -29,6 +31,7 @@ export default function Dashboard() {
   const [ini, setIni] = useState(''); const [fim, setFim] = useState('')   // período (vazio = última coleta)
   const [stats, setStats] = useState<StatsPublicas | null>(null)
   const [serie, setSerie] = useState<SeriePratos | null>(null)
+  const [produtosRegiao, setProdutosRegiao] = useState<ProdutoRegiao[]>([])
 
   const [modo, setModo]         = useState<ModoKey>('online')
   const [regioes, setRegioes]   = useState<Set<string>>(new Set())   // vazio = todas
@@ -56,6 +59,7 @@ export default function Dashboard() {
       getAllDetalhes(ref.id, ref.data).then(setDetalhes)
       getAllFontes(ref.id).then(setFontes)
       getAllFontesManuais(ref.data).then(setFontesManuais)
+      getPrecosPorRegiao(ref.id).then(setProdutosRegiao)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapsNovos, ini, fim])
@@ -405,6 +409,11 @@ export default function Dashboard() {
                 Atacarejo são estimativas sobre o preço online, em calibração com dados de campo.
               </p>
             </div>
+
+            {/* produtos por região (premium; gating real na Fase 8) */}
+            {produtosRegiao.length > 0 && (
+              <TabelaProdutosRegiao linhas={produtosRegiao} destravada={isAdmin} />
+            )}
           </section>
         </div>
       </div>

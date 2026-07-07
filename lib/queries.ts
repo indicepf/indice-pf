@@ -994,3 +994,45 @@ export async function getSeriePratos(): Promise<SeriePratos> {
   }
   return { snaps, pratos: [...pratos.values()], custos }
 }
+
+// preço por ingrediente × região (tabela "produtos por região" da home).
+// Online = mediana nacional da coleta (label próprio). Campo = R$/kg por
+// região a partir das contribuições aprovadas (itens por unidade/maço
+// convertidos pelo peso de referência) — célula vazia onde não há dado (D7).
+export type ProdutoRegiao = {
+  id: number; nome: string; label: string | null
+  online: number | null
+  campo: Record<string, { valor: number; n: number }>
+}
+export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoRegiao[]> {
+  const [precos, ingsQ, contribs] = await Promise.all([
+    supabase.from('precos').select('ingrediente_id,nome_ingrediente,mediana_exibicao,label').eq('snapshot_id', snapshotId),
+    supabase.from('ingredientes').select('id,unidade,peso_ref_g'),
+    fetchAll(() => supabase.from('contribuicoes').select('ingrediente_id,preco,peso_g,regiao,uf').eq('status', 'aprovada')),
+  ])
+  const ing = new Map(((ingsQ.data || []) as any[]).map(i => [i.id, i]))
+  const porIngReg: Record<string, number[]> = {}
+  ;(contribs as any[]).forEach(c => {
+    const regiao = calibRegiao(c.regiao, c.uf); if (!regiao) return
+    const iid = c.ingrediente_id; if (iid == null) return
+    const preco = Number(c.preco), peso = Number(c.peso_g)
+    if (!(preco > 0) || !(peso > 0)) return
+    const u = ing.get(iid)
+    const gramas = (u?.unidade === 'unidade' || u?.unidade === 'maco') ? peso * (Number(u?.peso_ref_g) || 0) : peso
+    if (!(gramas > 0)) return
+    ;(porIngReg[`${iid}|${regiao}`] ||= []).push(preco / gramas * 1000)   // R$/kg
+  })
+  return ((precos.data || []) as any[]).map(p => {
+    const campo: ProdutoRegiao['campo'] = {}
+    for (const key in porIngReg) {
+      const [iid, regiao] = key.split('|')
+      if (Number(iid) !== p.ingrediente_id) continue
+      const vals = porIngReg[key]
+      campo[regiao] = { valor: mediana(vals), n: vals.length }
+    }
+    return {
+      id: p.ingrediente_id, nome: p.nome_ingrediente, label: p.label,
+      online: p.mediana_exibicao != null ? Number(p.mediana_exibicao) : null, campo,
+    }
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+}
