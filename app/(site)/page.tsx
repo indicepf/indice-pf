@@ -2,24 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import AuthControls from './Auth'
-import DetalhePrato from './DetalhePrato'
-import { useAuth } from './useAuth'
+import DetalhePrato from '../DetalhePrato'
+import { useAuth } from '../useAuth'
 import { getDishCostsRange, getSnapshotsNovos, getAllDetalhes, getAllFontes, getAllFontesManuais, type FonteManual } from '@/lib/queries'
 import { MODOS, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
+import { mediana } from '@/lib/stats'
 import type { ModoKey, OrdemKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
-function mediana(v: number[]) {
-  if (!v.length) return 0
-  const s = [...v].sort((a, b) => a - b)
-  const meio = Math.floor(s.length / 2)
-  return s.length % 2 ? s[meio] : (s[meio - 1] + s[meio]) / 2
-}
-
 // mapa real do Brasil (d3/react-simple-maps) — só no cliente
-const MapaBrasil = dynamic(() => import('./MapaBrasil'), {
+const MapaBrasil = dynamic(() => import('../MapaBrasil'), {
   ssr: false,
-  loading: () => <div className="w-full max-w-[360px] h-[300px] grid place-items-center text-muted text-sm">carregando mapa…</div>,
+  loading: () => <div className="w-full max-w-[360px] h-[300px] grid place-items-center text-dim text-sm">carregando mapa…</div>,
 })
 
 export default function Dashboard() {
@@ -99,56 +92,43 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <main className="min-h-screen grid place-items-center text-muted">
-        <p className="font-[family-name:var(--font-serif)] text-lg">Carregando o Índice PF…</p>
+      <main className="min-h-screen grid place-items-center text-dim">
+        <p className="font-bold tracking-tight text-lg">Carregando o Índice PF…</p>
       </main>
     )
   }
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-line bg-cream/80 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
-          <div>
-            <h1 className="font-[family-name:var(--font-serif)] text-2xl leading-none">Índice PF</h1>
-            <p className="text-xs text-muted mt-1">
-              custo do prato feito no Brasil{snapshot ? ` · coleta de ${fmtData(snapshot.data)}` : ''}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap justify-end">
-            {isAdmin && <a href="/evolucao" className="text-sm text-muted hover:text-ink">Histórico</a>}
-            {isAdmin && <a href="/contribuidores" className="text-sm text-muted hover:text-ink">Ranking</a>}
-            <ToggleModo modo={modo} setModo={setModo} />
-            <AuthControls />
-          </div>
-        </div>
-      </header>
-
       <div className="max-w-5xl mx-auto px-6 py-10 space-y-12">
         <section>
           <div className="flex flex-col sm:flex-row sm:items-center gap-8 sm:gap-12">
             <div className="sm:flex-1">
-              <p className="text-[0.7rem] uppercase tracking-[0.12em] text-muted">{regioes.size === 0 ? 'Índice nacional' : regioes.size === 1 ? `Índice — ${[...regioes][0]}` : `Índice — ${regioes.size} regiões`}</p>
-              <p className="font-[family-name:var(--font-serif)] text-5xl sm:text-6xl text-paprika tnum mt-1">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-[0.7rem] uppercase tracking-[0.12em] text-dim">{regioes.size === 0 ? 'Índice nacional' : regioes.size === 1 ? `Índice — ${[...regioes][0]}` : `Índice — ${regioes.size} regiões`}</p>
+                <ToggleModo modo={modo} setModo={setModo} />
+              </div>
+              <p className="font-bold tracking-tight text-5xl sm:text-6xl text-accent tnum mt-1">
                 {brl(indiceNacional)}
               </p>
-              <p className="text-xs text-muted mt-2">mediana de {custosRegiao.length} pratos · {MODOS.find(m => m.key === modo)!.nota}</p>
-              <p className="text-sm text-muted mt-4 max-w-sm leading-relaxed">
+              {snapshot && <p className="text-xs text-faint mt-1.5">coleta de {fmtData(snapshot.data)}</p>}
+              <p className="text-xs text-dim mt-2">mediana de {custosRegiao.length} pratos · {MODOS.find(m => m.key === modo)!.nota}</p>
+              <p className="text-sm text-dim mt-4 max-w-sm leading-relaxed">
                 A cor de cada região indica o custo mediano do prato feito ali. Clique numa região para destacá-la
                 e filtrar os pratos; clique de novo ou use o filtro da lista para voltar.
               </p>
               {isAdmin && (
-                <div className="mt-5 text-xs text-muted">
+                <div className="mt-5 text-xs text-dim">
                   <p className="mb-1.5">Período do cálculo</p>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel">
+                    <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface">
                       {([['7d', 7], ['15d', 15], ['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
-                        <button key={label} onClick={() => presetHome(d)} className="px-2.5 py-1.5 text-muted hover:text-ink transition-colors">{label}</button>
+                        <button key={label} onClick={() => presetHome(d)} className="px-2.5 py-1.5 text-dim hover:text-ink transition-colors">{label}</button>
                       ))}
                     </div>
-                    <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+                    <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-surface border border-border rounded px-2 py-1 focus:outline-none focus:border-accent" />
                     <span>até</span>
-                    <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-panel border border-line rounded px-2 py-1 focus:outline-none focus:border-paprika" />
+                    <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-surface border border-border rounded px-2 py-1 focus:outline-none focus:border-accent" />
                   </div>
                   {nColetasHome > 1 && <p className="mt-1.5">Índice = média de {nColetasHome} coletas do período.</p>}
                 </div>
@@ -162,26 +142,26 @@ export default function Dashboard() {
 
         <section>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-            <h2 className="font-[family-name:var(--font-serif)] text-xl mr-auto">Pratos</h2>
+            <h2 className="font-bold tracking-tight text-xl mr-auto">Pratos</h2>
             <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar prato…"
-              className="bg-panel border border-line rounded-md px-3 py-1.5 text-sm w-full sm:w-48 focus:outline-none focus:border-paprika" />
+              className="bg-surface border border-border rounded-md px-3 py-1.5 text-sm w-full sm:w-48 focus:outline-none focus:border-accent" />
             <select value={regioes.size === 1 ? [...regioes][0] : ''} onChange={e => setRegioes(e.target.value ? new Set([e.target.value]) : new Set())}
-              className="bg-panel border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none cursor-pointer">
+              className="bg-surface border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none cursor-pointer">
               <option value="">{regioes.size > 1 ? `${regioes.size} regiões` : 'Todas as regiões'}</option>
               {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
             <select value={ordem} onChange={e => setOrdem(e.target.value as OrdemKey)}
-              className="bg-panel border border-line rounded-md px-3 py-1.5 text-sm focus:outline-none cursor-pointer">
+              className="bg-surface border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none cursor-pointer">
               <option value="custo">Por custo</option>
               <option value="nome">Por nome</option>
               <option value="regiao">Por região</option>
             </select>
           </div>
 
-          <div className="border border-line rounded-md overflow-hidden bg-panel">
+          <div className="border border-border rounded-md overflow-hidden bg-surface">
             <table className="w-full text-[0.95rem]">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-muted border-b border-line">
+                <tr className="text-left text-xs uppercase tracking-wide text-dim border-b border-border">
                   <th className="font-medium px-4 py-3">Prato</th>
                   <th className="font-medium px-4 py-3 hidden sm:table-cell">Região</th>
                   <th className="font-medium px-4 py-3 text-right">Custo</th>
@@ -191,22 +171,22 @@ export default function Dashboard() {
               <tbody>
                 {lista.map(c => (
                   <tr key={c.pratos.id} onClick={() => setSelecionado(c)}
-                    className="border-b border-line/70 last:border-0 hover:bg-cream cursor-pointer transition-colors">
+                    className="border-b border-border/70 last:border-0 hover:bg-surface-2 cursor-pointer transition-colors">
                     <td className="px-4 py-3">{limparNome(c.pratos.nome)}</td>
-                    <td className="px-4 py-3 text-muted hidden sm:table-cell">{c.pratos.regiao}</td>
+                    <td className="px-4 py-3 text-dim hidden sm:table-cell">{c.pratos.regiao}</td>
                     <td className="px-4 py-3 text-right font-medium tnum">{brl(c.custo_total * fator)}</td>
-                    <td className="px-4 py-3 text-right text-muted tnum hidden sm:table-cell">
+                    <td className="px-4 py-3 text-right text-dim tnum hidden sm:table-cell">
                       {c.ingredientes_cobertos}/{c.ingredientes_total}
                     </td>
                   </tr>
                 ))}
                 {!lista.length && (
-                  <tr><td colSpan={4} className="px-4 py-8 text-center text-muted">Nenhum prato encontrado.</td></tr>
+                  <tr><td colSpan={4} className="px-4 py-8 text-center text-dim">Nenhum prato encontrado.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-muted mt-3">
+          <p className="text-xs text-dim mt-3">
             Os preços de Mercado e Atacarejo são estimativas sobre o preço online; serão calibrados com dados de campo.
           </p>
         </section>
@@ -220,22 +200,16 @@ export default function Dashboard() {
           onClose={() => setSelecionado(null)} />
       )}
 
-      <footer className="border-t border-line mt-8">
-        <div className="max-w-5xl mx-auto px-6 py-4 text-xs text-muted flex justify-between">
-          <span>Índice PF · dados coletados no varejo online</span>
-          <span>{snapshot ? fmtData(snapshot.data) : ''}</span>
-        </div>
-      </footer>
     </main>
   )
 }
 
 function ToggleModo({ modo, setModo }: { modo: ModoKey; setModo: (m: ModoKey) => void }) {
   return (
-    <div className="inline-flex border border-line rounded-md overflow-hidden bg-panel text-sm">
+    <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface text-sm">
       {MODOS.map(m => (
         <button key={m.key} onClick={() => setModo(m.key)}
-          className={`px-3 py-1.5 transition-colors ${modo === m.key ? 'bg-paprika text-white' : 'text-muted hover:bg-cream'}`}>
+          className={`px-3 py-1.5 transition-colors ${modo === m.key ? 'bg-accent text-white' : 'text-dim hover:bg-surface-2'}`}>
           {m.label}
         </button>
       ))}
