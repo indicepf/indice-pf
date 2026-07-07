@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { getIngredientes } from '@/lib/queries'
+import { getIngredientes, getProfile } from '@/lib/queries'
+import { perfilCompleto } from '../useAuth'
 import { rotuloQtd, exemploQtd } from '@/lib/format'
 import type { Ing } from '@/lib/types'
 import { Button, Input, Select } from '@/components/ui'
@@ -74,10 +75,13 @@ export default function ContribuirPage() {
   const [resultado, setResultado] = useState<{ enviadas: number; dups: number; falhas: number } | null>(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       const u = data.session?.user
-      if (!u) { router.replace('/'); setUserId(null) }
-      else setUserId(u.id)
+      if (!u) { router.replace('/entrar?next=%2Fcontribuir'); setUserId(null); return }
+      // perfil completo é pré-requisito para contribuir (valida as contribuições)
+      const p = await getProfile(u.id)
+      if (!perfilCompleto(p)) { router.replace('/completar-perfil?next=%2Fcontribuir'); setUserId(null); return }
+      setUserId(u.id)
     })
   }, [router])
 
