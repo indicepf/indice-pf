@@ -10,13 +10,14 @@ import {
 } from '@/lib/queries'
 import { REGIOES, SEXOS, idade, mascararTel, telValido, mascararCpf, cpfValido, brl, SAQUE_MINIMO } from '@/lib/format'
 import type { Profile, Contribuicao } from '@/lib/types'
+import { Badge, Button, Input, Select, Tabs, type BadgeTone } from '@/components/ui'
 import BotaoInicio, { chip } from '../BotaoInicio'
 
 type MeuSaque = { id: number; valor: number; status: string; criado_em: string; pago_em: string | null }
-const SAQUE_STATUS: Record<string, { txt: string; cls: string }> = {
-  solicitado: { txt: 'em processamento', cls: 'text-muted border-line' },
-  pago:       { txt: 'pago',             cls: 'text-olive border-olive/30 bg-olive/5' },
-  rejeitada:  { txt: 'rejeitado',        cls: 'text-red-600 border-red-200 bg-red-50' },
+const SAQUE_STATUS: Record<string, { txt: string; tone: BadgeTone }> = {
+  solicitado: { txt: 'em processamento', tone: 'neutral' },
+  pago:       { txt: 'pago',             tone: 'ok' },
+  rejeitada:  { txt: 'rejeitado',        tone: 'danger' },
 }
 
 // reduz e recorta a foto num quadrado ~256px antes do upload do avatar
@@ -34,13 +35,13 @@ async function comprimirAvatar(file: File, lado = 256, q = 0.85): Promise<Blob> 
 
 const MapaLocal = dynamic(() => import('../MapaLocal'), {
   ssr: false,
-  loading: () => <div className="h-[280px] rounded-lg border border-line grid place-items-center text-muted text-sm">carregando mapa…</div>,
+  loading: () => <div className="h-[280px] rounded-lg border border-border grid place-items-center text-dim text-sm">carregando mapa…</div>,
 })
 
-const STATUS: Record<string, { txt: string; cls: string }> = {
-  pendente:  { txt: 'em análise', cls: 'text-muted border-line' },
-  aprovada:  { txt: 'aprovada',   cls: 'text-olive border-olive/30 bg-olive/5' },
-  rejeitada: { txt: 'rejeitada',  cls: 'text-red-600 border-red-200 bg-red-50' },
+const STATUS: Record<string, { txt: string; tone: BadgeTone }> = {
+  pendente:  { txt: 'em análise', tone: 'neutral' },
+  aprovada:  { txt: 'aprovada',   tone: 'ok' },
+  rejeitada: { txt: 'rejeitada',  tone: 'danger' },
 }
 
 export default function PerfilPage() {
@@ -181,84 +182,79 @@ export default function PerfilPage() {
   }
 
   if (userId === undefined) {
-    return <main className="min-h-screen grid place-items-center text-muted text-sm">Carregando…</main>
+    return <main className="min-h-screen grid place-items-center text-dim text-sm">Carregando…</main>
   }
   if (!userId) return null
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-line sticky top-0 bg-cream/90 backdrop-blur z-10">
+      <header className="border-b border-border sticky top-0 bg-surface/80 backdrop-blur z-10">
         <div className="max-w-lg mx-auto px-6 py-4 flex items-center gap-3">
           <BotaoInicio />
-          <h1 className="font-[family-name:var(--font-serif)] text-xl ml-1">Meu perfil</h1>
+          <h1 className="text-xl font-bold tracking-tight ml-1">Meu perfil</h1>
           <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
             className={`${chip} ml-auto`}>Sair</button>
         </div>
       </header>
 
-      <nav className="max-w-lg mx-auto px-6 flex gap-5 border-b border-line pt-4">
-        {([['dados', 'Dados'], ['recompensas', 'Recompensas'], ['contribuicoes', 'Minhas contribuições']] as const).map(([k, label]) => (
-          <button key={k} onClick={() => setAba(k)}
-            className={`text-sm pb-2 -mb-px border-b-2 transition ${aba === k ? 'border-paprika text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
-            {label}
-          </button>
-        ))}
-      </nav>
+      <Tabs className="max-w-lg mx-auto px-6 pt-4"
+        tabs={[['dados', 'Dados'], ['recompensas', 'Recompensas'], ['contribuicoes', 'Minhas contribuições']] as const}
+        active={aba} onChange={setAba} />
 
       <div className="max-w-lg mx-auto px-6 py-8">
         {/* Dados */}
         {aba === 'dados' && (
         <section>
           <div className="flex items-center gap-4 mb-5">
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-cream border border-line shrink-0 grid place-items-center">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-surface-3 border border-border shrink-0 grid place-items-center">
               {avatarUrl
                 ? <img src={avatarUrl} alt="Foto de perfil" className="w-full h-full object-cover" />
-                : <span className="text-2xl text-muted">{(nome || email || '?').trim().charAt(0).toUpperCase()}</span>}
+                : <span className="text-2xl text-dim">{(nome || email || '?').trim().charAt(0).toUpperCase()}</span>}
             </div>
-            <label className={`${btnGhostCls} cursor-pointer ${avatarBusy ? 'opacity-60 pointer-events-none' : ''}`}>
+            <label className={`inline-flex items-center justify-center rounded-[var(--r-sm)] px-4 py-2 text-sm font-medium transition bg-surface text-ink border border-border-2 hover:bg-surface-2 cursor-pointer ${avatarBusy ? 'opacity-60 pointer-events-none' : ''}`}>
               {avatarBusy ? 'Enviando…' : avatarUrl ? 'Trocar foto' : 'Adicionar foto'}
               <input type="file" accept="image/*" className="hidden" onChange={trocarAvatar} disabled={avatarBusy} />
             </label>
           </div>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-muted">E-mail</label>
-              <input value={email} disabled className={`${inputCls} opacity-60`} />
+              <label className="text-xs text-dim">E-mail</label>
+              <Input value={email} disabled className="opacity-60" />
             </div>
             <div>
-              <label className="text-xs text-muted">Nome</label>
-              <input value={nome} onChange={e => setNome(e.target.value)} className={inputCls} />
+              <label className="text-xs text-dim">Nome</label>
+              <Input value={nome} onChange={e => setNome(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs text-muted">Telefone (com DDD)</label>
-              <input value={tel} onChange={e => setTel(mascararTel(e.target.value))}
-                placeholder="(11) 99999-9999" className={inputCls} />
+              <label className="text-xs text-dim">Telefone (com DDD)</label>
+              <Input value={tel} onChange={e => setTel(mascararTel(e.target.value))}
+                placeholder="(11) 99999-9999" />
             </div>
             <div>
-              <label className="text-xs text-muted">Região</label>
-              <select value={regiao} onChange={e => setRegiao(e.target.value)} className={inputCls}>
+              <label className="text-xs text-dim">Região</label>
+              <Select value={regiao} onChange={e => setRegiao(e.target.value)}>
                 <option value="">Selecione…</option>
                 {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted">Sexo</label>
-                <select value={sexo} onChange={e => setSexo(e.target.value)} className={inputCls}>
+                <label className="text-xs text-dim">Sexo</label>
+                <Select value={sexo} onChange={e => setSexo(e.target.value)}>
                   <option value="">Selecione…</option>
                   {SEXOS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
+                </Select>
               </div>
               <div>
-                <label className="text-xs text-muted">Nascimento{idade(dataNasc) != null ? ` · ${idade(dataNasc)} anos` : ''}</label>
-                <input type="date" value={dataNasc} onChange={e => setDataNasc(e.target.value)} className={inputCls} />
+                <label className="text-xs text-dim">Nascimento{idade(dataNasc) != null ? ` · ${idade(dataNasc)} anos` : ''}</label>
+                <Input type="date" value={dataNasc} onChange={e => setDataNasc(e.target.value)} />
               </div>
             </div>
-            {erro && <p className="text-xs text-red-600">{erro}</p>}
-            {msg && <p className="text-xs text-olive">{msg}</p>}
-            <button disabled={salvando} onClick={salvar} className={btnCls}>
+            {erro && <p className="text-xs text-danger">{erro}</p>}
+            {msg && <p className="text-xs text-ok">{msg}</p>}
+            <Button disabled={salvando} onClick={salvar}>
               {salvando ? 'Salvando…' : 'Salvar'}
-            </button>
+            </Button>
           </div>
         </section>
         )}
@@ -266,16 +262,16 @@ export default function PerfilPage() {
         {/* Recompensas */}
         {aba === 'recompensas' && (
         <section>
-          {!rec ? <p className="text-sm text-muted">Carregando…</p> : (
+          {!rec ? <p className="text-sm text-dim">Carregando…</p> : (
             <>
-              <div className="border border-line rounded-md bg-panel p-4 mb-4">
-                <p className="text-xs text-muted">Saldo disponível</p>
-                <p className="font-[family-name:var(--font-serif)] text-3xl tnum mt-0.5">{brl(rec.disponivel)}</p>
-                <p className="text-xs text-muted mt-1">
+              <div className="border border-border rounded-[var(--r)] bg-surface p-4 mb-4">
+                <p className="text-xs text-dim">Saldo disponível</p>
+                <p className="text-3xl font-bold tracking-tight tnum mt-0.5">{brl(rec.disponivel)}</p>
+                <p className="text-xs text-dim mt-1">
                   {rec.aprovadas} {rec.aprovadas === 1 ? 'contribuição aprovada' : 'contribuições aprovadas'} · {brl(rec.ganho)} acumulados
                 </p>
                 {rec.disponivel < SAQUE_MINIMO && (
-                  <p className="text-xs text-muted mt-2">
+                  <p className="text-xs text-dim mt-2">
                     Faltam {brl(SAQUE_MINIMO - rec.disponivel)} para atingir o saque mínimo de {brl(SAQUE_MINIMO)}.
                   </p>
                 )}
@@ -283,30 +279,30 @@ export default function PerfilPage() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-muted">CPF (para pagamento e nota fiscal)</label>
-                  <input value={cpf} onChange={e => setCpf(mascararCpf(e.target.value))}
-                    placeholder="000.000.000-00" inputMode="numeric" className={inputCls} />
+                  <label className="text-xs text-dim">CPF (para pagamento e nota fiscal)</label>
+                  <Input value={cpf} onChange={e => setCpf(mascararCpf(e.target.value))}
+                    placeholder="000.000.000-00" inputMode="numeric" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted">Chave PIX</label>
-                  <input value={chavePix} onChange={e => setChavePix(e.target.value)}
-                    placeholder="CPF, e-mail, telefone ou aleatória" className={inputCls} />
+                  <label className="text-xs text-dim">Chave PIX</label>
+                  <Input value={chavePix} onChange={e => setChavePix(e.target.value)}
+                    placeholder="CPF, e-mail, telefone ou aleatória" />
                 </div>
-                <label className="flex items-start gap-2 text-xs text-muted leading-relaxed">
+                <label className="flex items-start gap-2 text-xs text-dim leading-relaxed">
                   <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
-                    className="mt-0.5 accent-paprika" />
+                    className="mt-0.5 accent-accent" />
                   Autorizo o uso do meu CPF e chave PIX exclusivamente para o pagamento das recompensas,
                   conforme a Lei Geral de Proteção de Dados (LGPD).
                 </label>
-                {recErro && <p className="text-xs text-red-600">{recErro}</p>}
-                {recMsg && <p className="text-xs text-olive">{recMsg}</p>}
+                {recErro && <p className="text-xs text-danger">{recErro}</p>}
+                {recMsg && <p className="text-xs text-ok">{recMsg}</p>}
                 <div className="flex items-center gap-3">
-                  <button disabled={recBusy} onClick={salvarRecDados} className={btnGhostCls}>
+                  <Button variant="secondary" disabled={recBusy} onClick={salvarRecDados}>
                     {recBusy ? 'Salvando…' : 'Salvar dados'}
-                  </button>
-                  <button disabled={recBusy || rec.disponivel < SAQUE_MINIMO} onClick={pedirSaque} className={btnCls}>
+                  </Button>
+                  <Button disabled={recBusy || rec.disponivel < SAQUE_MINIMO} onClick={pedirSaque}>
                     Solicitar saque
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -317,13 +313,13 @@ export default function PerfilPage() {
                     {saques.map(s => {
                       const st = SAQUE_STATUS[s.status] || SAQUE_STATUS.solicitado
                       return (
-                        <div key={s.id} className="flex items-center gap-3 border border-line rounded-md p-2 bg-panel text-sm">
+                        <div key={s.id} className="flex items-center gap-3 border border-border rounded-[var(--r-sm)] p-2 bg-surface text-sm">
                           <span className="tnum font-medium">{brl(Number(s.valor))}</span>
-                          <span className="text-xs text-muted">
+                          <span className="text-xs text-dim">
                             solicitado {new Date(s.criado_em).toLocaleDateString('pt-BR')}
                             {s.pago_em ? ` · pago ${new Date(s.pago_em).toLocaleDateString('pt-BR')}` : ''}
                           </span>
-                          <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 ml-auto shrink-0 ${st.cls}`}>{st.txt}</span>
+                          <Badge tone={st.tone} className="ml-auto shrink-0">{st.txt}</Badge>
                         </div>
                       )
                     })}
@@ -339,9 +335,9 @@ export default function PerfilPage() {
         {aba === 'contribuicoes' && (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-[family-name:var(--font-serif)] text-lg">Minhas contribuições</h2>
+            <h2 className="text-lg font-bold tracking-tight">Minhas contribuições</h2>
             <button onClick={() => router.push('/contribuir')}
-              className="text-sm border border-paprika text-paprika px-3 py-1.5 rounded-md hover:bg-paprika hover:text-white transition">
+              className="text-sm border border-accent text-accent px-3 py-1.5 rounded-[var(--r-sm)] hover:bg-accent hover:text-white transition cursor-pointer">
               Contribuir
             </button>
           </div>
@@ -351,29 +347,27 @@ export default function PerfilPage() {
                 label: `${c.ingredientes?.nome || c.produto || 'Produto'}${c.preco != null ? ` — R$ ${Number(c.preco).toFixed(2)}` : ''}${c.cidade ? ` · ${c.cidade}` : ''}` }))
             return pontos.length ? <div className="mb-4"><MapaLocal points={pontos} height="280px" /></div> : null
           })()}
-          {!contribs ? <p className="text-sm text-muted">Carregando…</p>
-            : !contribs.length ? <p className="text-sm text-muted">Você ainda não enviou nenhuma contribuição.</p>
+          {!contribs ? <p className="text-sm text-dim">Carregando…</p>
+            : !contribs.length ? <p className="text-sm text-dim">Você ainda não enviou nenhuma contribuição.</p>
             : (
               <div className="space-y-2">
                 {contribs.slice(0, visiveis).map(i => {
                   const s = STATUS[i.status] || STATUS.pendente
                   return (
-                    <div key={i.id} className="flex items-center gap-3 border border-line rounded-md p-2 bg-panel">
+                    <div key={i.id} className="flex items-center gap-3 border border-border rounded-[var(--r-sm)] p-2 bg-surface">
                       {i.foto_url
                         ? <img src={i.foto_url} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
-                        : <div className="w-12 h-12 rounded bg-cream shrink-0" />}
+                        : <div className="w-12 h-12 rounded bg-surface-3 shrink-0" />}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm truncate">{i.ingredientes?.nome || i.produto || 'Produto'}</p>
-                        <p className="text-xs text-muted truncate">
+                        <p className="text-xs text-dim truncate">
                           {i.preco != null ? `R$ ${Number(i.preco).toFixed(2)} · ` : ''}{new Date(i.criado_em).toLocaleDateString('pt-BR')}{i.cidade ? ` · ${i.cidade}` : ''}
                         </p>
                       </div>
-                      <span className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${s.cls}`}>
-                        {s.txt}
-                      </span>
+                      <Badge tone={s.tone} className="shrink-0">{s.txt}</Badge>
                       {i.status === 'pendente' && (
                         <button onClick={() => deletar(i.id)}
-                          className="text-xs text-muted hover:text-red-600 shrink-0">excluir</button>
+                          className="text-xs text-dim hover:text-danger shrink-0 cursor-pointer">excluir</button>
                       )}
                     </div>
                   )
@@ -392,7 +386,3 @@ export default function PerfilPage() {
     </main>
   )
 }
-
-const inputCls = 'w-full bg-panel border border-line rounded-md px-3 py-2 text-sm text-ink focus:outline-none focus:border-paprika mt-1'
-const btnCls = 'bg-paprika text-white rounded-md px-4 py-2 text-sm font-medium hover:brightness-95 transition disabled:opacity-60'
-const btnGhostCls = 'border border-line text-ink rounded-md px-4 py-2 text-sm font-medium hover:bg-cream transition disabled:opacity-60'
