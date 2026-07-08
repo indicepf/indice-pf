@@ -1,6 +1,6 @@
 // Fonte única das cores usadas FORA do CSS (Recharts, mapas, OG images).
 // Espelha os tokens de app/globals.css — manter os dois em sincronia.
-// Consumidores migram para cá nas Fases 2 e 5 (plano em docs/migracao-frontend-v1.html).
+// Consumidores migram para cá nas Fases 2 e 5 (plano em docs/009_migracao-frontend-v1.html).
 
 export const BRAND = {
   magenta: '#8D4CB2',
