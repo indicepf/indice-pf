@@ -104,7 +104,7 @@ export default function TabelaProdutosRegiao({ linhas, destravada, onIngrediente
         {!destravada && (
           <div className="absolute inset-0 grid place-items-center bg-gradient-to-b from-transparent via-surface/60 to-surface p-6">
             <div className="text-center max-w-xs">
-              <p className="text-2xl mb-2" aria-hidden="true">🔒</p>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-2 text-dim" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
               <p className="font-bold tracking-tight">Detalhamento por produto e região</p>
               <p className="text-sm text-dim mt-1.5 leading-relaxed">
                 Preço online nacional e preços de campo por região, produto a produto — no plano Premium.

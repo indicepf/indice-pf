@@ -1104,3 +1104,19 @@ export async function excluirAnuncio(id: number): Promise<{ error: any }> {
   const { error } = await supabase.from('anuncios').delete().eq('id', id)
   return { error }
 }
+
+// série do preço de um ingrediente (mediana de exibição) pelas coletas do
+// modelo novo — gráfico do drill de produto (fidelidade ao mockup)
+export type PontoIngrediente = { data: string; valor: number; label: string | null }
+export async function getSerieIngrediente(ingredienteId: number): Promise<PontoIngrediente[]> {
+  const novos = [...(await getSnapshotsNovos())].reverse()   // asc
+  if (!novos.length) return []
+  const { data } = await supabase.from('precos')
+    .select('snapshot_id,mediana_exibicao,label')
+    .eq('ingrediente_id', ingredienteId).in('snapshot_id', novos.map(s => s.id))
+  const porSnap = new Map(((data || []) as any[]).map(p => [p.snapshot_id, p]))
+  return novos.flatMap(s => {
+    const p = porSnap.get(s.id)
+    return p?.mediana_exibicao != null ? [{ data: s.data, valor: Number(p.mediana_exibicao), label: p.label ?? null }] : []
+  })
+}

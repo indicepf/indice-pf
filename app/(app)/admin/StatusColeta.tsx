@@ -71,7 +71,7 @@ export default function StatusColeta() {
 
       {pendente && (
         <div className="border border-warn/40 bg-warn/5 rounded-lg p-4">
-          <p className="text-sm font-medium">📋 Coleta em auditoria — ainda fora do índice</p>
+          <p className="text-sm font-medium">Coleta em auditoria — ainda fora do índice</p>
           <p className="text-xs text-dim mt-1 leading-relaxed">
             Esta coleta foi gravada mas <strong>não entrou no índice</strong>. Revise as variações fortes e as
             entradas na aba <strong>Dados</strong> (exclua fontes erradas) e então aprove abaixo — a aprovação

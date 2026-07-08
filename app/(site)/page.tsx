@@ -8,8 +8,8 @@ import DetalhePrato from '../DetalhePrato'
 import { useAuth } from '../useAuth'
 import {
   getDishCostsRange, getSnapshotsNovos, getAllDetalhes, getAllFontes, getAllFontesManuais,
-  getStatsPublicas, getSeriePratos, getPrecosPorRegiao, getPratosPorIngrediente,
-  type FonteManual, type StatsPublicas, type SeriePratos, type ProdutoRegiao, type PratoDeIngrediente,
+  getStatsPublicas, getSeriePratos, getPrecosPorRegiao, getPratosPorIngrediente, getSerieIngrediente,
+  type FonteManual, type StatsPublicas, type SeriePratos, type ProdutoRegiao, type PratoDeIngrediente, type PontoIngrediente,
 } from '@/lib/queries'
 import { NIVEIS_PRECO, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
 import { mediana } from '@/lib/stats'
@@ -49,6 +49,7 @@ export default function Dashboard() {
   const [selecionado, setSelecionado] = useState<DishCost | null>(null)
   const [ingModal, setIngModal] = useState<{ id: number; nome: string } | null>(null)
   const [pratosDoIng, setPratosDoIng] = useState<PratoDeIngrediente[] | null>(null)
+  const [serieIng, setSerieIng] = useState<PontoIngrediente[] | null>(null)
   const [filtroIng, setFiltroIng] = useState<{ nome: string; ids: Set<number> } | null>(null)
   const [share, setShare] = useState(false)
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]> | null>(null)
@@ -177,8 +178,9 @@ export default function Dashboard() {
     setRegioes(prev => { const nx = new Set(prev); if (nx.has(r)) nx.delete(r); else nx.add(r); return nx })
   }
   function abrirIngrediente(ing: { id: number; nome: string }) {
-    setIngModal(ing); setPratosDoIng(null)
+    setIngModal(ing); setPratosDoIng(null); setSerieIng(null)
     getPratosPorIngrediente(ing.id).then(setPratosDoIng)
+    getSerieIngrediente(ing.id).then(setSerieIng)
   }
 
   const temSerie = serieIndice.length >= 2
@@ -230,15 +232,15 @@ export default function Dashboard() {
           {/* ===== FILTROS (painel do mockup) ===== */}
           <aside className="filters-mk">
             <div className="filters-head">
-              <h3>⚙️ Filtros</h3>
+              <h3>Filtros</h3>
               <span className="clr" onClick={() => { setRegioes(new Set()); setBusca(''); setFiltroIng(null); setPendIni(''); setPendFim(''); setIni(''); setFim('') }}>Limpar</span>
             </div>
             <div className="f-group">
-              <div className="f-label">🔎 Busca</div>
+              <div className="f-label">Busca</div>
               <input className="f-search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Prato..." />
             </div>
             <div className="f-group">
-              <div className="f-label">💰 Nível de preço</div>
+              <div className="f-label">Nível de preço</div>
               <div className="seg">
                 {NIVEIS_PRECO.map(n => (
                   <button key={n.key} disabled={!n.disponivel}
@@ -251,7 +253,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="f-group">
-              <div className="f-label">📍 Região</div>
+              <div className="f-label">Região</div>
               <div className="region-bar">
                 {REGIOES.map(r => (
                   <button key={r} className={regioes.has(r) ? 'on' : ''} onClick={() => toggleRegiao(r)}>{r}</button>
@@ -259,7 +261,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="f-group">
-              <div className="f-label">📅 Período</div>
+              <div className="f-label">Período</div>
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap gap-1.5">
                   {([['7d', 7], ['15d', 15], ['30d', 30], ['3m', 90], ['Tudo', 0]] as const).map(([label, d]) => (
@@ -284,7 +286,7 @@ export default function Dashboard() {
             {/* banner de metodologia (mockup) */}
             {banner && (
               <div className="method-banner">
-                <div>ℹ️</div>
+                <div>i</div>
                 <div>
                   <h4>Como coletamos estes dados</h4>
                   <p>
@@ -325,7 +327,7 @@ export default function Dashboard() {
             <div className="panel">
               <div className="panel-head">
                 <div>
-                  <h2>📈 Índice PF Geral{regioes.size > 0 && (
+                  <h2>Índice PF Geral{regioes.size > 0 && (
                     <span className="premium-tag" style={{ background: 'var(--info-bg)', color: 'var(--azul)' }}>{rotuloRecorte}</span>
                   )}</h2>
                   <div className="sub">Mediana dos {custosRegiao.length} pratos · coleta a coleta{snapshot ? ` · última em ${fmtData(snapshot.data)}` : ''}</div>
@@ -344,7 +346,7 @@ export default function Dashboard() {
                       {deltaIndice > 0 ? '+' : ''}{deltaIndice.toFixed(2)}%<small>vs coleta anterior</small>
                     </span>
                   )}
-                  <button className="btn-mk sm" onClick={() => setShare(true)}>🔗 Compartilhar</button>
+                  <button className="btn-mk sm" onClick={() => setShare(true)}>Compartilhar</button>
                 </div>
               </div>
               <div className="panel-body">
@@ -375,11 +377,11 @@ export default function Dashboard() {
             <div className="panel">
               <div className="panel-head">
                 <div>
-                  <h2>🗺️ Índice PF por Região</h2>
+                  <h2>Índice PF por Região</h2>
                   <div className="sub">Mediana dos pratos de cada região, no nível {nivel.label}</div>
                 </div>
                 <div className="panel-tools">
-                  <button className="btn-mk sm" onClick={() => setShare(true)}>🔗 Compartilhar</button>
+                  <button className="btn-mk sm" onClick={() => setShare(true)}>Compartilhar</button>
                 </div>
               </div>
               <div className="panel-body">
@@ -430,14 +432,14 @@ export default function Dashboard() {
               <div className="panel">
                 <div className="panel-head">
                   <div>
-                    <h2>🚀 Destaques da coleta</h2>
+                    <h2>Destaques da coleta</h2>
                     <div className="sub">Variação de cada prato vs a coleta anterior — {rotuloRecorte}</div>
                   </div>
                 </div>
                 <div className="panel-body">
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="mover-col">
-                      <h3>🔺 Maiores altas</h3>
+                      <h3>Maiores altas</h3>
                       {movers.altas.map((m, i) => (
                         <div key={m.prato.id} className="mover" onClick={() => { const c = custos.find(x => x.pratos.id === m.prato.id); if (c) setSelecionado(c) }}>
                           <div className="rank">{i + 1}</div>
@@ -449,7 +451,7 @@ export default function Dashboard() {
                       {!movers.altas.length && <p className="text-xs text-dim">Nenhuma alta entre as duas últimas coletas.</p>}
                     </div>
                     <div className="mover-col">
-                      <h3>🔻 Maiores quedas</h3>
+                      <h3>Maiores quedas</h3>
                       {movers.quedas.map((m, i) => (
                         <div key={m.prato.id} className="mover" onClick={() => { const c = custos.find(x => x.pratos.id === m.prato.id); if (c) setSelecionado(c) }}>
                           <div className="rank">{i + 1}</div>
@@ -471,7 +473,7 @@ export default function Dashboard() {
             <div className="panel" id="tabela-pratos">
               <div className="panel-head">
                 <div>
-                  <h2>🍽️ Pratos Feitos{regioes.size > 0 && <span className="premium-tag" style={{ background: 'var(--info-bg)', color: 'var(--azul)' }}>{rotuloRecorte}</span>}</h2>
+                  <h2>Pratos Feitos{regioes.size > 0 && <span className="premium-tag" style={{ background: 'var(--info-bg)', color: 'var(--azul)' }}>{rotuloRecorte}</span>}</h2>
                   <div className="sub">{lista.length} pratos · {nivel.label}{snapshot ? ` · coleta de ${fmtData(snapshot.data)}` : ''}</div>
                 </div>
                 <div className="panel-tools">
@@ -482,7 +484,7 @@ export default function Dashboard() {
                     </button>
                   )}
                   <input className="f-search" style={{ width: 180 }} value={busca} onChange={e => setBusca(e.target.value)} placeholder="Filtrar pratos..." />
-                  <button className="btn-mk sm" onClick={() => setShare(true)}>🔗</button>
+                  <button className="btn-mk sm" onClick={() => setShare(true)}>Compartilhar</button>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -545,8 +547,9 @@ export default function Dashboard() {
       {selecionado && snapshot && (
         <DetalhePrato dish={selecionado}
           itens={detalhes ? (detalhes[selecionado.pratos.id] ?? []) : null}
-          fontesPorIngrediente={fontes} manuaisPorIngrediente={fontesManuais} fator={fator}
+          fontesPorIngrediente={fontes} manuaisPorIngrediente={fontesManuais} fator={fator} modo={modo}
           dataColeta={snapshot.data}
+          serie={serie ? { labels: serie.snaps.map(s => fmtCurta(s.data)), valores: serie.custos[selecionado.pratos.id] ?? [] } : undefined}
           onClose={() => setSelecionado(null)} />
       )}
 
@@ -554,6 +557,23 @@ export default function Dashboard() {
 
       {ingModal && (
         <Modal title={`Pratos com ${ingModal.nome}`} onClose={() => setIngModal(null)}>
+          {/* evolução do preço do produto (drill do mockup) */}
+          {serieIng && serieIng.length >= 2 && (
+            <div className="h-44 mb-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={serieIng.map(p => ({ data: fmtCurta(p.data), valor: p.valor }))}
+                  margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="data" tick={{ fontSize: 11, fill: DIM }} />
+                  <YAxis tick={{ fontSize: 11, fill: DIM }} width={46} domain={['auto', 'auto']}
+                    tickFormatter={(v: number) => `R$${v}`} />
+                  <Tooltip formatter={(v) => `${brl(Number(v))}${serieIng[0]?.label ? `/${serieIng[0].label}` : ''}`} />
+                  <Line type="monotone" dataKey="valor" name="Preço"
+                    stroke={NIVEL_HEX[modo]} strokeWidth={2.5} dot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
           {!pratosDoIng ? (
             <p className="text-sm text-dim py-4">Carregando…</p>
           ) : !pratosDoIng.length ? (

@@ -6,11 +6,10 @@ import { useEffect, useState } from 'react'
 export default function OrientPopup() {
   const [aberto, setAberto] = useState(false)
 
-  // como no mockup: aparece na abertura do site, 1× por sessão (qualquer tela)
   useEffect(() => {
     try {
       if (sessionStorage.getItem('orient') === '1') return
-      setAberto(true)
+      if (window.innerWidth < 700 && window.innerHeight > window.innerWidth) setAberto(true)
     } catch { /* sessão privada */ }
   }, [])
 

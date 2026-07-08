@@ -1,71 +1,58 @@
 import type { Metadata } from 'next'
-import { Card } from '@/components/ui'
 
 export const metadata: Metadata = {
   title: 'Metodologia — Índice PF',
   description: 'Como o Índice PF coleta, valida e calcula o custo do prato feito brasileiro.',
 }
 
+// conteúdo e layout do mockup (renderMethod), sem emojis
 const FONTES = [
-  {
-    titulo: 'Coleta no varejo online',
-    texto: 'Duas vezes por mês (dias 1 e 15), o preço de mais de 100 ingredientes é coletado automaticamente no Google Shopping. Cada busca é validada por regras de inclusão e exclusão de termos, preços fora da curva são descartados por filtro estatístico (IQR) e o valor oficial do ingrediente é a mediana das cotações, normalizada para R$/kg.',
-  },
-  {
-    titulo: 'Leituras manuais',
-    texto: 'Ingredientes sem cotação online confiável recebem leituras de preço cadastradas pela equipe, com loja e fonte registradas. Quando um ingrediente tem leitura manual recente e preço online, o valor usado é a média das duas medianas.',
-  },
-  {
-    titulo: 'Contribuições de campo',
-    texto: 'Usuários fotografam etiquetas de preço em mercados e atacarejos. Cada foto tem localização e data registradas e passa por moderação antes de entrar na base. As contribuições aprovadas geram recompensa em dinheiro para quem enviou.',
-  },
-  {
-    titulo: 'Calibração campo × online',
-    texto: 'Os preços de campo aprovados são comparados com os preços online dos mesmos ingredientes para medir o desconto real de mercados e atacarejos por região — substituindo gradualmente os percentuais estimados.',
-  },
+  ['Visitas de campo', 'Nosso time visita mercados e coleta preços presencialmente.'],
+  ['Ligações', 'Contato direto com atacarejos e distribuidores.'],
+  ['ABIA', 'Dados repassados pela Associação Brasileira da Indústria de Alimentos.'],
+  ['Fotos de usuários', 'Preços enviados e validados pela comunidade.'],
+  ['Scraping', 'Marketplaces, apps de pedidos e mídias de busca.'],
+  ['Aproveitamento', 'Preço final calculado sobre o peso do produto já cozido.'],
 ] as const
 
 export default function MetodologiaPage() {
   return (
-    <main className="max-w-3xl mx-auto px-6 py-12">
-      <h1 className="text-3xl font-bold tracking-tight">Metodologia</h1>
-      <p className="text-dim mt-3 leading-relaxed">
-        O Índice PF mede o custo de produção de uma porção de prato feito. São acompanhados
-        <strong className="text-ink"> 100 pratos regionais</strong> — 20 de cada uma das 5 regiões do Brasil — com
-        receitas fixas de ingredientes e quantidades por porção.
-      </p>
-
-      <h2 className="text-lg font-bold tracking-tight mt-10 mb-4">De onde vêm os preços</h2>
-      <div className="grid sm:grid-cols-2 gap-4">
-        {FONTES.map(f => (
-          <Card key={f.titulo} className="p-5">
-            <h3 className="font-medium">{f.titulo}</h3>
-            <p className="text-sm text-dim mt-2 leading-relaxed">{f.texto}</p>
-          </Card>
-        ))}
+    <main className="max-w-3xl mx-auto px-6 py-10">
+      <div className="box">
+        <h2>Metodologia</h2>
+        <p className="hint">Como o Índice PF é construído</p>
+        <p style={{ color: 'var(--ink-2)', lineHeight: 1.7, marginBottom: 16 }}>
+          O Índice PF mede a variação de preço dos alimentos que compõem o <b>prato feito</b> brasileiro —
+          a refeição mais representativa do país — em múltiplos níveis da cadeia e cinco regiões.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3 my-4">
+          {FONTES.map(([t, d]) => (
+            <div key={t} style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 12 }}>
+              <b className="text-sm">{t}</b>
+              <p className="text-[13px] text-dim mt-1.5">{d}</p>
+            </div>
+          ))}
+        </div>
+        <div className="method-banner" style={{ marginTop: 8 }}>
+          <div className="mb-ico">±5%</div>
+          <div>
+            <h4>Margem de erro</h4>
+            <p>Por combinar múltiplas fontes, o índice trabalha com margem de erro de <b>±5%</b>. Ideal
+              para tendência, não para precificação individual.</p>
+          </div>
+        </div>
       </div>
 
-      <h2 className="text-lg font-bold tracking-tight mt-10 mb-3">Como o índice é calculado</h2>
-      <ol className="list-decimal pl-5 space-y-2 text-sm text-dim leading-relaxed">
-        <li>Cada ingrediente recebe um preço por grama (R$/g) a partir das fontes acima.</li>
-        <li>O custo de um prato é a soma de <span className="text-ink">preço × quantidade da receita</span> de cada ingrediente da porção.</li>
-        <li>O <span className="text-ink">índice nacional é a mediana dos custos dos 100 pratos</span> naquela coleta. Os índices regionais usam a mediana dos 20 pratos da região.</li>
-      </ol>
-
-      <h2 className="text-lg font-bold tracking-tight mt-10 mb-3">Níveis de preço</h2>
-      <p className="text-sm text-dim leading-relaxed">
-        O preço coletado é o do <strong className="text-ink">varejo online</strong>. Os níveis
-        <strong className="text-ink"> Mercado (−10%)</strong> e <strong className="text-ink">Atacarejo (−22%)</strong> são
-        estimativas aplicadas sobre o preço online, em processo de calibração com os dados de campo. Os percentuais
-        serão substituídos pelos descontos reais medidos por região conforme as contribuições acumulam.
-      </p>
-
-      <h2 className="text-lg font-bold tracking-tight mt-10 mb-3">Limitações conhecidas</h2>
-      <ul className="list-disc pl-5 space-y-2 text-sm text-dim leading-relaxed">
-        <li>A série histórica é recente — o índice ganha profundidade a cada coleta quinzenal.</li>
-        <li>O preço online é nacional; a variação regional de um mesmo ingrediente vem dos dados de campo, ainda em acumulação.</li>
-        <li>Ingredientes sem cotação na coleta usam o último preço conhecido (a cobertura de cada prato é exibida no detalhe).</li>
-      </ul>
+      <div className="box">
+        <h2>Como o índice é calculado</h2>
+        <p className="hint">Do preço do ingrediente ao custo do prato</p>
+        <ol className="list-decimal pl-5 space-y-2 text-sm" style={{ color: 'var(--ink-2)', lineHeight: 1.7 }}>
+          <li>Cada ingrediente recebe um preço por grama (R$/g) a partir das fontes acima — o valor oficial é a mediana das cotações, com filtros estatísticos de outliers.</li>
+          <li>O custo de um prato é a soma de <b>preço × quantidade da receita</b> de cada ingrediente da porção.</li>
+          <li>O <b>índice é a mediana dos custos dos 100 pratos</b> em cada coleta. Os índices regionais usam a mediana dos 20 pratos da região.</li>
+          <li>Os níveis <b>Mercado (−10%)</b> e <b>Atacarejo (−22%)</b> são estimativas sobre o preço online, em calibração contínua com os dados de campo.</li>
+        </ol>
+      </div>
     </main>
   )
 }
