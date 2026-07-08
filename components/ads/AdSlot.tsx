@@ -17,10 +17,8 @@ const FORMATO: Record<string, string> = {
 // criativo em si (compartilhado com AdGate/AdPopup)
 export function AdCreative({ ad, pagina, formato = '' }: { ad: Anuncio; pagina: string; formato?: string }) {
   const conteudo = (
-    <div className={`relative border border-border rounded-[var(--r)] bg-surface overflow-hidden ${formato}`}>
-      <span className="absolute top-1.5 right-2 text-[0.6rem] uppercase tracking-wide text-faint bg-surface/80 rounded px-1 z-10">
-        publicidade
-      </span>
+    <div className={`ad-slot bg-surface ${formato}`}>
+      <span className="ad-label">Publicidade</span>
       {ad.imagem_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={ad.imagem_url} alt={ad.titulo} className="w-full h-auto object-contain" />
