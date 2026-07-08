@@ -27,6 +27,15 @@ create table if not exists public.anuncios (
   criado_em   timestamptz not null default now()
 );
 
+-- upgrade de tabela criada pela versão anterior desta migração (sem escala /
+-- sem os slots popup e gate-*) — no-op se a tabela já está atualizada
+alter table public.anuncios add column if not exists escala numeric not null default 1;
+alter table public.anuncios drop constraint if exists anuncios_escala_check;
+alter table public.anuncios add constraint anuncios_escala_check check (escala > 0 and escala <= 1);
+alter table public.anuncios drop constraint if exists anuncios_slot_check;
+alter table public.anuncios add constraint anuncios_slot_check
+  check (slot in ('hero', 'lateral', 'billboard', 'leaderboard', 'nativo', 'popup', 'gate-grafico', 'gate-tabela'));
+
 create index if not exists idx_anuncios_slot on public.anuncios (slot) where ativo;
 
 alter table public.anuncios enable row level security;
