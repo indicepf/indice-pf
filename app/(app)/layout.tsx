@@ -67,12 +67,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {secoes.map(s => (
             <div key={s.titulo} className="mb-4">
               <p className="px-3 mb-1 text-[0.62rem] uppercase tracking-[0.08em] text-faint font-bold">{s.titulo}</p>
-              <div className="space-y-0.5">
+              <div className="seg">
                 {s.itens.map(([href, label]) => (
-                  <Link key={href} href={href}
-                    className={`block px-3 py-2 rounded-[var(--r-sm)] text-sm transition-colors ${
-                      pathname === href ? 'bg-accent/10 text-accent font-medium' : 'text-dim hover:text-ink hover:bg-surface-2'
-                    }`}>
+                  <Link key={href} href={href} className={pathname === href ? 'on' : ''}>
                     {label}
                   </Link>
                 ))}
@@ -81,9 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ))}
           <div className="mb-4">
             <p className="px-3 mb-1 text-[0.62rem] uppercase tracking-[0.08em] text-faint font-bold">Site</p>
-            <Link href="/" className="block px-3 py-2 rounded-[var(--r-sm)] text-sm text-dim hover:text-ink hover:bg-surface-2 transition-colors">
-              ← Voltar ao índice
-            </Link>
+            <div className="seg"><Link href="/">← Voltar ao índice</Link></div>
           </div>
         </nav>
         <div className="px-5 py-4 border-t border-border">

@@ -14,7 +14,6 @@ import {
 import { NIVEIS_PRECO, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
 import { mediana } from '@/lib/stats'
 import { CORES_REGIAO, COR_ALTA, COR_QUEDA, DIM, NIVEL_HEX } from '@/lib/theme'
-import { Modal } from '@/components/ui'
 import Sparkline from '@/components/dashboard/Sparkline'
 import TabelaProdutosRegiao from '@/components/dashboard/TabelaProdutosRegiao'
 import AdSlot from '@/components/ads/AdSlot'
@@ -145,6 +144,15 @@ export default function Dashboard() {
     }
     return out
   }, [serie])
+
+  // item 1: com filtro por ingrediente ativo, a tabela de produtos mostra só
+  // os ingredientes que entram nos pratos filtrados (via composição carregada)
+  const produtosRegiaoFiltrados = useMemo(() => {
+    if (!filtroIng || !detalhes) return produtosRegiao
+    const ids = new Set<number>()
+    for (const pid of filtroIng.ids) for (const it of (detalhes[pid] ?? [])) ids.add(it.ingrediente_id)
+    return produtosRegiao.filter(p => ids.has(p.id))
+  }, [produtosRegiao, filtroIng, detalhes])
 
   const lista = useMemo(() => {
     let l = custos
@@ -534,10 +542,12 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* ===== PRODUTOS POR REGIÃO (PREMIUM) ===== */}
+            {/* ===== PRODUTOS POR REGIÃO (PREMIUM) — segue o filtro por ingrediente ===== */}
             {produtosRegiao.length > 0 && (
               <AdGate slot="gate-tabela">
-                <TabelaProdutosRegiao linhas={produtosRegiao} destravada={isAdmin || isPremium} onIngrediente={abrirIngrediente} />
+                <TabelaProdutosRegiao linhas={produtosRegiaoFiltrados} destravada={isAdmin || isPremium}
+                  filtroNome={filtroIng?.nome} onLimparFiltro={() => setFiltroIng(null)}
+                  onIngrediente={abrirIngrediente} />
               </AdGate>
             )}
           </div>
@@ -555,56 +565,90 @@ export default function Dashboard() {
 
       {share && <ShareModal onClose={() => setShare(false)} />}
 
+      {/* drill de produto — modal central do mockup (openProductDrill) */}
       {ingModal && (
-        <Modal title={`Pratos com ${ingModal.nome}`} onClose={() => setIngModal(null)}>
-          {/* evolução do preço do produto (drill do mockup) */}
-          {serieIng && serieIng.length >= 2 && (
-            <div className="h-44 mb-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={serieIng.map(p => ({ data: fmtCurta(p.data), valor: p.valor }))}
-                  margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="data" tick={{ fontSize: 11, fill: DIM }} />
-                  <YAxis tick={{ fontSize: 11, fill: DIM }} width={46} domain={['auto', 'auto']}
-                    tickFormatter={(v: number) => `R$${v}`} />
-                  <Tooltip formatter={(v) => `${brl(Number(v))}${serieIng[0]?.label ? `/${serieIng[0].label}` : ''}`} />
-                  <Line type="monotone" dataKey="valor" name="Preço"
-                    stroke={NIVEL_HEX[modo]} strokeWidth={2.5} dot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          {!pratosDoIng ? (
-            <p className="text-sm text-dim py-4">Carregando…</p>
-          ) : !pratosDoIng.length ? (
-            <p className="text-sm text-dim py-4">Nenhum prato usa este produto.</p>
-          ) : (
-            <>
-              <p className="text-xs text-dim mb-3">{pratosDoIng.length} prato{pratosDoIng.length === 1 ? '' : 's'} usa{pratosDoIng.length === 1 ? '' : 'm'} este produto.</p>
-              <div className="space-y-1.5 mb-4">
-                {pratosDoIng.map(p => {
-                  const custo = custos.find(c => c.pratos.id === p.prato_id)
-                  return (
-                    <div key={p.prato_id} className="flex items-center gap-2 text-sm border border-border rounded-[var(--r-sm)] px-3 py-2">
-                      <span className="truncate flex-1">{limparNome(p.nome)}</span>
-                      <span className="text-xs text-dim shrink-0">{p.regiao} · {p.qtd_g}g</span>
-                      {custo && <span className="tnum font-medium shrink-0">{brl(custo.custo_total * fator)}</span>}
-                    </div>
-                  )
-                })}
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-ink/40 px-4 py-6 overflow-y-auto" onClick={() => setIngModal(null)}>
+          <div onClick={e => e.stopPropagation()}
+            className="bg-surface rounded-[var(--r-lg)] shadow-[var(--shadow-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="modal-head">
+              <div>
+                <h2>{ingModal.nome}</h2>
+                <p>preço rastreado · margem ±5%</p>
               </div>
-              <button
-                onClick={() => {
-                  setFiltroIng({ nome: ingModal.nome, ids: new Set(pratosDoIng.map(p => p.prato_id)) })
-                  setIngModal(null)
-                  document.getElementById('tabela-pratos')?.scrollIntoView({ behavior: 'smooth' })
-                }}
-                className="btn-mk primary w-full justify-center">
-                Mostrar só esses pratos na tabela
-              </button>
-            </>
-          )}
-        </Modal>
+              <div className="modal-x" onClick={() => setIngModal(null)}>×</div>
+            </div>
+            <div className="p-5">
+              {serieIng && serieIng.length >= 2 ? (
+                <>
+                  <div className="h-52 mb-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={serieIng.map(p => ({ data: fmtCurta(p.data), valor: p.valor }))}
+                        margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis dataKey="data" tick={{ fontSize: 11, fill: DIM }} />
+                        <YAxis tick={{ fontSize: 11, fill: DIM }} width={46} domain={['auto', 'auto']}
+                          tickFormatter={(v: number) => `R$${v}`} />
+                        <Tooltip formatter={(v) => `${brl(Number(v))}${serieIng[0]?.label ? `/${serieIng[0].label}` : ''}`} />
+                        <Line type="monotone" dataKey="valor" name="Preço"
+                          stroke={NIVEL_HEX[modo]} strokeWidth={2.5} dot={{ r: 4 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {(() => {
+                    const v = serieIng.map(p => p.valor)
+                    const a = v[v.length - 1], p0 = v[v.length - 2], i0 = v[0]
+                    const dA = p0 > 0 ? (a - p0) / p0 * 100 : null
+                    const dI = i0 > 0 && v.length > 2 ? (a - i0) / i0 * 100 : null
+                    const cor = (x: number | null) => x == null ? 'var(--faint)' : x > 0 ? 'var(--danger)' : 'var(--ok)'
+                    const pc = (x: number | null) => x == null ? '—' : `${x > 0 ? '+' : ''}${x.toFixed(1)}%`
+                    return (
+                      <div className="grid grid-cols-3 gap-3 mb-4">
+                        <div className="stat-mini"><span className="k">Preço atual</span><b className="tnum">{brl(a)}{serieIng[0]?.label ? `/${serieIng[0].label}` : ''}</b></div>
+                        <div className="stat-mini"><span className="k">vs coleta anterior</span><b className="tnum" style={{ color: cor(dA) }}>{pc(dA)}</b></div>
+                        <div className="stat-mini"><span className="k">desde a 1ª coleta</span><b className="tnum" style={{ color: cor(dI) }}>{pc(dI)}</b></div>
+                      </div>
+                    )
+                  })()}
+                </>
+              ) : serieIng == null ? <p className="text-sm text-dim py-2">Carregando…</p>
+                : <p className="text-sm text-dim py-2">Série disponível a partir da 2ª coleta.</p>}
+
+              <h3 className="text-[13px] font-bold mb-2">Pratos que usam este produto</h3>
+              {!pratosDoIng ? (
+                <p className="text-sm text-dim py-2">Carregando…</p>
+              ) : !pratosDoIng.length ? (
+                <p className="text-sm text-dim py-2">Nenhum prato usa este produto.</p>
+              ) : (
+                <>
+                  <div className="space-y-1.5 mb-4">
+                    {pratosDoIng.map(p => {
+                      const custo = custos.find(c => c.pratos.id === p.prato_id)
+                      return (
+                        <div key={p.prato_id} className="flex items-center gap-2 text-sm border border-border rounded-[var(--r-sm)] px-3 py-2">
+                          <span className="truncate flex-1">{limparNome(p.nome)}</span>
+                          <span className="text-xs text-dim shrink-0">{p.regiao} · {p.qtd_g}g</span>
+                          {custo && <span className="tnum font-medium shrink-0">{brl(custo.custo_total * fator)}</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setFiltroIng({ nome: ingModal.nome, ids: new Set(pratosDoIng.map(p => p.prato_id)) })
+                        setIngModal(null)
+                        document.getElementById('tabela-pratos')?.scrollIntoView({ behavior: 'smooth' })
+                      }}
+                      className="btn-mk primary flex-1 justify-center">
+                      Filtrar tabelas por esses pratos
+                    </button>
+                    <button className="btn-mk" onClick={() => setIngModal(null)}>Fechar</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </main>
   )
