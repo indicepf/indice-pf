@@ -13,7 +13,7 @@ create table if not exists public.anuncios (
   id          bigserial primary key,
   -- slots fixos: hero/lateral/billboard/leaderboard/nativo (blocos na página),
   -- popup (modal 1×/sessão), gate-grafico e gate-tabela (cobrem o conteúdo até fechar)
-  slot        text not null check (slot in ('hero', 'lateral', 'billboard', 'leaderboard', 'nativo', 'popup', 'gate-grafico', 'gate-tabela')),
+  slot        text not null check (slot in ('hero', 'hero-lado', 'lateral', 'billboard', 'leaderboard', 'nativo', 'popup', 'gate-grafico', 'gate-tabela')),
   titulo      text not null,
   texto       text,
   imagem_url  text,
@@ -34,7 +34,7 @@ alter table public.anuncios drop constraint if exists anuncios_escala_check;
 alter table public.anuncios add constraint anuncios_escala_check check (escala > 0 and escala <= 1);
 alter table public.anuncios drop constraint if exists anuncios_slot_check;
 alter table public.anuncios add constraint anuncios_slot_check
-  check (slot in ('hero', 'lateral', 'billboard', 'leaderboard', 'nativo', 'popup', 'gate-grafico', 'gate-tabela'));
+  check (slot in ('hero', 'hero-lado', 'lateral', 'billboard', 'leaderboard', 'nativo', 'popup', 'gate-grafico', 'gate-tabela'));
 
 create index if not exists idx_anuncios_slot on public.anuncios (slot) where ativo;
 

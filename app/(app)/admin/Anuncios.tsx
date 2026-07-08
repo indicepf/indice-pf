@@ -5,7 +5,8 @@ import { getAnuncios, salvarAnuncio, excluirAnuncio, type Anuncio } from '@/lib/
 import { Badge, Button, Input, Select } from '@/components/ui'
 
 const SLOTS = [
-  ['hero', 'Hero (topo da home)'],
+  ['hero', 'Hero — faixa larga (abaixo do topo)'],
+  ['hero-lado', 'Hero — retângulo 300px (à direita, como no mockup)'],
   ['lateral', 'Lateral (painel de filtros)'],
   ['billboard', 'Billboard (entre seções)'],
   ['leaderboard', 'Leaderboard (antes da tabela)'],
