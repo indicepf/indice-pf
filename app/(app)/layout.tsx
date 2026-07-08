@@ -19,20 +19,13 @@ const TITULOS: Record<string, string> = {
   '/admin': 'Administração',
 }
 
-const NAV = [
-  ['/painel', 'Meu painel'],
-  ['/contribuir', 'Enviar preços'],
-  ['/meus-envios', 'Meus envios'],
-  ['/', 'Índice'],
-  ['/plano', 'Plano & assinatura'],
-  ['/configuracoes', 'Configurações'],
-] as const
-
-const NAV_ADMIN = [
-  ['/evolucao', 'Histórico'],
-  ['/contribuidores', 'Ranking'],
-  ['/admin', 'Administração'],
-] as const
+// menu por papel (item 3 do feedback): contribuição / assinatura / conta / administração
+const SECOES: { titulo: string; itens: readonly (readonly [string, string])[]; admin?: boolean }[] = [
+  { titulo: 'Contribuição', itens: [['/painel', '📊 Meu painel'], ['/contribuir', '📸 Enviar preços'], ['/meus-envios', '🗂 Meus envios']] },
+  { titulo: 'Assinatura', itens: [['/plano', '⭐ Plano & assinatura']] },
+  { titulo: 'Conta', itens: [['/configuracoes', '⚙️ Configurações']] },
+  { titulo: 'Administração', admin: true, itens: [['/admin', '🛡 Administração'], ['/evolucao', '📈 Histórico'], ['/contribuidores', '🏆 Ranking']] },
+]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -61,7 +54,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
   if (!logado) return null
 
-  const links = [...NAV, ...(profile?.is_admin ? NAV_ADMIN : [])]
+  const secoes = SECOES.filter(s => !s.admin || profile?.is_admin)
+  const links = secoes.flatMap(s => s.itens)
   const titulo = TITULOS[pathname] ?? ''
 
   return (
@@ -69,15 +63,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* sidebar (desktop) */}
       <aside className="hidden lg:flex flex-col border-r border-border bg-surface min-h-screen sticky top-0 max-h-screen">
         <Link href="/" className="px-5 py-4 border-b border-border"><Logo /></Link>
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {links.map(([href, label]) => (
-            <Link key={href} href={href}
-              className={`block px-3 py-2 rounded-[var(--r-sm)] text-sm transition-colors ${
-                pathname === href ? 'bg-accent/10 text-accent font-medium' : 'text-dim hover:text-ink hover:bg-surface-2'
-              }`}>
-              {label}
-            </Link>
+        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+          {secoes.map(s => (
+            <div key={s.titulo} className="mb-4">
+              <p className="px-3 mb-1 text-[0.62rem] uppercase tracking-[0.08em] text-faint font-bold">{s.titulo}</p>
+              <div className="space-y-0.5">
+                {s.itens.map(([href, label]) => (
+                  <Link key={href} href={href}
+                    className={`block px-3 py-2 rounded-[var(--r-sm)] text-sm transition-colors ${
+                      pathname === href ? 'bg-accent/10 text-accent font-medium' : 'text-dim hover:text-ink hover:bg-surface-2'
+                    }`}>
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
+          <div className="mb-4">
+            <p className="px-3 mb-1 text-[0.62rem] uppercase tracking-[0.08em] text-faint font-bold">Site</p>
+            <Link href="/" className="block px-3 py-2 rounded-[var(--r-sm)] text-sm text-dim hover:text-ink hover:bg-surface-2 transition-colors">
+              ← Voltar ao índice
+            </Link>
+          </div>
         </nav>
         <div className="px-5 py-4 border-t border-border">
           <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
