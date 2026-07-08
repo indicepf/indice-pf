@@ -63,3 +63,11 @@ export const CORES_GRUPO: Record<string, string> = {
 
 // extremos da escala sequencial (ex.: intensidade de custo em mapas/heatmaps)
 export const ESCALA_SEQ = { claro: '#e7eefb', escuro: BRAND.azul } as const
+
+// cor de cada nível de preço (mockup: consumidor=danger, atacarejo=warn, indústria=verde)
+export const NIVEL_HEX: Record<string, string> = {
+  online: SEMANTIC.danger,
+  mercado: SEMANTIC.info,
+  atacarejo: SEMANTIC.warn,
+  industria: BRAND.verde,
+}
