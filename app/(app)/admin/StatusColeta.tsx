@@ -75,7 +75,8 @@ export default function StatusColeta() {
           <p className="text-xs text-dim mt-1 leading-relaxed">
             Esta coleta foi gravada mas <strong>não entrou no índice</strong>. Revise as variações fortes e as
             entradas na aba <strong>Dados</strong> (exclua fontes erradas) e então aprove abaixo — a aprovação
-            calcula os custos dos pratos e publica a coleta no dashboard.
+            calcula os custos dos pratos e publica a coleta no dashboard. Sem aprovação manual, ela entra
+            <strong> automaticamente no índice após 5 dias</strong> (migração 29).
           </p>
           <button onClick={aprovarColeta} disabled={aprovando}
             className="mt-3 text-sm bg-ok text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60 cursor-pointer">
