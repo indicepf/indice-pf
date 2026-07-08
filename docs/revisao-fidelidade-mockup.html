@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Índice PF — Plano da Revisão Total de Fidelidade ao Mockup</title>
+<style>
+  body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 0; line-height: 1.55; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.6rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 36px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 { font-size: 1.15rem; font-weight: bold; margin-top: 48px; padding-bottom: 4px; border-bottom: 1px solid #ccc; }
+  h3 { font-size: 1rem; font-weight: bold; margin-top: 28px; }
+  p { margin: 12px 0; }
+  code { font-family: "Courier New", monospace; background: #f2f2f2; border: 1px solid #ddd; padding: 1px 5px; font-size: 0.88em; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.88rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  ol.steps { padding-left: 22px; }
+  ol.steps li { margin: 10px 0; }
+  .note { border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0; background: #fbfaf7; }
+  .note p:first-child { margin-top: 0; }
+  .note p:last-child { margin-bottom: 0; }
+  .pende { border-left: 4px solid #c98500; background: #fdf8ee; padding: 10px 14px; margin: 14px 0; font-family: Helvetica, Arial, sans-serif; font-size: 0.9rem; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .ok { color: #2f5d33; }
+  footer { margin-top: 56px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Revisão Total de Fidelidade ao Mockup — plano da próxima sessão</h1>
+  <p class="subtitle">Passada definitiva, seção por seção, comparando visualmente o app em produção com <code>docs/indice-pf-ads2.html</code> e corrigindo cada divergência. Preparado em 08/07/2026, ao fim da sessão de migração V1.</p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#contexto">Contexto — por que esta revisão</a></li>
+      <li><a href="#preparo">O que o responsável prepara antes</a></li>
+      <li><a href="#metodo">Método de trabalho da sessão</a></li>
+      <li><a href="#roteiro">Roteiro seção por seção</a></li>
+      <li><a href="#divergencias">Divergências já conhecidas</a></li>
+      <li><a href="#estado">Estado do projeto ao fim desta sessão</a></li>
+      <li><a href="#pendencias">Pendências fora do escopo visual</a></li>
+    </ol>
+  </div>
+
+  <h2 id="contexto">1. Contexto — por que esta revisão</h2>
+  <p>
+    A migração V0 → V1 está funcionalmente completa (Fases 1–10 do plano em
+    <code>docs/migracao-frontend-v1.html</code>, PRs #64–#91). O CSS do mockup foi portado literalmente para
+    <code>app/globals.css</code> (painéis, KPIs, segbar, filtros, region-bar, movers, tabelas, modais, auth,
+    planos), mas o <strong>markup</strong> de várias seções foi montado a partir da estrutura extraída do código
+    do mockup, sem comparação visual lado a lado. Resultado: o responsável apontou repetidamente divergências de
+    posicionamento, composição de cabeçalhos e detalhes de estilo. Esta revisão fecha essa lacuna de uma vez,
+    com <strong>verificação visual em cada passo</strong> — nada é dado como pronto sem screenshot comparado.
+  </p>
+  <div class="note">
+    <p><strong>Regra da revisão:</strong> fidelidade absoluta ao mockup em estilo, posicionamento, espaçamento,
+    cores e composição — com <strong>uma exceção deliberada: sem emojis</strong> (decisão do responsável em
+    08/07). Onde o mockup usa emoji como ícone, usar SVG equivalente ou omitir. Dados continuam 100% reais
+    (nada das séries sintéticas ou números de marketing do mockup).</p>
+  </div>
+
+  <h2 id="preparo">2. O que o responsável prepara antes</h2>
+  <ol class="steps">
+    <li><strong>Instalar/ativar a extensão Claude in Chrome</strong> (claude.ai/chrome), logado com a mesma conta
+      do Claude Code, e abrir o Chrome antes de iniciar a sessão. É o item que muda o jogo: permite ao Claude
+      abrir mockup e app lado a lado, tirar screenshots e comparar pixel a pixel, iterando até bater.
+      <em>Sem a extensão</em>, o fallback é arrastar screenshots direto para o chat (imagens coladas como
+      caminho <code>/var/folders/…</code> não são legíveis pelo Claude).</li>
+    <li><strong>Rodar as migrações 27 e 28</strong> no SQL Editor do Supabase (se ainda não rodou a 28 na versão
+      mais recente, rodar de novo — ela é idempotente e faz upgrade da tabela <code>anuncios</code>).</li>
+    <li><strong>Cadastrar 1 anúncio de teste por slot</strong> relevante em /admin → Anúncios (hero-lado,
+      billboard, popup, gate-grafico) para os slots aparecerem na comparação visual.</li>
+    <li><strong>Estar logado como admin</strong> numa aba (para as telas destravadas) e ter uma aba anônima
+      (para as telas públicas com lock).</li>
+    <li>Opcional: listar por escrito qualquer divergência que já incomoda, por seção — entra como prioridade.</li>
+  </ol>
+
+  <h2 id="metodo">3. Método de trabalho da sessão</h2>
+  <ol class="steps">
+    <li>Abrir o mockup (<code>docs/indice-pf-ads2.html</code> servido localmente) e a produção
+      (<code>indice-pf-ashen.vercel.app</code>) em abas separadas do Chrome.</li>
+    <li>Para cada seção do roteiro (§4): screenshot do mockup → screenshot do app → listar divergências
+      (posicionamento, espaçamento, tamanhos, cores, tipografia, composição) → corrigir no código →
+      re-screenshot até bater. Só então avançar.</li>
+    <li>Um PR por bloco de seções (home, modais, páginas estáticas, auth, app logado), no fluxo padrão:
+      branch → <code>tsc</code>/<code>build</code> → merge (deploy) → conferir em produção (atenção: o service
+      worker do PWA segura a versão antiga no primeiro load — <strong>recarregar 2×</strong>).</li>
+    <li>Nenhuma mudança de lógica de dados — só markup/estilo. Qualquer coisa funcional que aparecer vira nota,
+      não desvio de rota.</li>
+  </ol>
+
+  <h2 id="roteiro">4. Roteiro seção por seção</h2>
+  <p>Ordem de varredura, com os pontos de atenção conhecidos de cada uma:</p>
+  <table>
+    <tr><th>#</th><th>Seção</th><th>Referência no mockup</th><th>Atenção</th></tr>
+    <tr><td>1</td><td>Header público + nav</td><td><code>header</code> sticky, brand-mark</td><td>Espaçamentos, botão "Criar conta" primário</td></tr>
+    <tr><td>2</td><td>Hero</td><td><code>.hero</code>, <code>.hero-stats</code>, ad 300px</td><td>Marca d'água do infinito no fundo (<code>.hero-inf</code>) ainda não portada; padding 44/120</td></tr>
+    <tr><td>3</td><td>Painel de filtros</td><td><code>.filters</code>, <code>.f-group</code>, <code>.seg</code></td><td>Ordem dos grupos; toggle "Comparar com período anterior" existe no mockup e não no app (decidir)</td></tr>
+    <tr><td>4</td><td>Banner de metodologia</td><td><code>.method-banner</code></td><td>Ícone quadrado azul (mb-ico) vs "i" atual</td></tr>
+    <tr><td>5</td><td>KPIs</td><td><code>.kpi</code> (kbar/klabel/kval/ktrend)</td><td>kval no mockup é % (variação), no app é R$ — validar com o responsável qual fica</td></tr>
+    <tr><td>6</td><td><strong>Cabeçalhos dos painéis de gráfico</strong></td><td><code>.panel-head</code> + <code>.panel-tools</code></td><td><strong>Item apontado pelo responsável:</strong> posicionamento de segbar, var-badge e Compartilhar; tag de região no título</td></tr>
+    <tr><td>7</td><td>Gráfico geral + legenda</td><td><code>.chart-legend</code> clicável</td><td>Legenda clicável do mockup não existe no app</td></tr>
+    <tr><td>8</td><td>Gráfico por região + region-bar</td><td><code>.region-bar</code> dentro do panel-body</td><td>Margens, estados on</td></tr>
+    <tr><td>9</td><td>Destaques (movers)</td><td><code>.mover</code> (rank/mn/spark/mp)</td><td>Largura do sparkline 74×26</td></tr>
+    <tr><td>10</td><td>Tabela de pratos</td><td><code>.tbl</code> no panel + tools no head</td><td>Filtro de texto no cabeçalho do painel (posição)</td></tr>
+    <tr><td>11</td><td>Produtos por região + lock</td><td><code>.locked</code> + <code>.lock-overlay</code> + premium-tag</td><td>Gradiente do overlay, CTA</td></tr>
+    <tr><td>12</td><td>Modais de drill (prato/produto)</td><td><code>openDishDrill</code>/<code>openProductDrill</code></td><td>Feitos na fidelidade-3; conferir stats e espaçamentos</td></tr>
+    <tr><td>13</td><td>Modal de compartilhar</td><td><code>openShare</code> (abas social/e-mail)</td><td>Mockup tem 2 abas com preview — app tem 1 card; decidir aproximação</td></tr>
+    <tr><td>14</td><td>Popup de orientação</td><td><code>.orient-card</code></td><td>Animação pop .22s</td></tr>
+    <tr><td>15</td><td>Footer</td><td><code>.site-footer</code> (fundo escuro no mockup)</td><td>App usa footer claro — divergência estrutural a corrigir</td></tr>
+    <tr><td>16</td><td>Metodologia / Planos / Sobre</td><td><code>renderMethod</code>/<code>renderPublicPlans</code>/<code>page-sobre</code></td><td>Refeitas na fidelidade-2; conferir visualmente</td></tr>
+    <tr><td>17</td><td>Login / Cadastro / Completar perfil</td><td><code>.auth-wrap</code>/<code>.auth-card</code></td><td>Refeitas; conferir hero copy/stats e responsivo</td></tr>
+    <tr><td>18</td><td>App logado (sidebar, topbar, telas)</td><td><code>.sidebar</code>, <code>APP_TITLES</code></td><td>Sidebar do mockup tem brand + badge; conferir tudo</td></tr>
+    <tr><td>19</td><td>Slots de anúncio (todos)</td><td><code>.ad-slot</code> variantes</td><td>Raios 16px, sombra própria, proporções por slot</td></tr>
+  </table>
+
+  <h2 id="divergencias">5. Divergências já conhecidas (entrada da revisão)</h2>
+  <ul>
+    <li><strong>Cabeçalhos dos gráficos</strong> — posicionamento dos filtros/controles não bate (apontado pelo responsável em 08/07; motivo: markup montado sem comparação visual).</li>
+    <li><strong>Marca d'água do infinito</strong> no fundo do hero não foi portada.</li>
+    <li><strong>Footer</strong> do mockup é escuro; o do app é claro.</li>
+    <li><strong>Legenda clicável</strong> do gráfico geral (ligar/desligar séries) não existe no app.</li>
+    <li><strong>KPIs</strong>: mockup mostra variação %; app mostra o índice em R$ por nível — precisa de decisão.</li>
+    <li><strong>Modal de compartilhar</strong>: mockup tem abas "Redes sociais"/"E-mail completo" com previews.</li>
+    <li><strong>Toggle "Comparar com período anterior"</strong> dos filtros do mockup não implementado.</li>
+  </ul>
+
+  <h2 id="estado">6. Estado do projeto ao fim desta sessão (08/07/2026)</h2>
+  <table>
+    <tr><th>Área</th><th>Estado</th></tr>
+    <tr><td>Migração V1 (Fases 1–10)</td><td class="ok">Completa e em produção (PRs #64–#91). Falta só a Fase 11 (polimento: remover aliases de tokens V0, marca final em ícone/manifest, regressão completa).</td></tr>
+    <tr><td>Home</td><td class="ok">Estrutura do mockup (hero gradiente, filtros, KPIs por nível, 2 gráficos, destaques, tabelas), deep-link de filtros no Compartilhar, filtro cruzado pratos→produtos, drills em modal central.</td></tr>
+    <tr><td>Coleta</td><td class="ok">Staging com auditoria (aprovar em /admin → Coleta), filtro anti-alta +50% vs coleta anterior, coleta extraordinária agendada para 09/07 (cron temporário a remover do workflow).</td></tr>
+    <tr><td>Premium</td><td>Código pronto (checkout /assinar, /plano, gates); <strong>ativação adiada</strong> — sem conta de gateway, env vars ou migração 27 aplicada. is_premium degrada para free.</td></tr>
+    <tr><td>Anúncios</td><td class="ok">9 slots (blocos, popup, 2 gates), escala 10–100%, CRUD com métricas em /admin. Precisa da migração 28 (versão atual) aplicada.</td></tr>
+    <tr><td>V0</td><td class="ok">Preservada na tag <code>v0.0.0</code> e branch <code>versao-0</code>.</td></tr>
+  </table>
+
+  <h2 id="pendencias">7. Pendências fora do escopo visual (não esquecer)</h2>
+  <div class="pende"><strong>Coleta de 09/07:</strong> após rodar, revisar em /admin → Dados e <strong>aprovar em /admin → Coleta</strong> (sem aprovação ela não entra no índice). Depois, <strong>remover o cron temporário</strong> <code>0 11 9 7 *</code> de <code>.github/workflows/scraper-semanal.yml</code>.</div>
+  <div class="pende"><strong>Gateway (D9):</strong> comparar taxas (recomendação: Asaas) → criar conta sandbox → env vars no Vercel (<code>SUPABASE_SERVICE_ROLE_KEY</code>, <code>ASAAS_API_KEY</code>, <code>ASAAS_WEBHOOK_TOKEN</code>, <code>ASAAS_BASE_URL</code>) → webhook → migração 27 → teste ponta a ponta.</div>
+  <div class="pende"><strong>Decisões abertas:</strong> % do nível Indústria (D5); conceito de aproveitamento no cálculo (texto já está no modal do prato, cálculo não aplica redução); textos/links finais do Sobre (D3).</div>
+  <div class="pende"><strong>iCloud:</strong> mover o projeto para fora do iCloud Drive (ex.: <code>~/dev/indice-pf</code>) — o sync criou 6+ duplicatas "<code> 2</code>" e corrompeu um ref do git durante a sessão.</div>
+  <div class="pende"><strong>Fase 11</strong> do plano original: remover aliases de tokens V0 do <code>globals.css</code>, alias <code>MODOS</code>, marca final (ícone/OG/manifest) e o checklist de regressão completo — encaixar após a revisão de fidelidade.</div>
+
+  <footer>Preparado ao fim da sessão de 07–08/07/2026 · próximo passo: sessão dedicada de revisão visual com Claude in Chrome</footer>
+</div>
+</body>
+</html>
