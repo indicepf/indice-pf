@@ -16,7 +16,7 @@ export default function PremiumGate({ destravada, titulo, descricao, children }:
       <div className="blur-[5px] select-none pointer-events-none" aria-hidden="true">{children}</div>
       <div className="absolute inset-0 grid place-items-center bg-gradient-to-b from-transparent via-surface/60 to-surface p-6">
         <div className="text-center max-w-xs">
-          <p className="text-2xl mb-2" aria-hidden="true">🔒</p>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mx-auto mb-2 text-dim" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
           <p className="font-bold tracking-tight">{titulo ?? 'Conteúdo Premium'}</p>
           {descricao && <p className="text-sm text-dim mt-1.5 leading-relaxed">{descricao}</p>}
           <Link href="/assinar"

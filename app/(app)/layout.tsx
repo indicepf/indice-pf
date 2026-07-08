@@ -21,10 +21,10 @@ const TITULOS: Record<string, string> = {
 
 // menu por papel (item 3 do feedback): contribuição / assinatura / conta / administração
 const SECOES: { titulo: string; itens: readonly (readonly [string, string])[]; admin?: boolean }[] = [
-  { titulo: 'Contribuição', itens: [['/painel', '📊 Meu painel'], ['/contribuir', '📸 Enviar preços'], ['/meus-envios', '🗂 Meus envios']] },
-  { titulo: 'Assinatura', itens: [['/plano', '⭐ Plano & assinatura']] },
-  { titulo: 'Conta', itens: [['/configuracoes', '⚙️ Configurações']] },
-  { titulo: 'Administração', admin: true, itens: [['/admin', '🛡 Administração'], ['/evolucao', '📈 Histórico'], ['/contribuidores', '🏆 Ranking']] },
+  { titulo: 'Contribuição', itens: [['/painel', 'Meu painel'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios']] },
+  { titulo: 'Assinatura', itens: [['/plano', 'Plano & assinatura']] },
+  { titulo: 'Conta', itens: [['/configuracoes', 'Configurações']] },
+  { titulo: 'Administração', admin: true, itens: [['/admin', 'Administração'], ['/evolucao', 'Histórico'], ['/contribuidores', 'Ranking']] },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

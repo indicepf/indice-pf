@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { entrar } from '@/lib/auth-actions'
 import { getProfile } from '@/lib/queries'
 import { perfilCompleto } from '@/app/useAuth'
-import { Button, Input } from '@/components/ui'
 
 export default function EntrarPage() {
   return <Suspense fallback={null}><EntrarInner /></Suspense>
@@ -30,23 +29,26 @@ function EntrarInner() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold tracking-tight">Entrar no Índice PF</h1>
-      <p className="text-sm text-dim mt-1 mb-5">Use seu e-mail e senha.</p>
+      <h1>Entrar</h1>
+      <p className="sub">Bem-vindo de volta ao Índice PF</p>
 
-      <label className="text-xs text-dim">E-mail</label>
-      <Input type="email" value={email} onChange={e => setEmail(e.target.value)} autoFocus
-        placeholder="voce@email.com" autoComplete="email" />
-      <label className="text-xs text-dim mt-3 block">Senha</label>
-      <Input type="password" value={senha} onChange={e => setSenha(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && onEntrar()} autoComplete="current-password" />
+      <div className="field">
+        <label>E-mail</label>
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoFocus
+          placeholder="voce@email.com" autoComplete="email" />
+      </div>
+      <div className="field">
+        <label>Senha</label>
+        <input type="password" value={senha} onChange={e => setSenha(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && onEntrar()} autoComplete="current-password" />
+      </div>
 
       {erro && <p className="text-xs text-danger mt-2">{erro}</p>}
-      <Button full disabled={busy} onClick={onEntrar} className="mt-4">{busy ? '…' : 'Entrar'}</Button>
+      <button className="btn-primary" disabled={busy} onClick={onEntrar}>{busy ? '…' : 'Entrar'}</button>
 
-      <div className="mt-4 text-center space-y-2">
-        <Link href={`/cadastro${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`}
-          className="text-xs text-accent hover:underline block">Não tem conta? Criar conta</Link>
-        <Link href="/esqueci-senha" className="text-xs text-dim hover:text-ink block">Esqueci minha senha</Link>
+      <div className="auth-alt">Não tem conta? <Link href={`/cadastro${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`}>Criar conta</Link></div>
+      <div className="auth-alt" style={{ marginTop: 8 }}>
+        <Link href="/esqueci-senha">Esqueci minha senha</Link> · <Link href="/">← Voltar ao site</Link>
       </div>
     </>
   )

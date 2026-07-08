@@ -59,19 +59,19 @@ export default function PainelPage() {
       <div className="grid sm:grid-cols-3 gap-4 mt-4">
         <Link href="/contribuir" className="block">
           <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
-            <p className="font-medium text-sm">📸 Enviar preços</p>
+            <p className="font-medium text-sm">Enviar preços</p>
             <p className="text-xs text-dim mt-1">Fotografe etiquetas no mercado — uma ou várias de uma vez.</p>
           </Card>
         </Link>
         <Link href="/meus-envios" className="block">
           <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
-            <p className="font-medium text-sm">🗂 Meus envios</p>
+            <p className="font-medium text-sm">Meus envios</p>
             <p className="text-xs text-dim mt-1">Acompanhe o status de cada contribuição.</p>
           </Card>
         </Link>
         <Link href="/configuracoes" className="block">
           <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
-            <p className="font-medium text-sm">⚙️ Configurações</p>
+            <p className="font-medium text-sm">Configurações</p>
             <p className="text-xs text-dim mt-1">Perfil, CPF e chave PIX para saques.</p>
           </Card>
         </Link>

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, usuarioDoStorage } from '@/lib/supabase'
 import { salvarPerfilBasico } from '@/lib/auth-actions'
 import { REGIOES, mascararTel } from '@/lib/format'
-import { Button, Input, Select } from '@/components/ui'
+
 
 export default function CompletarPerfilPage() {
   return <Suspense fallback={null}><CompletarPerfilInner /></Suspense>
@@ -43,22 +43,28 @@ function CompletarPerfilInner() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold tracking-tight">Complete seu perfil</h1>
-      <p className="text-sm text-dim mt-1 mb-5">Rápido — para validar suas contribuições.</p>
+      <h1>Complete seu perfil</h1>
+      <p className="sub">Rápido — para validar suas contribuições</p>
 
-      <label className="text-xs text-dim">Nome</label>
-      <Input value={nome} onChange={e => setNome(e.target.value)} autoFocus autoComplete="name" />
-      <label className="text-xs text-dim mt-3 block">Telefone (com DDD)</label>
-      <Input value={tel} onChange={e => setTel(mascararTel(e.target.value))}
-        placeholder="(11) 99999-9999" inputMode="tel" autoComplete="tel" />
-      <label className="text-xs text-dim mt-3 block">Região</label>
-      <Select value={regiao} onChange={e => setRegiao(e.target.value)}>
-        <option value="">Selecione…</option>
-        {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
-      </Select>
+      <div className="field">
+        <label>Nome</label>
+        <input value={nome} onChange={e => setNome(e.target.value)} autoFocus autoComplete="name" placeholder="Seu nome" />
+      </div>
+      <div className="field">
+        <label>Telefone (com DDD)</label>
+        <input value={tel} onChange={e => setTel(mascararTel(e.target.value))}
+          placeholder="(11) 99999-9999" inputMode="tel" autoComplete="tel" />
+      </div>
+      <div className="field">
+        <label>Região</label>
+        <select value={regiao} onChange={e => setRegiao(e.target.value)}>
+          <option value="">Selecione…</option>
+          {REGIOES.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </div>
 
       {erro && <p className="text-xs text-danger mt-2">{erro}</p>}
-      <Button full disabled={busy} onClick={onSalvar} className="mt-4">{busy ? 'Salvando…' : 'Continuar'}</Button>
+      <button className="btn-primary" disabled={busy} onClick={onSalvar}>{busy ? 'Salvando…' : 'Continuar'}</button>
     </>
   )
 }

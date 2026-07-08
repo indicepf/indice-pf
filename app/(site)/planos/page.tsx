@@ -1,49 +1,49 @@
 import type { Metadata } from 'next'
-import { Badge, Card } from '@/components/ui'
 
 export const metadata: Metadata = {
   title: 'Planos — Índice PF',
   description: 'Plano gratuito e plano Premium do Índice PF.',
 }
 
+const Check = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+)
+const X = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12" /></svg>
+)
+
+// layout do mockup (renderPublicPlans)
 export default function PlanosPage() {
   return (
-    <main className="max-w-3xl mx-auto px-6 py-12">
-      <h1 className="text-3xl font-bold tracking-tight">Planos</h1>
-      <p className="text-dim mt-3">O índice é público. O Premium destrava o detalhamento por produto e a exportação de dados.</p>
+    <main className="max-w-3xl mx-auto px-6 py-10">
+      <h1 className="text-2xl font-extrabold tracking-tight mb-1">Planos</h1>
+      <p className="hint">O índice é público. O Premium destrava o detalhamento por produto.</p>
 
-      <div className="grid sm:grid-cols-2 gap-5 mt-8 items-start">
-        <Card className="p-6">
-          <h2 className="font-bold tracking-tight text-lg">Gratuito</h2>
-          <p className="text-3xl font-bold tracking-tight mt-2">R$ 0</p>
-          <ul className="text-sm text-dim mt-4 space-y-2 leading-relaxed">
-            <li>✓ Índice nacional e por região</li>
-            <li>✓ Custo dos 100 pratos com detalhamento de ingredientes</li>
-            <li>✓ Fontes de cada preço (lojas e leituras)</li>
-            <li>✓ Contribuir com fotos de preços e receber recompensa</li>
+      <div className="grid sm:grid-cols-2 gap-5 mt-5 items-start">
+        <div className="plan">
+          <h3>Gratuito</h3>
+          <div className="p-price">R$ 0</div>
+          <ul>
+            <li><Check />Índice geral, região e pratos</li>
+            <li><Check />Compartilhamento</li>
+            <li><Check />Envio de fotos com recompensa via PIX</li>
+            <li className="off"><X />Detalhamento por produto</li>
           </ul>
-          <a href="/" className="mt-6 inline-flex items-center justify-center w-full rounded-[var(--r-sm)] px-4 py-2 text-sm font-medium bg-surface border border-border-2 hover:bg-surface-2 transition">
-            Usar agora
-          </a>
-        </Card>
+          <a href="/cadastro" className="btn-mk w-full justify-center">Criar conta grátis</a>
+        </div>
 
-        <Card className="p-6 border-accent/40 shadow-[var(--shadow-brand)] relative">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold tracking-tight text-lg">Premium</h2>
-            <Badge tone="warn">em breve</Badge>
-          </div>
-          <p className="text-3xl font-bold tracking-tight mt-2">R$ 99,99<span className="text-sm text-dim font-normal">/mês</span></p>
-          <ul className="text-sm text-dim mt-4 space-y-2 leading-relaxed">
-            <li>✓ Tudo do plano gratuito</li>
-            <li>✓ Preços por produto e por região</li>
-            <li>✓ Exportação de dados (CSV/XLSX)</li>
-            <li>✓ Série histórica completa por ingrediente</li>
+        <div className="plan featured">
+          <div className="pop">Premium</div>
+          <h3>Premium</h3>
+          <div className="p-price">R$ 99,99<small>/mês</small></div>
+          <ul>
+            <li><Check />Tudo do Gratuito</li>
+            <li><Check />Detalhamento por produto e região</li>
+            <li><Check />Exportação de dados</li>
+            <li><Check />Comparativos históricos</li>
           </ul>
-          <a href="/assinar" className="mt-6 inline-flex items-center justify-center w-full rounded-[var(--r-sm)] px-4 py-2 text-sm font-medium bg-accent text-white hover:brightness-110 transition">
-            Assinar o Premium
-          </a>
-          <p className="text-xs text-faint mt-3">Pagamento em fase final de configuração — o checkout avisa quando estiver no ar.</p>
-        </Card>
+          <a href="/assinar" className="btn-mk primary w-full justify-center">Assinar Premium →</a>
+        </div>
       </div>
     </main>
   )

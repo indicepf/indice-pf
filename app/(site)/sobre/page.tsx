@@ -5,25 +5,17 @@ export const metadata: Metadata = {
   description: 'O que é o Índice PF e quem faz.',
 }
 
+// layout e texto do mockup (page-sobre)
 export default function SobrePage() {
   return (
-    <main className="max-w-3xl mx-auto px-6 py-12">
-      <h1 className="text-3xl font-bold tracking-tight">Sobre o Índice PF</h1>
-
-      <div className="mt-4 space-y-4 text-dim leading-relaxed">
-        <p>
-          O Índice PF acompanha o custo de produção do prato feito — a refeição mais comum do Brasil.
-          Medimos, a cada coleta, quanto custa produzir uma porção de cada um de 100 pratos regionais,
-          a partir do preço real dos ingredientes no varejo e de dados coletados em campo.
-        </p>
-        <p>
-          O objetivo é dar a quem compra, vende e produz comida uma referência pública e auditável
-          de preço: cada valor do índice pode ser aberto até a lista de lojas e leituras que o geraram.
-          A <a href="/metodologia" className="text-accent hover:underline">metodologia</a> é pública.
-        </p>
-        <p>
-          O Índice PF é um produto da <strong className="text-ink">Infinity Inc</strong>, e integra o
-          ecossistema de food service do grupo — Rede Food Service, Seasoning e Ponto Food.
+    <main className="max-w-3xl mx-auto px-6 py-10">
+      <div className="box" style={{ maxWidth: 760, margin: '0 auto' }}>
+        <h2>Sobre o Índice PF</h2>
+        <p className="hint">Um produto Infinity Inc.</p>
+        <p style={{ color: 'var(--ink-2)', lineHeight: 1.7 }}>
+          O Índice PF é um índice financeiro de inflação de alimentos — no espírito do Índice Big Mac —
+          construído sobre o prato feito, a refeição mais representativa do brasileiro. Faz parte do
+          ecossistema Infinity, ao lado da Rede Food Service, Seasoning e Ponto Food.
         </p>
       </div>
     </main>

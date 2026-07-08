@@ -76,7 +76,7 @@ function ContribuidoresInner() {
                   {lista.map((c, i) => (
                     <tr key={c.user_id} className="border-t border-border/60">
                       <td className="px-3 py-2 tnum text-dim">{i + 1}º</td>
-                      <td className="px-3 py-2 font-medium">{i === 0 ? '🥇 ' : i === 1 ? '🥈 ' : i === 2 ? '🥉 ' : ''}{c.nome}</td>
+                      <td className="px-3 py-2 font-medium">{c.nome}</td>
                       <td className="px-3 py-2 text-right tnum text-accent font-medium">{c.entradas}</td>
                       <td className="px-3 py-2 text-right tnum text-dim">{c.ingredientes}</td>
                       <td className="px-3 py-2 text-dim">{[c.cidade, c.uf].filter(Boolean).join(' · ') || '—'}</td>

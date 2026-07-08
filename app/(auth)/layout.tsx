@@ -1,40 +1,39 @@
 import Link from 'next/link'
 import Logo from '@/components/site/Logo'
 
+// layout de auth do mockup: hero com gradiente à esquerda, formulário à direita
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-screen grid lg:grid-cols-2">
-      {/* painel de marca (desktop) */}
-      <div className="hidden lg:flex flex-col justify-between p-10 text-white"
-        style={{ background: 'var(--grad-marca)' }}>
-        <Link href="/" className="inline-flex items-center gap-2 w-fit">
+    <div className="auth-wrap">
+      <div className="auth-hero">
+        <Link href="/" className="inline-flex items-center gap-2 w-fit relative z-[1]">
           <Logo compact />
           <span className="leading-none">
-            <span className="block text-lg font-bold tracking-tight">Índice PF</span>
-            <span className="block text-[0.6rem] uppercase tracking-[0.14em] opacity-80">by Infinity</span>
+            <span className="block text-lg font-bold tracking-tight text-white">Índice PF</span>
+            <span className="block text-[0.6rem] uppercase tracking-[0.14em] text-white/70">by Infinity</span>
           </span>
         </Link>
-        <div className="max-w-sm">
-          <h2 className="text-3xl font-bold tracking-tight leading-tight">
-            O custo do prato feito brasileiro, medido com dados reais.
-          </h2>
-          <p className="mt-4 text-sm opacity-85 leading-relaxed">
-            100 pratos regionais · 5 regiões · coletas quinzenais no varejo e em campo.
-            Contribuições aprovadas rendem recompensa via PIX.
+        <div className="relative z-[1]">
+          <h2>Crie sua conta e contribua com o índice.</h2>
+          <p className="hero-sub">
+            Grátis para acompanhar o custo do prato feito. Premium por R$ 99,99/mês para o
+            detalhamento completo por produto.
           </p>
+          <div className="hstats">
+            <div><b>100</b><span>pratos monitorados</span></div>
+            <div><b>5</b><span>regiões</span></div>
+            <div><b>PIX</b><span>recompensa por foto</span></div>
+          </div>
         </div>
-        <span className="text-xs opacity-70">© 2026 Infinity Inc</span>
+        <span className="text-[13px] text-white/70 relative z-[1]">© 2026 Infinity Inc</span>
       </div>
 
-      {/* área do formulário */}
-      <div className="flex flex-col">
-        <div className="p-6 lg:hidden">
-          <Link href="/"><Logo /></Link>
-        </div>
-        <div className="flex-1 grid place-items-center px-6 py-10">
-          <div className="w-full max-w-sm">{children}</div>
+      <div className="auth-panel">
+        <div className="auth-card">
+          <div className="mb-6 lg:hidden"><Link href="/"><Logo /></Link></div>
+          {children}
         </div>
       </div>
-    </main>
+    </div>
   )
 }

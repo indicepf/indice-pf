@@ -8,7 +8,7 @@ const SLOTS = [
   ['hero', 'Hero — faixa larga (abaixo do topo)'],
   ['hero-lado', 'Hero — retângulo 300px (à direita, como no mockup)'],
   ['lateral', 'Lateral (painel de filtros)'],
-  ['billboard', 'Billboard (entre seções)'],
+  ['billboard', 'Billboard (entre os gráficos)'],
   ['leaderboard', 'Leaderboard (antes da tabela)'],
   ['nativo', 'Nativo (linha da tabela)'],
   ['popup', 'Pop-up (modal, 1× por sessão)'],
