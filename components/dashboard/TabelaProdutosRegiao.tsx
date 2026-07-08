@@ -8,16 +8,35 @@ import { Card, Input } from '@/components/ui'
 // Tabela premium da home: preço online nacional + preço de campo por região.
 // O gating real (assinatura) entra na Fase 8 — por ora o conteúdo fica
 // coberto pelo overlay com CTA para /planos (visual, como no mockup).
+type SortCol = 'nome' | 'online' | string   // string = nome da região
+
 export default function TabelaProdutosRegiao({ linhas, destravada, onIngrediente }: {
   linhas: ProdutoRegiao[]; destravada: boolean
   onIngrediente?: (ing: { id: number; nome: string }) => void
 }) {
   const [busca, setBusca] = useState('')
+  const [sort, setSort] = useState<{ col: SortCol; dir: 1 | -1 }>({ col: 'nome', dir: 1 })
 
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase()
-    return q ? linhas.filter(l => (l.nome || '').toLowerCase().includes(q)) : linhas
-  }, [linhas, busca])
+    const l = q ? linhas.filter(x => (x.nome || '').toLowerCase().includes(q)) : linhas
+    const { col, dir } = sort
+    const valor = (x: ProdutoRegiao): number | string | null =>
+      col === 'nome' ? (x.nome || '') : col === 'online' ? x.online : (x.campo[col]?.valor ?? null)
+    return [...l].sort((a, b) => {
+      const va = valor(a), vb = valor(b)
+      if (typeof va === 'string' || typeof vb === 'string') return String(va).localeCompare(String(vb)) * dir
+      if (va == null && vb == null) return 0
+      if (va == null) return 1   // sem dado vai para o fim, em qualquer direção
+      if (vb == null) return -1
+      return (va - vb) * dir
+    })
+  }, [linhas, busca, sort])
+
+  function toggleSort(col: SortCol) {
+    setSort(s => s.col === col ? { col, dir: s.dir === 1 ? -1 : 1 } : { col, dir: 1 })
+  }
+  const seta = (col: SortCol) => sort.col === col ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''
 
   const visiveis = destravada ? filtradas : filtradas.slice(0, 8)
 
@@ -35,10 +54,24 @@ export default function TabelaProdutosRegiao({ linhas, destravada, onIngrediente
           aria-hidden={!destravada}>
           <table className="w-full text-sm min-w-[44rem]">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-dim border-b border-border">
-                <th className="font-medium px-4 py-3">Produto</th>
-                <th className="font-medium px-4 py-3 text-right">Online (nacional)</th>
-                {REGIOES.map(r => <th key={r} className="font-medium px-4 py-3 text-right">{r}</th>)}
+              <tr className="text-left text-xs uppercase tracking-wide text-dim border-b border-border select-none">
+                <th className="font-medium px-4 py-3">
+                  <button onClick={() => toggleSort('nome')} className={`uppercase tracking-wide cursor-pointer hover:text-ink transition-colors ${sort.col === 'nome' ? 'text-ink' : ''}`}>
+                    Produto{seta('nome')}
+                  </button>
+                </th>
+                <th className="font-medium px-4 py-3 text-right">
+                  <button onClick={() => toggleSort('online')} className={`uppercase tracking-wide cursor-pointer hover:text-ink transition-colors ${sort.col === 'online' ? 'text-ink' : ''}`}>
+                    Online (nacional){seta('online')}
+                  </button>
+                </th>
+                {REGIOES.map(r => (
+                  <th key={r} className="font-medium px-4 py-3 text-right">
+                    <button onClick={() => toggleSort(r)} className={`uppercase tracking-wide cursor-pointer hover:text-ink transition-colors ${sort.col === r ? 'text-ink' : ''}`}>
+                      {r}{seta(r)}
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className={destravada ? '' : 'blur-[5px]'}>

@@ -10,10 +10,13 @@ const SLOTS = [
   ['billboard', 'Billboard (entre seções)'],
   ['leaderboard', 'Leaderboard (antes da tabela)'],
   ['nativo', 'Nativo (linha da tabela)'],
+  ['popup', 'Pop-up (modal, 1× por sessão)'],
+  ['gate-grafico', 'Gate do gráfico (cobre até fechar)'],
+  ['gate-tabela', 'Gate da tabela de produtos (cobre até fechar)'],
 ] as const
 
 type AdComMetrica = Anuncio & { imps: number; clicks: number }
-const VAZIO: Partial<Anuncio> = { slot: 'hero', titulo: '', texto: '', imagem_url: '', link: '', anunciante: '', ativo: true, inicio: null, fim: null, peso: 1 }
+const VAZIO: Partial<Anuncio> = { slot: 'hero', titulo: '', texto: '', imagem_url: '', link: '', anunciante: '', ativo: true, inicio: null, fim: null, peso: 1, escala: 1 }
 
 export default function Anuncios() {
   const [ads, setAds] = useState<AdComMetrica[] | null>(null)
@@ -89,6 +92,11 @@ export default function Anuncios() {
             </label>
             <label className="text-xs text-dim">Peso do sorteio (≥1)
               <Input type="number" min={1} value={form.peso ?? 1} onChange={e => set('peso', Math.max(1, Number(e.target.value) || 1))} />
+            </label>
+            <label className="text-xs text-dim">Tamanho ({Math.round((form.escala ?? 1) * 100)}% do slot)
+              <input type="range" min={10} max={100} step={5} value={Math.round((form.escala ?? 1) * 100)}
+                onChange={e => set('escala', Number(e.target.value) / 100)}
+                className="w-full mt-2 accent-accent" />
             </label>
             <label className="text-xs text-dim flex items-end gap-2 pb-2">
               <input type="checkbox" checked={form.ativo ?? true} onChange={e => set('ativo', e.target.checked)} className="accent-accent" />

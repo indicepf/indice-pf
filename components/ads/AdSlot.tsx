@@ -14,11 +14,35 @@ const FORMATO: Record<string, string> = {
   nativo: '',
 }
 
-// Slot de anúncio (house ads, Fase 9). Regras:
-// - assinante Premium nunca vê anúncio
-// - sem criativo cadastrado (ou migração 28 ausente) → não renderiza nada
-// - impressão registrada 1× por montagem; clique registrado no href
-export default function AdSlot({ slot, className = '' }: { slot: string; className?: string }) {
+// criativo em si (compartilhado com AdGate/AdPopup)
+export function AdCreative({ ad, pagina, formato = '' }: { ad: Anuncio; pagina: string; formato?: string }) {
+  const conteudo = (
+    <div className={`relative border border-border rounded-[var(--r)] bg-surface overflow-hidden ${formato}`}>
+      <span className="absolute top-1.5 right-2 text-[0.6rem] uppercase tracking-wide text-faint bg-surface/80 rounded px-1 z-10">
+        publicidade
+      </span>
+      {ad.imagem_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={ad.imagem_url} alt={ad.titulo} className="w-full h-auto object-contain" />
+      ) : (
+        <div className="p-4">
+          <p className="text-sm font-medium">{ad.titulo}</p>
+          {ad.texto && <p className="text-xs text-dim mt-1 leading-relaxed">{ad.texto}</p>}
+          {ad.anunciante && <p className="text-[0.65rem] text-faint mt-2">{ad.anunciante}</p>}
+        </div>
+      )}
+    </div>
+  )
+  return ad.link ? (
+    <a href={ad.link} target="_blank" rel="noopener noreferrer sponsored"
+      onClick={() => registrarEventoAd(ad.id, 'click', pagina)} className="block">
+      {conteudo}
+    </a>
+  ) : conteudo
+}
+
+// hook comum: busca o criativo do slot (premium nunca vê) e registra a impressão
+export function useAnuncio(slot: string) {
   const { isPremium } = useAuth()
   const pathname = usePathname()
   const [ad, setAd] = useState<Anuncio | null>(null)
@@ -35,30 +59,19 @@ export default function AdSlot({ slot, className = '' }: { slot: string; classNa
     if (ad && !impRegistrada.current) { impRegistrada.current = true; registrarEventoAd(ad.id, 'imp', pathname) }
   }, [ad, pathname])
 
-  if (isPremium || !ad) return null
+  return { ad: isPremium ? null : ad, pathname }
+}
 
-  const conteudo = (
-    <div className={`relative border border-border rounded-[var(--r)] bg-surface overflow-hidden ${FORMATO[slot] ?? ''} ${className}`}>
-      <span className="absolute top-1.5 right-2 text-[0.6rem] uppercase tracking-wide text-faint bg-surface/80 rounded px-1 z-10">
-        publicidade
-      </span>
-      {ad.imagem_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={ad.imagem_url} alt={ad.titulo} className="w-full h-full object-cover" />
-      ) : (
-        <div className="p-4">
-          <p className="text-sm font-medium">{ad.titulo}</p>
-          {ad.texto && <p className="text-xs text-dim mt-1 leading-relaxed">{ad.texto}</p>}
-          {ad.anunciante && <p className="text-[0.65rem] text-faint mt-2">{ad.anunciante}</p>}
-        </div>
-      )}
+// Slot de bloco (hero/lateral/billboard/leaderboard/nativo). Regras:
+// - assinante Premium nunca vê anúncio
+// - sem criativo cadastrado (ou migração 28 ausente) → não renderiza nada
+// - `escala` do criativo controla a largura relativa (centralizado)
+export default function AdSlot({ slot, className = '' }: { slot: string; className?: string }) {
+  const { ad, pathname } = useAnuncio(slot)
+  if (!ad) return null
+  return (
+    <div className={className} style={ad.escala < 1 ? { width: `${ad.escala * 100}%`, marginInline: 'auto' } : undefined}>
+      <AdCreative ad={ad} pagina={pathname} formato={FORMATO[slot] ?? ''} />
     </div>
   )
-
-  return ad.link ? (
-    <a href={ad.link} target="_blank" rel="noopener noreferrer sponsored"
-      onClick={() => registrarEventoAd(ad.id, 'click', pathname)} className="block">
-      {conteudo}
-    </a>
-  ) : conteudo
 }
