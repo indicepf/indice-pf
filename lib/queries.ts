@@ -1036,3 +1036,13 @@ export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoReg
     }
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
 }
+
+// pratos que usam um ingrediente (modal da tabela produtos × região)
+export type PratoDeIngrediente = { prato_id: number; nome: string; regiao: string; qtd_g: number }
+export async function getPratosPorIngrediente(ingredienteId: number): Promise<PratoDeIngrediente[]> {
+  const rows = await fetchAll<any>(() => supabase.from('receitas')
+    .select('prato_id, qtd_g, pratos(id, nome, regiao)').eq('ingrediente_id', ingredienteId))
+  return rows.map(r => ({
+    prato_id: r.prato_id, nome: r.pratos?.nome ?? '', regiao: r.pratos?.regiao ?? '', qtd_g: Number(r.qtd_g),
+  })).sort((a, b) => a.nome.localeCompare(b.nome))
+}

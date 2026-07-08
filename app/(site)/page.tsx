@@ -8,18 +8,20 @@ import DetalhePrato from '../DetalhePrato'
 import { useAuth } from '../useAuth'
 import {
   getDishCostsRange, getSnapshotsNovos, getAllDetalhes, getAllFontes, getAllFontesManuais,
-  getStatsPublicas, getSeriePratos, getPrecosPorRegiao,
-  type FonteManual, type StatsPublicas, type SeriePratos, type ProdutoRegiao,
+  getStatsPublicas, getSeriePratos, getPrecosPorRegiao, getPratosPorIngrediente,
+  type FonteManual, type StatsPublicas, type SeriePratos, type ProdutoRegiao, type PratoDeIngrediente,
 } from '@/lib/queries'
 import { NIVEIS_PRECO, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
 import { mediana } from '@/lib/stats'
 import { ACCENT, CORES_REGIAO, COR_ALTA, COR_QUEDA, DIM } from '@/lib/theme'
-import { Badge, Card, Input, Select } from '@/components/ui'
+import { Badge, Card, Input, Modal } from '@/components/ui'
 import Sparkline from '@/components/dashboard/Sparkline'
 import TabelaProdutosRegiao from '@/components/dashboard/TabelaProdutosRegiao'
-import type { ModoKey, OrdemKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
+import type { ModoKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
+
+type ColunaSort = 'nome' | 'regiao' | 'custo' | 'delta'
 
 export default function Dashboard() {
   const { profile } = useAuth()
@@ -36,8 +38,12 @@ export default function Dashboard() {
   const [modo, setModo]         = useState<ModoKey>('online')
   const [regioes, setRegioes]   = useState<Set<string>>(new Set())   // vazio = todas
   const [busca, setBusca]       = useState('')
-  const [ordem, setOrdem]       = useState<OrdemKey>('custo')
+  const [sort, setSort]         = useState<{ col: ColunaSort; dir: 1 | -1 }>({ col: 'custo', dir: 1 })
   const [selecionado, setSelecionado] = useState<DishCost | null>(null)
+  // modal "pratos que usam o ingrediente" + filtro derivado dele na tabela
+  const [ingModal, setIngModal] = useState<{ id: number; nome: string } | null>(null)
+  const [pratosDoIng, setPratosDoIng] = useState<PratoDeIngrediente[] | null>(null)
+  const [filtroIng, setFiltroIng] = useState<{ nome: string; ids: Set<number> } | null>(null)
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]> | null>(null)
   const [fontes, setFontes]     = useState<Record<number, Fonte[]>>({})
   const [fontesManuais, setFontesManuais] = useState<Record<number, FonteManual[]>>({})
@@ -142,16 +148,36 @@ export default function Dashboard() {
   const lista = useMemo(() => {
     let l = custos
     if (regioes.size) l = l.filter(c => regioes.has(c.pratos.regiao))
+    if (filtroIng) l = l.filter(c => filtroIng.ids.has(c.pratos.id))
     if (busca.trim()) {
       const q = busca.toLowerCase()
       l = l.filter(c => c.pratos.nome.toLowerCase().includes(q))
     }
+    const { col, dir } = sort
     return [...l].sort((a, b) => {
-      if (ordem === 'custo') return a.custo_total - b.custo_total
-      if (ordem === 'nome')  return a.pratos.nome.localeCompare(b.pratos.nome)
-      return a.pratos.regiao.localeCompare(b.pratos.regiao) || a.custo_total - b.custo_total
+      let cmp = 0
+      if (col === 'custo') cmp = a.custo_total - b.custo_total
+      else if (col === 'nome') cmp = limparNome(a.pratos.nome).localeCompare(limparNome(b.pratos.nome))
+      else if (col === 'regiao') cmp = a.pratos.regiao.localeCompare(b.pratos.regiao) || a.custo_total - b.custo_total
+      else {   // delta — sem série vai para o fim, em qualquer direção
+        const da = porPrato[a.pratos.id]?.delta, db = porPrato[b.pratos.id]?.delta
+        if (da == null && db == null) cmp = 0
+        else if (da == null) return 1
+        else if (db == null) return -1
+        else cmp = da - db
+      }
+      return cmp * dir
     })
-  }, [custos, regioes, busca, ordem])
+  }, [custos, regioes, busca, sort, filtroIng, porPrato])
+
+  function toggleSort(col: ColunaSort) {
+    setSort(s => s.col === col ? { col, dir: s.dir === 1 ? -1 : 1 } : { col, dir: 1 })
+  }
+
+  function abrirIngrediente(ing: { id: number; nome: string }) {
+    setIngModal(ing); setPratosDoIng(null)
+    getPratosPorIngrediente(ing.id).then(setPratosDoIng)
+  }
 
   const temSerie = serieIndice.length >= 2
 
@@ -235,14 +261,6 @@ export default function Dashboard() {
                     className="text-xs text-dim hover:text-ink mt-2 cursor-pointer">limpar ({regioes.size})</button>
                 )}
               </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-faint mb-2">Ordenar por</p>
-                <Select value={ordem} onChange={e => setOrdem(e.target.value as OrdemKey)} className="mt-0">
-                  <option value="custo">Custo</option>
-                  <option value="nome">Nome</option>
-                  <option value="regiao">Região</option>
-                </Select>
-              </div>
               {isAdmin && (
                 <div className="border-t border-border pt-4 text-xs text-dim">
                   <p className="mb-1.5">Período do cálculo</p>
@@ -279,15 +297,21 @@ export default function Dashboard() {
                   )}
                 </p>
               </Card>
-              <Card className="p-4">
+              <Card className={`p-4 ${maisCaro ? 'cursor-pointer hover:bg-surface-2 transition-colors' : ''}`}
+                onClick={() => maisCaro && setSelecionado(maisCaro)}
+                title={maisCaro ? 'Ver os ingredientes deste prato' : undefined}>
                 <p className="text-[0.7rem] uppercase tracking-[0.12em] text-dim">Prato mais caro</p>
                 <p className="text-lg font-bold tracking-tight mt-1 truncate">{maisCaro ? limparNome(maisCaro.pratos.nome) : '—'}</p>
                 <p className="text-xs text-dim mt-1.5 tnum">{maisCaro ? `${brl(maisCaro.custo_total * fator)} · ${maisCaro.pratos.regiao}` : ''}</p>
+                {maisCaro && <p className="text-[0.7rem] text-accent mt-1">ver ingredientes →</p>}
               </Card>
-              <Card className="p-4">
+              <Card className={`p-4 ${maisBarato ? 'cursor-pointer hover:bg-surface-2 transition-colors' : ''}`}
+                onClick={() => maisBarato && setSelecionado(maisBarato)}
+                title={maisBarato ? 'Ver os ingredientes deste prato' : undefined}>
                 <p className="text-[0.7rem] uppercase tracking-[0.12em] text-dim">Prato mais barato</p>
                 <p className="text-lg font-bold tracking-tight mt-1 truncate">{maisBarato ? limparNome(maisBarato.pratos.nome) : '—'}</p>
                 <p className="text-xs text-dim mt-1.5 tnum">{maisBarato ? `${brl(maisBarato.custo_total * fator)} · ${maisBarato.pratos.regiao}` : ''}</p>
+                {maisBarato && <p className="text-[0.7rem] text-accent mt-1">ver ingredientes →</p>}
               </Card>
             </div>
 
@@ -360,19 +384,27 @@ export default function Dashboard() {
             )}
 
             {/* tabela de pratos */}
-            <div>
-              <div className="flex items-baseline justify-between gap-3 mb-3">
+            <div id="tabela-pratos">
+              <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
                 <h2 className="font-bold tracking-tight text-xl">Pratos</h2>
-                <p className="text-xs text-dim">{snapshot ? `coleta de ${fmtData(snapshot.data)}` : ''}</p>
+                <div className="flex items-center gap-3">
+                  {filtroIng && (
+                    <button onClick={() => setFiltroIng(null)}
+                      className="text-xs bg-accent/10 text-accent border border-accent/30 rounded-full px-2.5 py-1 hover:bg-accent/20 transition-colors cursor-pointer">
+                      com {filtroIng.nome} · limpar ×
+                    </button>
+                  )}
+                  <p className="text-xs text-dim">{snapshot ? `coleta de ${fmtData(snapshot.data)}` : ''}</p>
+                </div>
               </div>
               <Card className="overflow-hidden">
                 <table className="w-full text-[0.95rem]">
                   <thead>
-                    <tr className="text-left text-xs uppercase tracking-wide text-dim border-b border-border">
-                      <th className="font-medium px-4 py-3">Prato</th>
-                      <th className="font-medium px-4 py-3 hidden sm:table-cell">Região</th>
-                      <th className="font-medium px-4 py-3 text-right">Custo</th>
-                      {temSerie && <th className="font-medium px-4 py-3 text-right hidden md:table-cell">Δ última</th>}
+                    <tr className="text-left text-xs uppercase tracking-wide text-dim border-b border-border select-none">
+                      <Th onClick={() => toggleSort('nome')} ativa={sort.col === 'nome'} dir={sort.dir}>Prato</Th>
+                      <Th onClick={() => toggleSort('regiao')} ativa={sort.col === 'regiao'} dir={sort.dir} className="hidden sm:table-cell">Região</Th>
+                      <Th onClick={() => toggleSort('custo')} ativa={sort.col === 'custo'} dir={sort.dir} right>Custo</Th>
+                      {temSerie && <Th onClick={() => toggleSort('delta')} ativa={sort.col === 'delta'} dir={sort.dir} right className="hidden md:table-cell">Δ última</Th>}
                       {temSerie && <th className="font-medium px-4 py-3 text-right hidden lg:table-cell">Tendência</th>}
                     </tr>
                   </thead>
@@ -413,7 +445,7 @@ export default function Dashboard() {
 
             {/* produtos por região (premium; gating real na Fase 8) */}
             {produtosRegiao.length > 0 && (
-              <TabelaProdutosRegiao linhas={produtosRegiao} destravada={isAdmin} />
+              <TabelaProdutosRegiao linhas={produtosRegiao} destravada={isAdmin} onIngrediente={abrirIngrediente} />
             )}
           </section>
         </div>
@@ -426,6 +458,56 @@ export default function Dashboard() {
           dataColeta={snapshot.data}
           onClose={() => setSelecionado(null)} />
       )}
+
+      {/* pratos que usam o ingrediente clicado em "Produtos por região" */}
+      {ingModal && (
+        <Modal title={`Pratos com ${ingModal.nome}`} onClose={() => setIngModal(null)}>
+          {!pratosDoIng ? (
+            <p className="text-sm text-dim py-4">Carregando…</p>
+          ) : !pratosDoIng.length ? (
+            <p className="text-sm text-dim py-4">Nenhum prato usa este produto.</p>
+          ) : (
+            <>
+              <p className="text-xs text-dim mb-3">{pratosDoIng.length} prato{pratosDoIng.length === 1 ? '' : 's'} usa{pratosDoIng.length === 1 ? '' : 'm'} este produto.</p>
+              <div className="space-y-1.5 mb-4">
+                {pratosDoIng.map(p => {
+                  const custo = custos.find(c => c.pratos.id === p.prato_id)
+                  return (
+                    <div key={p.prato_id} className="flex items-center gap-2 text-sm border border-border rounded-[var(--r-sm)] px-3 py-2">
+                      <span className="truncate flex-1">{limparNome(p.nome)}</span>
+                      <span className="text-xs text-dim shrink-0">{p.regiao} · {p.qtd_g}g</span>
+                      {custo && <span className="tnum font-medium shrink-0">{brl(custo.custo_total * fator)}</span>}
+                    </div>
+                  )
+                })}
+              </div>
+              <button
+                onClick={() => {
+                  setFiltroIng({ nome: ingModal.nome, ids: new Set(pratosDoIng.map(p => p.prato_id)) })
+                  setIngModal(null)
+                  document.getElementById('tabela-pratos')?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                className="w-full inline-flex items-center justify-center rounded-[var(--r-sm)] px-4 py-2 text-sm font-medium bg-accent text-white hover:brightness-110 transition cursor-pointer">
+                Mostrar só esses pratos na tabela
+              </button>
+            </>
+          )}
+        </Modal>
+      )}
     </main>
+  )
+}
+
+function Th({ children, onClick, ativa, dir, right = false, className = '' }: {
+  children: React.ReactNode; onClick: () => void; ativa: boolean; dir: 1 | -1
+  right?: boolean; className?: string
+}) {
+  return (
+    <th className={`font-medium px-4 py-3 ${right ? 'text-right' : ''} ${className}`}>
+      <button onClick={onClick}
+        className={`uppercase tracking-wide cursor-pointer hover:text-ink transition-colors ${ativa ? 'text-ink' : ''}`}>
+        {children}{ativa ? (dir === 1 ? ' ▲' : ' ▼') : ''}
+      </button>
+    </th>
   )
 }
