@@ -15,7 +15,8 @@ const X = () => (
 // layout do mockup (renderPublicPlans)
 export default function PlanosPage() {
   return (
-    <main className="max-w-3xl mx-auto px-6 py-10">
+    <main className="site-main" style={{ marginTop: 0, paddingTop: 40 }}>
+      <div style={{ maxWidth: 820, margin: '0 auto' }}>
       <h1 className="text-2xl font-extrabold tracking-tight mb-1">Planos</h1>
       <p className="hint">O índice é público. O Premium destrava o detalhamento por produto.</p>
 
@@ -44,6 +45,7 @@ export default function PlanosPage() {
           </ul>
           <a href="/assinar" className="btn-mk primary w-full justify-center">Assinar Premium →</a>
         </div>
+      </div>
       </div>
     </main>
   )
