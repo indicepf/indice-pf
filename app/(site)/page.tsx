@@ -405,7 +405,7 @@ export default function Dashboard() {
                 <div>
                   <h4>Como coletamos estes dados</h4>
                   <p>
-                    Combinamos coleta automática no varejo online (2× por mês), leituras manuais da equipe e
+                    Combinamos coleta automática semanal no varejo online, leituras manuais da equipe e
                     <b> fotos de preços enviadas por usuários</b>, validadas uma a uma. Os níveis Mercado e
                     Atacarejo são estimativas sobre o preço online, em calibração com os dados de campo.
                     Metodologia aberta em <a href="/metodologia" className="underline">/metodologia</a>.
@@ -508,7 +508,7 @@ export default function Dashboard() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-dim py-8 text-center">O gráfico aparece a partir da 2ª coleta do recorte. Coletas nos dias 1 e 15.</p>
+                  <p className="text-sm text-dim py-8 text-center">O gráfico aparece a partir da 2ª coleta do recorte. Coletas toda segunda-feira.</p>
                 )}
               </div>
             </div>
