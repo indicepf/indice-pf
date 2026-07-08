@@ -13,12 +13,12 @@ import { inputBase } from '@/components/ui'
 import type { ItemDetalhe, Fonte } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
 import BotaoExportar from './BotaoExportar'
-import BotaoInicio from '../BotaoInicio'
-import InfoTip from '../InfoTip'
-import AuthControls from '../Auth'
-import RequireAdmin from '../RequireAdmin'
+import BotaoInicio from '../../BotaoInicio'
+import InfoTip from '../../InfoTip'
+import AuthControls from '../../Auth'
+import RequireAdmin from '../../RequireAdmin'
 
-const MapaLocal = dynamic(() => import('../MapaLocal'), { ssr: false, loading: () => <div className="h-[440px] grid place-items-center text-dim text-sm">Carregando mapa…</div> })
+const MapaLocal = dynamic(() => import('../../MapaLocal'), { ssr: false, loading: () => <div className="h-[440px] grid place-items-center text-dim text-sm">Carregando mapa…</div> })
 
 // keys herdadas da V0 (paprika/olive) mapeadas para a paleta V1 de lib/theme;
 // renomear junto com a reescrita da Fase 5

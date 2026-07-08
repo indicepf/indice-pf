@@ -7,8 +7,8 @@ import {
   type LinhaIngrediente, type FonteManual,
 } from '@/lib/queries'
 import type { Fonte } from '@/lib/types'
-import ModalFontes from '../ModalFontes'
-import InfoTip from '../InfoTip'
+import ModalFontes from '../../ModalFontes'
+import InfoTip from '../../InfoTip'
 import BotaoExportar from './BotaoExportar'
 import { brl } from '@/lib/format'
 
