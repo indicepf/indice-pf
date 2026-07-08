@@ -97,8 +97,9 @@
   <h2 id="scraping">3. Coleta de dados (scraping) — detalhado</h2>
   <p>
     Todo o processo de coleta vive em <code>scraper_pf.py</code>. Ele não faz scraping de HTML diretamente — usa a
-    <strong>SerpAPI</strong> como intermediária, que já estrutura os resultados do Google Shopping em JSON. A chave
-    da API está hardcoded no topo do arquivo (ver seção de segurança).
+    <strong>SerpAPI</strong> como intermediária, que já estrutura os resultados do Google Shopping em JSON. As chaves
+    da API vêm das variáveis de ambiente <code>SERPAPI_KEY</code>/<code>_2</code>/<code>_3</code> (secrets do GitHub),
+    com rotação automática entre as contas quando uma esgota a cota.
   </p>
 
   <h3>3.1 Catálogo de 27 ingredientes</h3>
@@ -218,13 +219,24 @@
   </p>
 
   <h2 id="automacao">7. Automação (GitHub Actions)</h2>
-  <p>O workflow <code>.github/workflows/scraper-semanal.yml</code> roda:</p>
+  <p>O workflow <code>.github/workflows/scraper-semanal.yml</code> roda (atualizado em 08/07/2026):</p>
   <ul>
-    <li><strong>Agendamento:</strong> dias 1 e 15 às 11h UTC (8h em Brasília) — <code>cron: '0 11 1,15 * *'</code> = 2 coletas/mês (198 chamadas, dentro do plano gratuito SerpAPI de 250).</li>
-    <li><strong>Disparo manual:</strong> via <code>workflow_dispatch</code>, pela aba Actions do GitHub</li>
-    <li><strong>Passos:</strong> checkout → Python 3.11 + <code>requests</code>/<code>python-dotenv</code> → <code>scraper_pf.py</code> → <code>salvar_supabase.py</code> → <code>calcular_custos_pratos.py</code>. (O passo legado <code>limpar_simulados.py</code> foi removido — preservaria os dados antigos.)</li>
-    <li><strong>Segredos usados:</strong> <code>SUPABASE_URL</code>, <code>SUPABASE_KEY</code> (service role), <code>SERPAPI_KEY</code> — todos do projeto novo.</li>
+    <li><strong>Agendamento:</strong> <u>toda segunda-feira</u> às 11h UTC (8h em Brasília) — <code>cron: '0 11 * * 1'</code> = 4–5 coletas/mês. Antes eram 2 coletas/mês (dias 1 e 15); a cadência semanal foi pedida pelo responsável em 08/07/2026.</li>
+    <li><strong>Cota:</strong> ~115 ingredientes × 4–5 coletas = 460–575 chamadas/mês. São <strong>3 contas SerpAPI</strong> nos secrets (<code>SERPAPI_KEY</code>, <code>SERPAPI_KEY_2</code>, <code>SERPAPI_KEY_3</code> = 750 chamadas grátis/mês) e o scraper rotaciona automaticamente para a próxima conta quando uma esgota (401/429/cota). Folga de ~175 chamadas para rodadas manuais.</li>
+    <li><strong>Disparo manual:</strong> via <code>workflow_dispatch</code>, pela aba Actions do GitHub — modo <code>faltantes</code> (default; só raspa o que não veio nos últimos 6 dias e soma ao último snapshot) ou <code>completo</code> (raspa os 115).</li>
+    <li><strong>Passos:</strong> checkout → Python 3.11 + <code>requests</code>/<code>python-dotenv</code> → <code>scraper_pf.py</code> → <code>salvar_supabase.py</code>. <code>calcular_custos_pratos.py</code> <strong>não roda mais no workflow</strong>: a coleta fica em staging e só entra no índice após aprovação em /admin → Coleta.</li>
+    <li><strong>Segredos usados:</strong> <code>SUPABASE_URL</code>, <code>SUPABASE_KEY</code> (service role), <code>SERPAPI_KEY</code>, <code>SERPAPI_KEY_2</code>, <code>SERPAPI_KEY_3</code>.</li>
+    <li><strong>Temporário:</strong> há um cron extraordinário <code>0 11 9 7 *</code> (coleta única de 09/07/2026) a remover após rodar.</li>
   </ul>
+  <div class="note">
+    <p><strong>Para mudar a frequência da coleta:</strong> solicite a alteração — não basta editar o cron. Uma mudança de
+    cadência envolve três pontos que precisam andar juntos: (1) o <code>cron</code> do workflow; (2) a cota da SerpAPI —
+    cada coleta completa gasta ~115 chamadas e o teto atual é 750/mês com 3 contas; se a nova cadência estourar isso,
+    é preciso criar outra conta e adicionar <code>SERPAPI_KEY_4</code> aos secrets e ao workflow; e (3) os textos do
+    site que citam a frequência (banner "Como coletamos estes dados" e o aviso do gráfico na home). Lembrete: com o
+    staging, cada coleta também exige <strong>aprovação manual em /admin → Coleta</strong> — mais coletas = mais
+    aprovações.</p>
+  </div>
 
   <h2 id="frontend">8. Frontend (Next.js)</h2>
   <p>
@@ -291,10 +303,9 @@
     garrafa, queijos prato/mussarela, fubá/flocão, extrato/molho de tomate, pimenta, etc.).
   </p>
   <p>
-    Resultado: de 404 nomes brutos para <strong>99 ingredientes-base</strong> (termos de busca distintos), o que
-    permite <strong>2 coletas completas por mês</strong> dentro do plano gratuito. Optou-se por preservar todos os
-    ingredientes regionais (sem descartar itens de nicho), aceitando a cadência mensal menor em troca de dados
-    completos.
+    Resultado: de 404 nomes brutos para <strong>99 ingredientes-base</strong> (termos de busca distintos). Com as
+    3 contas SerpAPI (750 chamadas/mês) isso permite a <strong>coleta semanal completa</strong> (ver §7). Optou-se por
+    preservar todos os ingredientes regionais (sem descartar itens de nicho) em troca de dados completos.
   </p>
   <p>
     O gerador <code>scripts/gerar_tabela_canonica.py</code> valida que os 404 estão 100% cobertos, que as proporções
