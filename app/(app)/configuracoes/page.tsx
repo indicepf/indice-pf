@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, usuarioDoStorage } from '@/lib/supabase'
 import {
-  getProfile, getRecompensa, getDadosRecompensa, salvarDadosRecompensa, solicitarSaque, getMeusSaques,
+  getProfile, getRecompensa, getDadosRecompensa, salvarDadosRecompensa, solicitarSaque, getMeusSaques, comRetry,
 } from '@/lib/queries'
 import { REGIOES, SEXOS, idade, mascararTel, telValido, mascararCpf, cpfValido, brl, SAQUE_MINIMO } from '@/lib/format'
 import { Badge, Button, Input, Select, Tabs, type BadgeTone } from '@/components/ui'
@@ -50,6 +50,8 @@ export default function ConfiguracoesPage() {
   const [recMsg, setRecMsg] = useState('')
   const [recErro, setRecErro] = useState('')
   const [recBusy, setRecBusy] = useState(false)
+  const [erroCarga, setErroCarga] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
 
   // sessão garantida pelo layout do shell — aqui só resolve o uid
   useEffect(() => {
@@ -64,22 +66,28 @@ export default function ConfiguracoesPage() {
   useEffect(() => {
     if (!userId) return
     let cancelado = false
+    setErroCarga(false)
     ;(async () => {
-      const [p, r, dr, sq] = await Promise.all([
-        getProfile(userId), getRecompensa(userId), getDadosRecompensa(userId), getMeusSaques(userId),
-      ])
-      if (cancelado) return
-      setNome(p?.nome ?? ''); setTel(p?.telefone ?? ''); setRegiao(p?.regiao ?? '')
-      setSexo(p?.sexo ?? ''); setDataNasc(p?.data_nascimento ?? '')
-      setAvatarUrl(p?.avatar_url ?? null)
-      setRec(r); setSaques(sq)
-      if (dr) {
-        if (dr.cpf) { setCpf(mascararCpf(dr.cpf)); setConsent(true) }
-        setChavePix(dr.chave_pix ?? '')
+      try {
+        const [p, r, dr, sq] = await Promise.all([
+          comRetry(() => getProfile(userId)), comRetry(() => getRecompensa(userId)),
+          comRetry(() => getDadosRecompensa(userId)), comRetry(() => getMeusSaques(userId)),
+        ])
+        if (cancelado) return
+        setNome(p?.nome ?? ''); setTel(p?.telefone ?? ''); setRegiao(p?.regiao ?? '')
+        setSexo(p?.sexo ?? ''); setDataNasc(p?.data_nascimento ?? '')
+        setAvatarUrl(p?.avatar_url ?? null)
+        setRec(r); setSaques(sq)
+        if (dr) {
+          if (dr.cpf) { setCpf(mascararCpf(dr.cpf)); setConsent(true) }
+          setChavePix(dr.chave_pix ?? '')
+        }
+      } catch {
+        if (!cancelado) setErroCarga(true)
       }
     })()
     return () => { cancelado = true }
-  }, [userId])
+  }, [userId, tentativa])
 
   async function salvarRecDados() {
     setRecErro(''); setRecMsg('')
@@ -148,6 +156,13 @@ export default function ConfiguracoesPage() {
       <Tabs className="mb-6"
         tabs={[['dados', 'Dados'], ['recompensas', 'Recompensas']] as const}
         active={aba} onChange={setAba} />
+
+      {erroCarga && (
+        <div className="mb-4 border border-danger/40 bg-danger-bg text-sm rounded-[var(--r-sm)] px-4 py-3 flex items-center justify-between gap-3">
+          <span>Não foi possível carregar seus dados.</span>
+          <button className="btn-mk sm" onClick={() => setTentativa(t => t + 1)}>Tentar de novo</button>
+        </div>
+      )}
 
       {aba === 'dados' && (
       <section>

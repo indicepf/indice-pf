@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { supabase, usuarioDoStorage } from '@/lib/supabase'
-import { getMinhasContribuicoes, excluirContribuicao } from '@/lib/queries'
+import { getMinhasContribuicoes, excluirContribuicao, comRetry } from '@/lib/queries'
 import type { Contribuicao } from '@/lib/types'
 import { Badge, type BadgeTone } from '@/components/ui'
 import { chip } from '../../BotaoInicio'
@@ -31,7 +31,9 @@ export default function MeusEnviosPage() {
     if (u) { setUserId(u.id); return }
     supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user?.id ?? null))
   }, [])
-  useEffect(() => { if (userId) getMinhasContribuicoes(userId).then(setContribs) }, [userId])
+  useEffect(() => {
+    if (userId) comRetry(() => getMinhasContribuicoes(userId)).then(setContribs).catch(() => setContribs([]))
+  }, [userId])
 
   async function deletar(id: number) {
     if (!confirm('Excluir esta contribuição?')) return

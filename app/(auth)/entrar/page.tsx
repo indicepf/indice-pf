@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { entrar } from '@/lib/auth-actions'
-import { getProfile } from '@/lib/queries'
+import { getProfile, comRetry } from '@/lib/queries'
 import { perfilCompleto } from '@/app/useAuth'
 
 export default function EntrarPage() {
@@ -23,8 +23,10 @@ function EntrarInner() {
     setErro(''); setBusy(true)
     const r = await entrar(email, senha)
     if (r.erro || !r.uid) { setBusy(false); setErro(r.erro ?? 'Falha ao entrar.'); return }
-    const p = await getProfile(r.uid)
-    router.replace(perfilCompleto(p) ? next : `/completar-perfil?next=${encodeURIComponent(next)}`)
+    const uid = r.uid
+    // falha na busca do perfil não trava o login — segue para o destino
+    const p = await comRetry(() => getProfile(uid)).catch(() => undefined)
+    router.replace(p === undefined || perfilCompleto(p) ? next : `/completar-perfil?next=${encodeURIComponent(next)}`)
   }
 
   return (
