@@ -11,7 +11,8 @@ import {
   getStatsPublicas, getSeriePratos, getPrecosPorRegiao, getPratosPorIngrediente, getSerieIngrediente,
   type FonteManual, type StatsPublicas, type SeriePratos, type ProdutoRegiao, type PratoDeIngrediente, type PontoIngrediente,
 } from '@/lib/queries'
-import { NIVEIS_PRECO, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
+import { NIVEIS_PRECO, MODOS, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
+import { INF_PATH } from '@/components/site/Logo'
 import { mediana } from '@/lib/stats'
 import { CORES_REGIAO, COR_ALTA, COR_QUEDA, DIM, NIVEL_HEX } from '@/lib/theme'
 import Sparkline from '@/components/dashboard/Sparkline'
@@ -24,6 +25,22 @@ import OrientPopup from '@/components/site/OrientPopup'
 import type { ModoKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
+
+// ícones dos grupos de filtro (mockup usa emoji; decisão de 08/07: SVG equivalente)
+const ico = (d: string, size = 12) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+)
+const ICO = {
+  gear: ico('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.4 7.4 0 0 0-2-1.2L14.5 3h-5l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a7.4 7.4 0 0 0 2 1.2l.4 2.6h5l.4-2.6a7.4 7.4 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z', 14),
+  search: ico('M21 21l-4.3-4.3M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z'),
+  coin: ico('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm3-11.5c0-1.4-1.3-2.5-3-2.5s-3 1.1-3 2.5 1.3 2.5 3 2.5 3 1.1 3 2.5-1.3 2.5-3 2.5-3-1.1-3-2.5M12 5.5V7m0 10v1.5'),
+  pin: ico('M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0zm-5 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0z'),
+  cal: ico('M8 2v4M16 2v4M3 8h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z'),
+  share: ico('M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7', 14),
+  lock: ico('M5 11h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zm3 0V7a4 4 0 0 1 8 0v4', 24),
+  info: ico('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-13.5v.5m0 3v5', 16),
+}
 
 type ColunaSort = 'nome' | 'regiao' | 'custo' | 'delta'
 
@@ -51,6 +68,8 @@ export default function Dashboard() {
   const [serieIng, setSerieIng] = useState<PontoIngrediente[] | null>(null)
   const [filtroIng, setFiltroIng] = useState<{ nome: string; ids: Set<number> } | null>(null)
   const [share, setShare] = useState(false)
+  const [comparar, setComparar] = useState(false)                          // toggle do mockup: linha da coleta anterior + coluna "ant."
+  const [legendOff, setLegendOff] = useState<Set<string>>(new Set())       // legenda clicável do gráfico geral
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]> | null>(null)
   const [fontes, setFontes]     = useState<Record<number, Fonte[]>>({})
   const [fontesManuais, setFontesManuais] = useState<Record<number, FonteManual[]>>({})
@@ -127,7 +146,9 @@ export default function Dashboard() {
     return serie.snaps.map((s, i) => {
       const vals = serie.pratos.filter(p => idsRecorte.has(p.id))
         .map(p => serie.custos[p.id]?.[i]).filter((v): v is number => v != null && v > 0)
-      const row: Record<string, number | string> = { data: fmtCurta(s.data), indice: +(mediana(vals) * fator).toFixed(2) }
+      const med = mediana(vals)
+      const row: Record<string, number | string> = { data: fmtCurta(s.data), indice: +(med * fator).toFixed(2) }
+      for (const n of MODOS) row[n.key] = +(med * (1 - n.desc)).toFixed(2)   // uma linha por nível (legenda clicável)
       for (const r of REGIOES) {
         const vr = serie.pratos.filter(p => p.regiao === r).map(p => serie.custos[p.id]?.[i])
           .filter((v): v is number => v != null && v > 0)
@@ -145,6 +166,24 @@ export default function Dashboard() {
     return a > 0 ? (b - a) / a * 100 : null
   }, [serieIndice])
 
+  // comparar com período anterior: valor da coleta anterior como linha tracejada
+  const chartGeral = useMemo(() => {
+    if (!comparar) return serieIndice
+    return serieIndice.map((row, i) => ({ ...row, anterior: i > 0 ? serieIndice[i - 1][modo] : null }))
+  }, [serieIndice, comparar, modo])
+
+  // Δ% do índice desde a 1ª coleta do histórico (linha secundária do KPI)
+  const deltaTotal = useMemo(() => {
+    if (serieIndice.length < 2) return null
+    const a = serieIndice[0].indice as number
+    const b = serieIndice[serieIndice.length - 1].indice as number
+    return a > 0 ? (b - a) / a * 100 : null
+  }, [serieIndice])
+
+  function toggleLegend(key: string) {
+    setLegendOff(prev => { const nx = new Set(prev); if (nx.has(key)) nx.delete(key); else nx.add(key); return nx })
+  }
+
   const movers = useMemo(() => {
     if (!serie || serie.snaps.length < 2) return null
     const n = serie.snaps.length
@@ -158,13 +197,18 @@ export default function Dashboard() {
   }, [serie, idsRecorte])
 
   const porPrato = useMemo(() => {
-    const out: Record<number, { delta: number | null; serie: (number | null)[] }> = {}
+    const out: Record<number, { delta: number | null; deltaAnt: number | null; serie: (number | null)[] }> = {}
     if (!serie) return out
     const n = serie.snaps.length
     for (const p of serie.pratos) {
       const arr = serie.custos[p.id] || []
       const ant = n >= 2 ? arr[n - 2] : null, atual = arr[n - 1]
-      out[p.id] = { delta: ant != null && atual != null && ant > 0 ? (atual - ant) / ant * 100 : null, serie: arr }
+      const ant2 = n >= 3 ? arr[n - 3] : null   // coleta anterior à anterior (toggle comparar)
+      out[p.id] = {
+        delta: ant != null && atual != null && ant > 0 ? (atual - ant) / ant * 100 : null,
+        deltaAnt: ant2 != null && ant != null && ant2 > 0 ? (ant - ant2) / ant2 * 100 : null,
+        serie: arr,
+      }
     }
     return out
   }, [serie])
@@ -233,11 +277,14 @@ export default function Dashboard() {
       <AdPopup />
 
       {/* ===== HERO (gradiente da marca, como no mockup) ===== */}
-      <section className="hero-mk">
-        <div className="max-w-6xl mx-auto px-6 pt-11 pb-14 relative z-[1] flex items-center gap-12 justify-between flex-wrap">
-          <div className="flex-1 min-w-0">
-            <h1>O <span className="underline decoration-white/40 underline-offset-4">custo de produção</span> do Prato Feito brasileiro</h1>
-            <p className="hero-p">
+      <section className="hero">
+        <div className="hero-inf">
+          <svg viewBox="0 0 100 50" style={{ width: '100%', height: '100%' }} aria-hidden="true"><path fill="#fff" d={INF_PATH} /></svg>
+        </div>
+        <div className="hero-inner">
+          <div className="hero-copy">
+            <h1>O <span className="em">custo de produção</span> do Prato Feito brasileiro</h1>
+            <p>
               Acompanhe, coleta a coleta, quanto custa produzir a comida de verdade — do preço online ao
               atacarejo — em todas as regiões do Brasil.
             </p>
@@ -254,26 +301,26 @@ export default function Dashboard() {
             )}
           </div>
           {/* retângulo de publicidade do hero (mockup) */}
-          <div className="w-[300px] shrink-0 max-lg:hidden"><AdSlot slot="hero-lado" /></div>
+          <div className="hero-ad"><AdSlot slot="hero-lado" /></div>
         </div>
       </section>
 
-      <div className="max-w-6xl mx-auto px-6 py-6">
-        <AdSlot slot="hero" className="mb-6" />
+      <div className="site-main">
+        <AdSlot slot="hero" className="mb-[22px]" />
 
-        <div className="grid lg:grid-cols-[264px_1fr] gap-[22px] items-start">
+        <div className="layout">
           {/* ===== FILTROS (painel do mockup) ===== */}
-          <aside className="filters-mk">
+          <aside className="filters">
             <div className="filters-head">
-              <h3>Filtros</h3>
+              <h3>{ICO.gear} Filtros</h3>
               <span className="clr" onClick={() => { setRegioes(new Set()); setBusca(''); setFiltroIng(null); setPendIni(''); setPendFim(''); setIni(''); setFim('') }}>Limpar</span>
             </div>
             <div className="f-group">
-              <div className="f-label">Busca</div>
-              <input className="f-search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Prato..." />
+              <div className="f-label">{ICO.search} Busca</div>
+              <input className="f-search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Prato ou produto..." />
             </div>
             <div className="f-group">
-              <div className="f-label">Nível de preço</div>
+              <div className="f-label">{ICO.coin} Nível de preço</div>
               <div className="seg">
                 {NIVEIS_PRECO.map(n => (
                   <button key={n.key} disabled={!n.disponivel}
@@ -286,15 +333,15 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="f-group">
-              <div className="f-label">Região</div>
-              <div className="region-bar">
+              <div className="f-label">{ICO.pin} Região</div>
+              <div className="seg">
                 {REGIOES.map(r => (
                   <button key={r} className={regioes.has(r) ? 'on' : ''} onClick={() => toggleRegiao(r)}>{r}</button>
                 ))}
               </div>
             </div>
             <div className="f-group">
-              <div className="f-label">Período</div>
+              <div className="f-label">{ICO.cal} Período</div>
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap gap-1.5">
                   {([['7d', 7], ['15d', 15], ['30d', 30], ['3m', 90], ['Tudo', 0]] as const).map(([label, d]) => (
@@ -307,6 +354,10 @@ export default function Dashboard() {
                 <button className={`btn-mk sm ${periodoPendente ? 'primary' : ''}`} onClick={aplicarPeriodo} disabled={!periodoPendente}>
                   {periodoPendente ? 'Aplicar período' : nColetasHome > 1 ? `${nColetasHome} coletas no período ✓` : 'Período aplicado ✓'}
                 </button>
+                <div className="cmp-toggle" onClick={() => setComparar(c => !c)}>
+                  <div className={`switch ${comparar ? 'on' : ''}`} />
+                  <span>Comparar com período anterior</span>
+                </div>
               </div>
             </div>
             <div className="f-group">
@@ -315,11 +366,11 @@ export default function Dashboard() {
           </aside>
 
           {/* ===== CONTEÚDO ===== */}
-          <div className="flex flex-col gap-[22px] min-w-0">
+          <div className="content">
             {/* banner de metodologia (mockup) */}
             {banner && (
               <div className="method-banner">
-                <div>i</div>
+                <div className="mb-ico">{ICO.info}</div>
                 <div>
                   <h4>Como coletamos estes dados</h4>
                   <p>
@@ -333,9 +384,10 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* KPIs — um por nível de preço (estrutura do mockup) */}
+            {/* KPIs — um por nível de preço; scorecard composto (decisão de 08/07):
+                variação % como número principal + valor em R$ no canto inferior direito */}
             <div className="grid sm:grid-cols-3 gap-[14px]">
-              {NIVEIS_PRECO.filter(n => n.disponivel).map(n => {
+              {MODOS.map(n => {
                 const f = 1 - n.desc
                 const cls = deltaIndice == null ? 'flat' : deltaIndice > 0.05 ? 'up' : deltaIndice < -0.05 ? 'down' : 'flat'
                 const arrow = cls === 'up' ? '▲' : cls === 'down' ? '▼' : '▬'
@@ -346,10 +398,15 @@ export default function Dashboard() {
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: NIVEL_HEX[n.key], display: 'inline-block' }} />
                       {n.label}
                     </div>
-                    <div className="kval tnum">{brl(indice * f)}</div>
-                    <div className={`ktrend ${cls}`}>
-                      {arrow} {deltaIndice != null ? `${deltaIndice > 0 ? '+' : ''}${deltaIndice.toFixed(1)}% vs coleta anterior` : 'primeira coleta do recorte'}
+                    <div className="kval tnum">
+                      {deltaIndice != null ? `${deltaIndice > 0 ? '+' : ''}${deltaIndice.toFixed(2)}%` : '—'}
                     </div>
+                    <div className={`ktrend ${cls}`}>
+                      {deltaIndice != null ? <>{arrow} coleta · <span style={{ color: 'var(--dim)', fontWeight: 600 }}>
+                        {deltaTotal != null ? `${deltaTotal > 0 ? '+' : ''}${deltaTotal.toFixed(1)}% desde a 1ª` : '—'}
+                      </span></> : 'primeira coleta do recorte'}
+                    </div>
+                    <div className="kbrl tnum">{brl(indice * f)}</div>
                   </button>
                 )
               })}
@@ -360,9 +417,9 @@ export default function Dashboard() {
             <div className="panel">
               <div className="panel-head">
                 <div>
-                  <h2>Índice PF Geral{regioes.size > 0 && (
-                    <span className="premium-tag" style={{ background: 'var(--info-bg)', color: 'var(--azul)' }}>{rotuloRecorte}</span>
-                  )}</h2>
+                  <h2>Índice PF Geral <span className="premium-tag" style={{ background: 'var(--info-bg)', color: 'var(--azul)' }}>
+                    {regioes.size > 0 ? rotuloRecorte : 'Brasil · nacional'}
+                  </span></h2>
                   <div className="sub">Mediana dos {custosRegiao.length} pratos · coleta a coleta{snapshot ? ` · última em ${fmtData(snapshot.data)}` : ''}</div>
                 </div>
                 <div className="panel-tools">
@@ -379,24 +436,46 @@ export default function Dashboard() {
                       {deltaIndice > 0 ? '+' : ''}{deltaIndice.toFixed(2)}%<small>vs coleta anterior</small>
                     </span>
                   )}
-                  <button className="btn-mk sm" onClick={() => setShare(true)}>Compartilhar</button>
+                  <button className="btn-mk sm" onClick={() => setShare(true)}>{ICO.share} Compartilhar</button>
                 </div>
               </div>
               <div className="panel-body">
                 {temSerie ? (
-                  <div className="h-60">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={serieIndice} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                        <XAxis dataKey="data" tick={{ fontSize: 12, fill: DIM }} />
-                        <YAxis tick={{ fontSize: 12, fill: DIM }} width={52} domain={['auto', 'auto']}
-                          tickFormatter={(v: number) => `R$${v}`} />
-                        <Tooltip formatter={(v) => brl(Number(v))} />
-                        <Line type="monotone" dataKey="indice" name={`Índice — ${rotuloRecorte}`}
-                          stroke={NIVEL_HEX[modo]} strokeWidth={2.5} dot={{ r: 4 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <>
+                    <div className="h-60">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartGeral} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="data" tick={{ fontSize: 12, fill: DIM }} />
+                          <YAxis tick={{ fontSize: 12, fill: DIM }} width={52} domain={['auto', 'auto']}
+                            tickFormatter={(v: number) => `R$${v}`} />
+                          <Tooltip formatter={(v) => brl(Number(v))} />
+                          {MODOS.filter(n => !legendOff.has(n.key)).map(n => (
+                            <Line key={n.key} type="monotone" dataKey={n.key} name={n.label}
+                              stroke={NIVEL_HEX[n.key]} strokeWidth={n.key === modo ? 2.5 : 1.8}
+                              dot={{ r: n.key === modo ? 4 : 3 }} />
+                          ))}
+                          {comparar && (
+                            <Line type="monotone" dataKey="anterior" name="Período anterior"
+                              stroke="var(--dim)" strokeWidth={1.8} strokeDasharray="5 4" dot={false} />
+                          )}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    {/* legenda clicável do mockup: liga/desliga a linha de cada nível */}
+                    <div className="chart-legend">
+                      {MODOS.map(n => (
+                        <div key={n.key} className={`lg ${legendOff.has(n.key) ? 'off' : ''}`} onClick={() => toggleLegend(n.key)}>
+                          <span className="sw" style={{ background: NIVEL_HEX[n.key] }} />{n.label}
+                        </div>
+                      ))}
+                      {comparar && (
+                        <div className="lg" style={{ cursor: 'default' }}>
+                          <span className="sw" style={{ background: 'none', height: 0, borderTop: '2px dashed var(--dim)' }} />Período anterior
+                        </div>
+                      )}
+                    </div>
+                  </>
                 ) : (
                   <p className="text-sm text-dim py-8 text-center">O gráfico aparece a partir da 2ª coleta do recorte. Coletas nos dias 1 e 15.</p>
                 )}
@@ -414,7 +493,12 @@ export default function Dashboard() {
                   <div className="sub">Mediana dos pratos de cada região, no nível {nivel.label}</div>
                 </div>
                 <div className="panel-tools">
-                  <button className="btn-mk sm" onClick={() => setShare(true)}>Compartilhar</button>
+                  {deltaIndice != null && (
+                    <span className={`var-badge ${deltaIndice > 0 ? 'up' : 'down'}`}>
+                      {deltaIndice > 0 ? '+' : ''}{deltaIndice.toFixed(2)}%<small>vs coleta anterior</small>
+                    </span>
+                  )}
+                  <button className="btn-mk sm" onClick={() => setShare(true)}>{ICO.share} Compartilhar</button>
                 </div>
               </div>
               <div className="panel-body">
@@ -470,14 +554,14 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="panel-body">
-                  <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="movers-grid">
                     <div className="mover-col">
                       <h3>Maiores altas</h3>
                       {movers.altas.map((m, i) => (
                         <div key={m.prato.id} className="mover" onClick={() => { const c = custos.find(x => x.pratos.id === m.prato.id); if (c) setSelecionado(c) }}>
                           <div className="rank">{i + 1}</div>
                           <div className="mn">{limparNome(m.prato.nome)}</div>
-                          <Sparkline valores={m.serie} cor={COR_ALTA} />
+                          <span className="spark"><Sparkline valores={m.serie} cor={COR_ALTA} w={74} h={26} /></span>
                           <div className="mp up">+{m.delta.toFixed(1)}%</div>
                         </div>
                       ))}
@@ -489,7 +573,7 @@ export default function Dashboard() {
                         <div key={m.prato.id} className="mover" onClick={() => { const c = custos.find(x => x.pratos.id === m.prato.id); if (c) setSelecionado(c) }}>
                           <div className="rank">{i + 1}</div>
                           <div className="mn">{limparNome(m.prato.nome)}</div>
-                          <Sparkline valores={m.serie} cor={COR_QUEDA} />
+                          <span className="spark"><Sparkline valores={m.serie} cor={COR_QUEDA} w={74} h={26} /></span>
                           <div className="mp down">{m.delta.toFixed(1)}%</div>
                         </div>
                       ))}
@@ -517,7 +601,7 @@ export default function Dashboard() {
                     </button>
                   )}
                   <input className="f-search" style={{ width: 180 }} value={busca} onChange={e => setBusca(e.target.value)} placeholder="Filtrar pratos..." />
-                  <button className="btn-mk sm" onClick={() => setShare(true)}>Compartilhar</button>
+                  <button className="btn-mk sm" onClick={() => setShare(true)} aria-label="Compartilhar">{ICO.share}</button>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -548,6 +632,14 @@ export default function Dashboard() {
                               <td className="max-md:hidden text-right tnum font-semibold"
                                 style={{ color: pp?.delta == null ? undefined : pp.delta > 0 ? COR_ALTA : pp.delta < 0 ? COR_QUEDA : undefined }}>
                                 {pp?.delta == null ? '—' : `${pp.delta > 0 ? '+' : ''}${pp.delta.toFixed(1)}%`}
+                                {comparar && (
+                                  <span className="pct-prev" style={{ justifyContent: 'flex-end' }}>
+                                    <span className="lbl">ant.</span>
+                                    <span className={`pv ${pp?.deltaAnt == null ? 'flat' : pp.deltaAnt > 0 ? 'up' : 'down'}`}>
+                                      {pp?.deltaAnt == null ? '—' : `${pp.deltaAnt > 0 ? '+' : ''}${pp.deltaAnt.toFixed(1)}%`}
+                                    </span>
+                                  </span>
+                                )}
                               </td>
                             )}
                             {temSerie && (
