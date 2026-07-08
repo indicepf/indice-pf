@@ -59,6 +59,24 @@ def _ids_coletados_recentes(dias=6):
     return {p["ingrediente_id"] for p in r.json() if p["ingrediente_id"] is not None}
 
 
+def medianas_coleta_anterior():
+    """Mediana normalizada (R$/g) por ingrediente na coleta mais recente.
+    Usada como referência do filtro anti-alta: preço >50% acima dela é descartado."""
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/snapshots?select=id&order=data.desc&limit=1",
+                     headers=SUPA_HEADERS, timeout=30)
+    r.raise_for_status()
+    snaps = r.json()
+    if not snaps:
+        return {}
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/precos"
+                     f"?select=ingrediente_id,mediana_normalizada&snapshot_id=eq.{snaps[0]['id']}",
+                     headers=SUPA_HEADERS, timeout=30)
+    r.raise_for_status()
+    return {p["ingrediente_id"]: float(p["mediana_normalizada"])
+            for p in r.json()
+            if p["ingrediente_id"] is not None and p["mediana_normalizada"] not in (None, 0)}
+
+
 def carregar_catalogo():
     # ignora só itens de preço fixo (custo_fixo). Itens com preço manual TAMBÉM
     # são raspados: precisamos do preço online para o blend manual×online.
@@ -255,7 +273,7 @@ def _buscar_serp(query):
     return None
 
 
-def buscar_ingrediente(ingrediente, cache):
+def buscar_ingrediente(ingrediente, cache, medianas_ant=None):
     chave = chave_cache(ingrediente)
     if chave in cache:
         print(f"\n💾 {ingrediente['nome']} → cache de hoje")
@@ -305,6 +323,19 @@ def buscar_ingrediente(ingrediente, cache):
             "link":              link,
         })
 
+    # anti-alta: descarta preço >50% acima da mediana do ingrediente na coleta
+    # anterior (provável produto errado/embalagem menor inflando o preço)
+    med_ant = (medianas_ant or {}).get(ingrediente["id"])
+    inflados = 0
+    if med_ant:
+        teto = med_ant * 1.5
+        antes_alta = len(resultados)
+        resultados = [r for r in resultados if r["preco_normalizado"] <= teto]
+        inflados = antes_alta - len(resultados)
+        if inflados:
+            print(f"  🚫 {inflados} descartado(s) por preço >50% acima da coleta anterior "
+                  f"(teto R${teto * 1000:.2f}/kg)")
+
     # sanidade (erro de vírgula) → depois outliers (dispersão)
     antes = len(resultados)
     norm = [r["preco_normalizado"] for r in resultados]
@@ -332,9 +363,18 @@ def main():
     catalogo = carregar_catalogo()
     print(f"📦 {len(catalogo)} ingredientes ativos no catálogo")
 
+    # referência anti-alta: mediana de cada ingrediente na coleta anterior
+    # (lida ANTES desta coleta gravar o snapshot novo)
+    try:
+        medianas_ant = medianas_coleta_anterior()
+        print(f"🛡️  Filtro anti-alta ativo: referência de {len(medianas_ant)} ingredientes da coleta anterior (+50% = descarte)")
+    except Exception as e:
+        medianas_ant = {}
+        print(f"⚠️  Filtro anti-alta desativado (falha ao ler a coleta anterior: {e})")
+
     cache, todos, resumo = carregar_cache(), [], []
     for ing in catalogo:
-        resultados = buscar_ingrediente(ing, cache)
+        resultados = buscar_ingrediente(ing, cache, medianas_ant)
         todos.extend(resultados)
 
         norm = [r["preco_normalizado"] for r in resultados if r["preco_normalizado"]]

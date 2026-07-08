@@ -5,6 +5,8 @@ on:
     # Dias 1 e 15 às 8h (Brasília = 11h UTC) = 2 coletas/mês.
     # 115 ingredientes × 2 = 230 chamadas/mês (2 contas SerpAPI = 500 grátis/mês).
     - cron: '0 11 1,15 * *'
+    # coleta extraordinária pedida pelo responsável para 09/07/2026 — remover depois
+    - cron: '0 11 9 7 *'
   workflow_dispatch:  # permite rodar manualmente pelo GitHub
     inputs:
       modo:
@@ -36,7 +38,7 @@ jobs:
         run: |
           pip install requests python-dotenv
 
-      - name: Coletar, salvar e calcular custos
+      - name: Coletar e salvar (staging — índice só atualiza após aprovação no admin)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -52,11 +54,14 @@ jobs:
           echo "Modo: ${{ github.event.inputs.modo || 'completo (agendado)' }} | FORCE_RESCRAPE='${FORCE_RESCRAPE}' SCRAPE_MERGE='${SCRAPE_MERGE}'"
           python scraper_pf.py
           python salvar_supabase.py
-          python calcular_custos_pratos.py
+          # AUDITORIA ANTES DE INTEGRAR: calcular_custos_pratos NÃO roda mais aqui.
+          # A coleta fica em precos/resultados_brutos, fora do índice, até o admin
+          # revisar (Admin → Dados: variações fortes/entradas) e aprovar em
+          # Admin → Coleta ("Aprovar coleta e integrar ao índice").
 
       - name: Notificar sucesso
         if: success()
-        run: echo "✅ Índice PF atualizado com sucesso em $(date)"
+        run: echo "📋 Coleta em staging — revisar e aprovar em /admin (aba Coleta) para entrar no índice"
 
       - name: Notificar falha
         if: failure()
