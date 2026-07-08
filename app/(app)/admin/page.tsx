@@ -18,6 +18,7 @@ import BotaoInicio, { chip } from '../../BotaoInicio'
 import Painel from './Painel'
 import Auditoria from './Auditoria'
 import SuperAcoes from './SuperAcoes'
+import Anuncios from './Anuncios'
 import StatusColeta from './StatusColeta'
 import AuditoriaDados from './AuditoriaDados'
 
@@ -30,7 +31,7 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'auditoria' | 'coleta' | 'dados' | 'super'>('mod')
+  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'anuncios' | 'auditoria' | 'coleta' | 'dados' | 'super'>('mod')
   const [souSuper, setSouSuper] = useState(false)
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
@@ -272,7 +273,7 @@ export default function AdminPage() {
   const abas: [typeof aba, string][] = [
     ['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`],
     ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`],
-    ['precos', `Preços manuais (${manuais.length})`],
+    ['precos', `Preços manuais (${manuais.length})`], ['anuncios', 'Anúncios'],
     ...(souSuper ? [['coleta', 'Coleta'] as [typeof aba, string], ['dados', 'Dados'] as [typeof aba, string], ['super', 'Ações do super'] as [typeof aba, string]] : []),
   ]
 
@@ -586,6 +587,10 @@ export default function AdminPage() {
               </div>
             )}
         </div>
+      </div>
+      ) : aba === 'anuncios' ? (
+      <div className="max-w-3xl mx-auto px-6 py-8" key="anuncios">
+        <Anuncios />
       </div>
       ) : aba === 'coleta' ? (
       <div className="max-w-3xl mx-auto px-6 py-8" key="coleta">

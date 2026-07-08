@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
@@ -17,6 +17,7 @@ import { ACCENT, CORES_REGIAO, COR_ALTA, COR_QUEDA, DIM } from '@/lib/theme'
 import { Badge, Card, Input, Modal } from '@/components/ui'
 import Sparkline from '@/components/dashboard/Sparkline'
 import TabelaProdutosRegiao from '@/components/dashboard/TabelaProdutosRegiao'
+import AdSlot from '@/components/ads/AdSlot'
 import type { ModoKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
@@ -211,6 +212,7 @@ export default function Dashboard() {
               )}
             </p>
           )}
+          <AdSlot slot="hero" className="mt-6" />
         </section>
 
         <div className="grid lg:grid-cols-[250px_1fr] gap-8 items-start">
@@ -276,6 +278,7 @@ export default function Dashboard() {
                 </div>
               )}
             </Card>
+            <AdSlot slot="lateral" />
           </aside>
 
           {/* conteúdo */}
@@ -383,6 +386,8 @@ export default function Dashboard() {
               </div>
             )}
 
+            <AdSlot slot="billboard" />
+
             {/* tabela de pratos */}
             <div id="tabela-pratos">
               <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
@@ -409,26 +414,34 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lista.map(c => {
+                    {lista.map((c, idx) => {
                       const pp = porPrato[c.pratos.id]
-                      return (
-                        <tr key={c.pratos.id} onClick={() => setSelecionado(c)}
-                          className="border-b border-border/70 last:border-0 hover:bg-surface-2 cursor-pointer transition-colors">
-                          <td className="px-4 py-3">{limparNome(c.pratos.nome)}</td>
-                          <td className="px-4 py-3 text-dim hidden sm:table-cell">{c.pratos.regiao}</td>
-                          <td className="px-4 py-3 text-right font-medium tnum">{brl(c.custo_total * fator)}</td>
-                          {temSerie && (
-                            <td className="px-4 py-3 text-right tnum hidden md:table-cell"
-                              style={{ color: pp?.delta == null ? undefined : pp.delta > 0 ? COR_ALTA : pp.delta < 0 ? COR_QUEDA : undefined }}>
-                              {pp?.delta == null ? '—' : `${pp.delta > 0 ? '+' : ''}${pp.delta.toFixed(1)}%`}
-                            </td>
-                          )}
-                          {temSerie && (
-                            <td className="px-4 py-3 text-right hidden lg:table-cell">
-                              {pp && <Sparkline valores={pp.serie} cor={DIM} />}
-                            </td>
-                          )}
+                      const adRow = idx === 8 ? (
+                        <tr>
+                          <td colSpan={temSerie ? 5 : 3} className="p-0"><AdSlot slot="nativo" className="rounded-none border-x-0" /></td>
                         </tr>
+                      ) : null
+                      return (
+                        <Fragment key={c.pratos.id}>
+                          {adRow}
+                          <tr onClick={() => setSelecionado(c)}
+                            className="border-b border-border/70 last:border-0 hover:bg-surface-2 cursor-pointer transition-colors">
+                            <td className="px-4 py-3">{limparNome(c.pratos.nome)}</td>
+                            <td className="px-4 py-3 text-dim hidden sm:table-cell">{c.pratos.regiao}</td>
+                            <td className="px-4 py-3 text-right font-medium tnum">{brl(c.custo_total * fator)}</td>
+                            {temSerie && (
+                              <td className="px-4 py-3 text-right tnum hidden md:table-cell"
+                                style={{ color: pp?.delta == null ? undefined : pp.delta > 0 ? COR_ALTA : pp.delta < 0 ? COR_QUEDA : undefined }}>
+                                {pp?.delta == null ? '—' : `${pp.delta > 0 ? '+' : ''}${pp.delta.toFixed(1)}%`}
+                              </td>
+                            )}
+                            {temSerie && (
+                              <td className="px-4 py-3 text-right hidden lg:table-cell">
+                                {pp && <Sparkline valores={pp.serie} cor={DIM} />}
+                              </td>
+                            )}
+                          </tr>
+                        </Fragment>
                       )
                     })}
                     {!lista.length && (
@@ -442,6 +455,8 @@ export default function Dashboard() {
                 Atacarejo são estimativas sobre o preço online, em calibração com dados de campo.
               </p>
             </div>
+
+            <AdSlot slot="leaderboard" />
 
             {/* produtos por região (premium; gating real na Fase 8) */}
             {produtosRegiao.length > 0 && (

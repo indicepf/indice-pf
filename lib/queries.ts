@@ -1046,3 +1046,61 @@ export async function getPratosPorIngrediente(ingredienteId: number): Promise<Pr
     prato_id: r.prato_id, nome: r.pratos?.nome ?? '', regiao: r.pratos?.regiao ?? '', qtd_g: Number(r.qtd_g),
   })).sort((a, b) => a.nome.localeCompare(b.nome))
 }
+
+// ── Publicidade (Fase 9 — house ads) ─────────────────────────────────────────
+
+export type Anuncio = {
+  id: number; slot: string; titulo: string; texto: string | null
+  imagem_url: string | null; link: string | null; anunciante: string | null
+  ativo: boolean; inicio: string | null; fim: string | null; peso: number
+}
+
+// criativo de um slot, sorteado por peso; null se não há (ou a migração 28
+// ainda não rodou — o slot simplesmente não renderiza)
+export async function getAnuncioParaSlot(slot: string): Promise<Anuncio | null> {
+  const { data, error } = await supabase.from('anuncios')
+    .select('id,slot,titulo,texto,imagem_url,link,anunciante,ativo,inicio,fim,peso')
+    .eq('slot', slot).eq('ativo', true)
+  if (error || !data?.length) return null
+  const total = data.reduce((s, a) => s + (a.peso || 1), 0)
+  let sorteio = Math.random() * total
+  for (const a of data) { sorteio -= (a.peso || 1); if (sorteio <= 0) return a as Anuncio }
+  return data[0] as Anuncio
+}
+
+export function registrarEventoAd(anuncioId: number, tipo: 'imp' | 'click', pagina: string) {
+  // fire-and-forget: falha de RLS/migração não pode afetar a página
+  supabase.from('anuncio_eventos').insert({ anuncio_id: anuncioId, tipo, pagina }).then(() => {})
+}
+
+// admin: lista completa + métricas agregadas
+export async function getAnuncios(): Promise<(Anuncio & { imps: number; clicks: number })[]> {
+  const [ads, evs] = await Promise.all([
+    supabase.from('anuncios').select('id,slot,titulo,texto,imagem_url,link,anunciante,ativo,inicio,fim,peso').order('criado_em', { ascending: false }),
+    fetchAll<any>(() => supabase.from('anuncio_eventos').select('anuncio_id,tipo')),
+  ])
+  const m: Record<number, { imps: number; clicks: number }> = {}
+  for (const e of evs) {
+    const x = (m[e.anuncio_id] ||= { imps: 0, clicks: 0 })
+    if (e.tipo === 'imp') x.imps++; else x.clicks++
+  }
+  return ((ads.data || []) as Anuncio[]).map(a => ({ ...a, ...(m[a.id] ?? { imps: 0, clicks: 0 }) }))
+}
+
+export async function salvarAnuncio(a: Partial<Anuncio> & { id?: number }): Promise<{ error: any }> {
+  const campos = {
+    slot: a.slot, titulo: a.titulo, texto: a.texto || null, imagem_url: a.imagem_url || null,
+    link: a.link || null, anunciante: a.anunciante || null, ativo: a.ativo ?? true,
+    inicio: a.inicio || null, fim: a.fim || null, peso: a.peso || 1,
+  }
+  const q = a.id
+    ? supabase.from('anuncios').update(campos).eq('id', a.id)
+    : supabase.from('anuncios').insert(campos)
+  const { error } = await q
+  return { error }
+}
+
+export async function excluirAnuncio(id: number): Promise<{ error: any }> {
+  const { error } = await supabase.from('anuncios').delete().eq('id', id)
+  return { error }
+}
