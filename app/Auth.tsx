@@ -24,7 +24,7 @@ export default function AuthControls() {
     <>
       <div className="flex items-center gap-2">
         <button onClick={() => { if (user && perfilCompleto(profile)) router.push('/contribuir'); else setCta(true) }}
-          className="text-sm border border-accent text-accent px-3 py-1.5 rounded-[var(--r-sm)] hover:bg-accent hover:text-white transition-colors cursor-pointer">
+          className="btn-mk sm">
           Contribuir
         </button>
         {user ? (
@@ -55,12 +55,10 @@ export default function AuthControls() {
           </div>
         ) : (
           <>
-            <button onClick={() => router.push('/entrar')}
-              className="text-sm px-3 py-1.5 rounded-[var(--r-sm)] hover:bg-surface-2 transition-colors cursor-pointer">
+            <button onClick={() => router.push('/entrar')} className="btn-mk ghost sm">
               Entrar
             </button>
-            <button onClick={() => router.push('/cadastro')}
-              className="text-sm px-3 py-1.5 rounded-[var(--r-sm)] bg-accent text-white hover:brightness-110 transition cursor-pointer max-sm:hidden">
+            <button onClick={() => router.push('/cadastro')} className="btn-mk primary sm max-sm:hidden">
               Criar conta
             </button>
           </>

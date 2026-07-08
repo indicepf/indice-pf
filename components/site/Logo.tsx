@@ -1,25 +1,20 @@
-// símbolo de infinito com o gradiente da marca (mockup docs/indice-pf-ads2.html)
-export default function Logo({ compact = false }: { compact?: boolean }) {
+// marca do mockup (brand-mark): quadrado com gradiente + infinito branco + nome
+// símbolo #inf do docs/indice-pf-ads2.html
+export const INF_PATH =
+  'M28 8C15 8 6 16 6 25s9 17 22 17c9 0 15-5 22-13 7 8 13 13 22 13 13 0 22-8 22-17S85 8 72 8c-9 0-15 5-22 13C43 13 37 8 28 8zm0 9c4 0 8 3 13 8-5 5-9 8-13 8-6 0-10-3-10-8s4-8 10-8zm44 0c6 0 10 3 10 8s-4 8-10 8c-4 0-8-3-13-8 5-5 9-8 13-8z'
+
+export default function Logo({ compact = false, small = false, dark = false }: {
+  compact?: boolean; small?: boolean; dark?: boolean
+}) {
   return (
-    <span className="inline-flex items-center gap-2">
-      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-        <defs>
-          <linearGradient id="grad-marca" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#8D4CB2" />
-            <stop offset="0.22" stopColor="#6954BD" />
-            <stop offset="0.46" stopColor="#0069D4" />
-            <stop offset="0.7" stopColor="#00A7E2" />
-            <stop offset="1" stopColor="#20C58C" />
-          </linearGradient>
-        </defs>
-        <rect width="32" height="32" rx="8" fill="url(#grad-marca)" />
-        <path d="M9.5 16c0-1.9 1.5-3.4 3.4-3.4 2.9 0 3.3 6.8 6.2 6.8 1.9 0 3.4-1.5 3.4-3.4s-1.5-3.4-3.4-3.4c-2.9 0-3.3 6.8-6.2 6.8-1.9 0-3.4-1.5-3.4-3.4z"
-          fill="none" stroke="#fff" strokeWidth="2.1" strokeLinecap="round" />
-      </svg>
+    <span className="brand-mark">
+      <span className={`inf-logo${small ? ' sm' : ''}`}>
+        <svg viewBox="0 0 100 50" aria-hidden="true"><path fill="#fff" d={INF_PATH} /></svg>
+      </span>
       {!compact && (
-        <span className="leading-none">
-          <span className="block text-lg font-bold tracking-tight">Índice PF</span>
-          <span className="block text-[0.6rem] uppercase tracking-[0.14em] text-dim">by Infinity</span>
+        <span className="brand-name" style={dark ? { color: '#fff' } : undefined}>
+          Índice PF
+          <small style={dark ? { color: 'rgba(255,255,255,.5)' } : undefined}>by Infinity</small>
         </span>
       )}
     </span>
