@@ -382,7 +382,16 @@ export const MODOS = NIVEIS_PRECO.filter(n =&gt; n.disponivel)</code></pre>
   <div class="decisao"><strong>D6 · Fase 5.</strong> Terceiro KPI da home (os dois primeiros são índice atual e variação vs. coleta anterior): prato mais caro/barato? nº de coletas? contribuições aprovadas?</div>
   <div class="decisao"><strong>D7 · Fase 5.</strong> Tabela de produtos por região com dado esparso (a dimensão regional vem das contribuições de campo): mostrar "sem dado" por célula, ou estrear só com a coluna Online nacional + regiões onde há dado?</div>
   <div class="decisao"><strong>D8 · Fase 6.</strong> "Índice completo" do app logado: rota própria <code>/indice</code> dentro do shell (recomendado) ou item da sidebar apontando para a home pública?</div>
-  <div class="decisao"><strong>D9 · Fase 7.</strong> Gateway de pagamento: recomendação técnica é Asaas (recorrência nativa com Pix + cartão). Confirmar após comparação comercial de taxas e prazos de repasse — números ficaram fora deste documento de propósito.</div>
+  <div class="decisao"><strong>D9 · Fase 7.</strong> Gateway de pagamento: recomendação técnica é Asaas (recorrência nativa com Pix + cartão). Confirmar após comparação comercial de taxas e prazos de repasse — números ficaram fora deste documento de propósito.
+    <br><strong>Status (decisão do responsável, 08/07/2026): ativação adiada.</strong> A criação da conta no
+    gateway, as env vars no Vercel (<code>SUPABASE_SERVICE_ROLE_KEY</code>, <code>ASAAS_API_KEY</code>,
+    <code>ASAAS_WEBHOOK_TOKEN</code>, <code>ASAAS_BASE_URL</code>), o cadastro do webhook e a execução da
+    migração 27 no Supabase ficam <strong>para depois da migração visual</strong>. O código das Fases 7–8 já
+    está em produção e degrada com segurança sem as chaves: <code>is_premium</code> retorna free, o checkout
+    exibe "assinatura ainda não disponível" e nada quebra. Passos para ativar a venda quando decidido:
+    (1) confirmar o gateway após comparação de taxas; (2) rodar <code>supabase_migration_27.sql</code>;
+    (3) configurar as env vars no Vercel; (4) cadastrar o webhook no painel do gateway;
+    (5) testar o fluxo completo em sandbox.</div>
   <div class="decisao"><strong>D10 · Fase 7.</strong> Lista exata do que é premium. O mockup indica: tabela de produtos por região, export no app logado e detalhe por produto. Índice e pratos permanecem públicos. Confirmar a lista.</div>
   <div class="decisao"><strong>D11 · Fase 9.</strong> Publicidade: house ads primeiro (recomendado) ou rede de terceiros desde já? Se rede, qual e em quais slots?</div>
   <div class="decisao"><strong>D12 · Fase 9.</strong> Chart-gate (anúncio cobrindo o gráfico): recomendação é não lançar. Decidir explicitamente; se aprovado, com frequency cap e nunca para assinantes.</div>

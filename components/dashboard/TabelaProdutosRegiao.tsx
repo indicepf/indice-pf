@@ -76,7 +76,7 @@ export default function TabelaProdutosRegiao({ linhas, destravada, onIngrediente
               <p className="text-sm text-dim mt-1.5 leading-relaxed">
                 Preço online nacional e preços de campo por região, produto a produto — no plano Premium.
               </p>
-              <a href="/planos"
+              <a href="/assinar"
                 className="inline-flex items-center justify-center mt-4 rounded-[var(--r-sm)] px-4 py-2 text-sm font-medium bg-accent text-white hover:brightness-110 transition">
                 Conhecer o Premium
               </a>
