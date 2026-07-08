@@ -233,9 +233,11 @@
     cadência envolve três pontos que precisam andar juntos: (1) o <code>cron</code> do workflow; (2) a cota da SerpAPI —
     cada coleta completa gasta ~115 chamadas e o teto atual é 750/mês com 3 contas; se a nova cadência estourar isso,
     é preciso criar outra conta e adicionar <code>SERPAPI_KEY_4</code> aos secrets e ao workflow; e (3) os textos do
-    site que citam a frequência (banner "Como coletamos estes dados" e o aviso do gráfico na home). Lembrete: com o
-    staging, cada coleta também exige <strong>aprovação manual em /admin → Coleta</strong> — mais coletas = mais
-    aprovações.</p>
+    site que citam a frequência (banner "Como coletamos estes dados" e o aviso do gráfico na home). Sobre aprovação:
+    cada coleta fica em staging até ser aprovada em <strong>/admin → Coleta</strong>; se ninguém aprovar, a migração 29
+    (pg_cron no Supabase, diário às 9h de Brasília) integra automaticamente ao índice qualquer coleta pendente com
+    <strong>mais de 5 dias</strong> — nenhuma coleta se perde, e os 5 dias são a janela para revisar/corrigir antes
+    de publicar.</p>
   </div>
 
   <h2 id="frontend">8. Frontend (Next.js)</h2>
