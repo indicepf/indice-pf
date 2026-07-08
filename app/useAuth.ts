@@ -10,10 +10,14 @@ export const perfilCompleto = (p?: Profile | null) => !!(p?.nome && p?.telefone 
 export function useAuth() {
   const [user, setUser] = useState<{ id: string; email?: string } | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [isPremium, setIsPremium] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async (uid: string) => {
-    const p = await getProfile(uid); setProfile(p); return p
+    const p = await getProfile(uid); setProfile(p)
+    // RPC is_premium (migração 27); erro (migração não rodada) → free
+    supabase.rpc('is_premium', { uid }).then(({ data }) => setIsPremium(data === true))
+    return p
   }, [])
 
   useEffect(() => {
@@ -25,10 +29,10 @@ export function useAuth() {
     const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
       const u = session?.user
       if (u) { setUser({ id: u.id, email: u.email ?? undefined }); await refresh(u.id) }
-      else { setUser(null); setProfile(null) }
+      else { setUser(null); setProfile(null); setIsPremium(false) }
     })
     return () => sub.subscription.unsubscribe()
   }, [refresh])
 
-  return { user, profile, loading, refresh }
+  return { user, profile, isPremium, loading, refresh }
 }

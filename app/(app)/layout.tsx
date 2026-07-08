@@ -37,7 +37,7 @@ const NAV_ADMIN = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { profile } = useAuth()
+  const { profile, isPremium } = useAuth()
   const [logado, setLogado] = useState<boolean | null>(null)
 
   // gate de sessão do shell: storage síncrono primeiro (sem lock), auth real depois
@@ -92,7 +92,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Link href="/" className="lg:hidden"><Logo compact /></Link>
             <h1 className="font-bold tracking-tight truncate">{titulo}</h1>
             <div className="ml-auto flex items-center gap-2.5">
-              <Badge tone="neutral">Gratuito</Badge>
+              <Badge tone={isPremium ? 'ok' : 'neutral'}>{isPremium ? 'Premium' : 'Gratuito'}</Badge>
               <span className="text-sm text-dim max-sm:hidden">{profile?.nome?.split(' ')[0] ?? ''}</span>
             </div>
           </div>
