@@ -20,6 +20,7 @@ import TabelaProdutosRegiao from '@/components/dashboard/TabelaProdutosRegiao'
 import AdSlot from '@/components/ads/AdSlot'
 import AdGate from '@/components/ads/AdGate'
 import AdPopup from '@/components/ads/AdPopup'
+import ShareModal from '@/components/dashboard/ShareModal'
 import type { ModoKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
@@ -47,6 +48,7 @@ export default function Dashboard() {
   const [ingModal, setIngModal] = useState<{ id: number; nome: string } | null>(null)
   const [pratosDoIng, setPratosDoIng] = useState<PratoDeIngrediente[] | null>(null)
   const [filtroIng, setFiltroIng] = useState<{ nome: string; ids: Set<number> } | null>(null)
+  const [share, setShare] = useState(false)
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]> | null>(null)
   const [fontes, setFontes]     = useState<Record<number, Fonte[]>>({})
   const [fontesManuais, setFontesManuais] = useState<Record<number, FonteManual[]>>({})
@@ -326,7 +328,11 @@ export default function Dashboard() {
             <Card className="p-4">
               <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
                 <h2 className="font-bold tracking-tight">Evolução do índice</h2>
-                <p className="text-xs text-faint">coletas nos dias 1 e 15 de cada mês</p>
+                <div className="flex items-baseline gap-3">
+                  <p className="text-xs text-faint">coletas nos dias 1 e 15 de cada mês</p>
+                  <button onClick={() => setShare(true)}
+                    className="text-xs text-accent hover:underline cursor-pointer">Compartilhar</button>
+                </div>
               </div>
               {temSerie ? (
                 <>
@@ -480,6 +486,8 @@ export default function Dashboard() {
           dataColeta={snapshot.data}
           onClose={() => setSelecionado(null)} />
       )}
+
+      {share && <ShareModal onClose={() => setShare(false)} />}
 
       {/* pratos que usam o ingrediente clicado em "Produtos por região" */}
       {ingModal && (
