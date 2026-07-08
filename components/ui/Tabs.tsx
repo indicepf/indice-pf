@@ -8,7 +8,7 @@ type Props<K extends string> = {
 
 export default function Tabs<K extends string>({ tabs, active, onChange, className = '' }: Props<K>) {
   return (
-    <nav className={`flex gap-5 border-b border-border overflow-x-auto ${className}`}>
+    <nav className={`flex gap-5 border-b border-border ${className}`}>
       {tabs.map(([k, label]) => (
         <button key={k} onClick={() => onChange(k)}
           className={`text-sm pb-2 -mb-px border-b-2 transition whitespace-nowrap cursor-pointer ${
