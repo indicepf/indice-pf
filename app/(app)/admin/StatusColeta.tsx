@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { inputBase } from '@/components/ui'
-import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, getHistoricoManual, type StatusColeta, type ItemColeta, type PrecoManualHist } from '@/lib/queries'
+import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, getHistoricoManual, getLatestSnapshot, getSnapshotsNovos, type StatusColeta, type ItemColeta, type PrecoManualHist } from '@/lib/queries'
 import { brl } from '@/lib/format'
 
 export default function StatusColeta() {
@@ -14,9 +14,26 @@ export default function StatusColeta() {
   const [hist, setHist] = useState<Record<number, PrecoManualHist[]>>({})
   const [salvandoId, setSalvandoId] = useState<number | null>(null)
   const [msg, setMsg] = useState('')
+  const [pendente, setPendente] = useState(false)   // staging: coleta gravada sem custos_pratos
+  const [aprovando, setAprovando] = useState(false)
 
-  async function recarregar() { setStatus(await getStatusUltimaColeta()) }
+  async function recarregar() {
+    setStatus(await getStatusUltimaColeta())
+    // staging (auditoria antes de integrar): a última coleta ainda não tem
+    // custos_pratos → não entra no índice até ser aprovada aqui
+    const [ultimo, novos] = await Promise.all([getLatestSnapshot(), getSnapshotsNovos()])
+    setPendente(!!ultimo && !novos.some(s => s.id === ultimo.id))
+  }
   useEffect(() => { recarregar() }, [])
+
+  async function aprovarColeta() {
+    setAprovando(true); setMsg('')
+    const { error } = await recalcularCustos()
+    setAprovando(false)
+    if (error) { setMsg(`Erro ao integrar a coleta: ${error.message}`); return }
+    setMsg('Coleta aprovada e integrada ao índice.')
+    recarregar()
+  }
 
   async function salvarManual(item: ItemColeta) {
     const preco = Number((valores[item.id] ?? '').replace(',', '.'))
@@ -51,6 +68,21 @@ export default function StatusColeta() {
         Resultado da última coleta online (snapshot mais recente). Os itens <strong>não encontrados</strong> continuam
         sendo raspados a cada coleta — aqui você define um preço manual de segurança para eles.
       </p>
+
+      {pendente && (
+        <div className="border border-warn/40 bg-warn/5 rounded-lg p-4">
+          <p className="text-sm font-medium">📋 Coleta em auditoria — ainda fora do índice</p>
+          <p className="text-xs text-dim mt-1 leading-relaxed">
+            Esta coleta foi gravada mas <strong>não entrou no índice</strong>. Revise as variações fortes e as
+            entradas na aba <strong>Dados</strong> (exclua fontes erradas) e então aprove abaixo — a aprovação
+            calcula os custos dos pratos e publica a coleta no dashboard.
+          </p>
+          <button onClick={aprovarColeta} disabled={aprovando}
+            className="mt-3 text-sm bg-ok text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60 cursor-pointer">
+            {aprovando ? 'Integrando…' : 'Aprovar coleta e integrar ao índice'}
+          </button>
+        </div>
+      )}
 
       <div className="border border-border rounded-lg bg-surface p-5">
         <p className="text-xs text-dim mb-1">Último scrape</p>
