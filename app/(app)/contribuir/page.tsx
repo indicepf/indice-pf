@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getIngredientes, getProfile } from '@/lib/queries'
-import { perfilCompleto } from '../useAuth'
+import { perfilCompleto } from '../../useAuth'
 import { rotuloQtd, exemploQtd } from '@/lib/format'
 import type { Ing } from '@/lib/types'
 import { Button, Input, Select } from '@/components/ui'
-import BotaoInicio from '../BotaoInicio'
+import BotaoInicio from '../../BotaoInicio'
 
 const TIPOS_LOJA = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência']
 const MAX_FOTOS = 10
@@ -213,13 +213,6 @@ export default function ContribuirPage() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-border sticky top-0 bg-surface/80 backdrop-blur z-10">
-        <div className="max-w-lg mx-auto px-6 py-4 flex items-center gap-3">
-          <BotaoInicio />
-          <h1 className="text-xl font-bold tracking-tight ml-1">Contribuir com preços</h1>
-        </div>
-      </header>
-
       <div className="max-w-lg mx-auto px-6 py-8">
         {resultado ? (
           <div className="text-center py-10">

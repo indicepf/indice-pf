@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getTopContribuidores, type Contribuidor } from '@/lib/queries'
 import { Card, Select } from '@/components/ui'
-import AuthControls from '../Auth'
-import RequireAdmin from '../RequireAdmin'
-import BotaoInicio from '../BotaoInicio'
+import AuthControls from '../../Auth'
+import RequireAdmin from '../../RequireAdmin'
+import BotaoInicio from '../../BotaoInicio'
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const rotuloMes = (m: string) => { const [a, mm] = m.split('-'); return `${MESES[Number(mm) - 1]}/${a}` }

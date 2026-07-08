@@ -15,7 +15,7 @@ import { baixarCSV } from '@/lib/exportar'
 import { ACCENT, CORES_REGIAO, FAINT } from '@/lib/theme'
 import type { Ing } from '@/lib/types'
 
-const MapaLocal = dynamic(() => import('../MapaLocal'), {
+const MapaLocal = dynamic(() => import('../../MapaLocal'), {
   ssr: false,
   loading: () => <div className="h-[420px] rounded-lg border border-border grid place-items-center text-dim text-sm">carregando mapa…</div>,
 })

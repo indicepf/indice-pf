@@ -40,8 +40,10 @@ export default function AuthControls() {
             </button>
             {menu && (
               <div className="absolute right-0 mt-1 w-44 bg-surface border border-border rounded-[var(--r-sm)] shadow-[var(--shadow-md)] text-sm py-1 z-50">
-                <button onClick={() => { setMenu(false); router.push('/perfil') }}
-                  className="block w-full text-left px-3 py-2 hover:bg-surface-2">Meu perfil</button>
+                <button onClick={() => { setMenu(false); router.push('/painel') }}
+                  className="block w-full text-left px-3 py-2 hover:bg-surface-2">Meu painel</button>
+                <button onClick={() => { setMenu(false); router.push('/configuracoes') }}
+                  className="block w-full text-left px-3 py-2 hover:bg-surface-2">Configurações</button>
                 {profile?.is_admin && (
                   <button onClick={() => { setMenu(false); router.push('/admin') }}
                     className="block w-full text-left px-3 py-2 hover:bg-surface-2 text-accent">Administração</button>

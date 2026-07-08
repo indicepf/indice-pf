@@ -14,7 +14,7 @@ import {
 import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
 import { capturarContexto, resumoDispositivo } from '@/lib/contexto'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
-import BotaoInicio, { chip } from '../BotaoInicio'
+import BotaoInicio, { chip } from '../../BotaoInicio'
 import Painel from './Painel'
 import Auditoria from './Auditoria'
 import SuperAcoes from './SuperAcoes'
