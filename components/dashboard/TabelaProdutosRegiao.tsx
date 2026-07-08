@@ -8,8 +8,9 @@ import { Card, Input } from '@/components/ui'
 // Tabela premium da home: preço online nacional + preço de campo por região.
 // O gating real (assinatura) entra na Fase 8 — por ora o conteúdo fica
 // coberto pelo overlay com CTA para /planos (visual, como no mockup).
-export default function TabelaProdutosRegiao({ linhas, destravada }: {
+export default function TabelaProdutosRegiao({ linhas, destravada, onIngrediente }: {
   linhas: ProdutoRegiao[]; destravada: boolean
+  onIngrediente?: (ing: { id: number; nome: string }) => void
 }) {
   const [busca, setBusca] = useState('')
 
@@ -42,7 +43,10 @@ export default function TabelaProdutosRegiao({ linhas, destravada }: {
             </thead>
             <tbody className={destravada ? '' : 'blur-[5px]'}>
               {visiveis.map(l => (
-                <tr key={l.id} className="border-b border-border/70 last:border-0">
+                <tr key={l.id}
+                  onClick={destravada && onIngrediente ? () => onIngrediente({ id: l.id, nome: l.nome }) : undefined}
+                  className={`border-b border-border/70 last:border-0 ${destravada && onIngrediente ? 'hover:bg-surface-2 cursor-pointer transition-colors' : ''}`}
+                  title={destravada && onIngrediente ? 'Ver os pratos que usam este produto' : undefined}>
                   <td className="px-4 py-2.5">{l.nome}</td>
                   <td className="px-4 py-2.5 text-right tnum">
                     {l.online != null ? `${brl(l.online)}${l.label ? `/${l.label}` : ''}` : '—'}
