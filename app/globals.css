@@ -203,7 +203,7 @@ body {
 .btn-mk.ghost:hover{background:var(--surface-3)}
 .btn-mk svg{width:16px;height:16px}
 
-.filters{position:sticky;top:74px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:hidden}
+.filters{position:sticky;top:74px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:auto;max-height:calc(100vh - 92px)}
 .f-group{padding:14px 18px;border-bottom:1px solid var(--border)}
 .f-group:last-child{border-bottom:none}
 .f-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:700;margin-bottom:9px;display:flex;align-items:center;gap:6px}
@@ -282,10 +282,11 @@ body {
 .hs span{font-size:12.5px;color:rgba(255,255,255,.8)}
 
 .orient-back{position:fixed;inset:0;background:rgba(18,32,58,.62);backdrop-filter:blur(6px);z-index:1200;display:flex;align-items:center;justify-content:center;padding:22px}
-.orient-card{background:var(--surface);border-radius:var(--r-xl);width:100%;max-width:400px;padding:30px 28px 26px;text-align:center;box-shadow:var(--shadow-lg)}
+.orient-card{background:var(--surface);border-radius:var(--r-xl);width:100%;max-width:400px;padding:30px 28px 26px;text-align:center;box-shadow:var(--shadow-lg);animation:pop .22s}
 .orient-card h3{font-size:18px;font-weight:800;margin-bottom:8px}
 .orient-card p{font-size:13.5px;color:var(--ink-2);line-height:1.6;margin-bottom:18px}
 .orient-ico{width:74px;height:74px;border-radius:20px;background:var(--grad-cta);display:grid;place-items:center;margin:0 auto 18px;box-shadow:var(--shadow-brand)}
+.orient-card .btn-mk.primary{width:100%;justify-content:center}
 
 /* ===== auth / planos / caixas (portados do mockup) ===== */
 .auth-wrap{min-height:100vh;display:grid;grid-template-columns:1.05fr 1fr}
@@ -328,11 +329,24 @@ body {
 .mb-ico{width:34px;height:34px;border-radius:10px;background:var(--azul);color:#fff;display:grid;place-items:center;flex:none;font-size:11px;font-weight:750}
 
 /* modal central do mockup + stats do drill */
-.modal-head{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 22px;border-bottom:1px solid var(--border);gap:12px}
-.modal-head h2{font-size:18px;font-weight:800;letter-spacing:-.01em}
-.modal-head p{font-size:12.5px;color:var(--dim);margin-top:3px}
-.modal-x{cursor:pointer;color:var(--dim);font-size:22px;line-height:1}
-.modal-x:hover{color:var(--ink)}
+.modal-back{position:fixed;inset:0;background:rgba(18,32,58,.5);backdrop-filter:blur(4px);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-mk{background:var(--surface);border-radius:var(--r-xl);width:100%;max-width:520px;max-height:90vh;overflow:auto;box-shadow:var(--shadow-lg);animation:pop .2s}
+.modal-mk.wide{max-width:720px}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;padding:22px 24px 14px;gap:12px}
+.modal-head h2{font-size:19px;font-weight:750;letter-spacing:-.02em}
+.modal-head p{font-size:13px;color:var(--dim);margin-top:3px}
+.modal-x{cursor:pointer;color:var(--faint);font-size:22px;line-height:1;padding:2px 8px;border-radius:8px}
+.modal-x:hover{background:var(--surface-3);color:var(--ink)}
+.modal-body{padding:6px 24px 24px}
+
+/* share modal (mockup): abas + preview */
+.share-tabs{display:flex;gap:6px;background:var(--surface-3);padding:4px;border-radius:99px;margin-bottom:16px}
+.share-tabs button{flex:1;padding:8px;border-radius:99px;font-size:13px;font-weight:650;color:var(--dim);cursor:pointer}
+.share-tabs button.on{background:#fff;color:var(--azul);box-shadow:var(--shadow-xs)}
+.share-prev{border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:var(--surface-2)}
+.share-prev img{width:100%;display:block}
+.share-actions{display:flex;gap:9px;margin-top:16px}
 .stat-mini{padding:12px;background:var(--surface-2);border-radius:12px}
 .stat-mini .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);display:block}
 .stat-mini b{font-size:20px;letter-spacing:-.02em}
