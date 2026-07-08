@@ -10,8 +10,9 @@ import { Card, Input } from '@/components/ui'
 // coberto pelo overlay com CTA para /planos (visual, como no mockup).
 type SortCol = 'nome' | 'online' | string   // string = nome da região
 
-export default function TabelaProdutosRegiao({ linhas, destravada, onIngrediente }: {
+export default function TabelaProdutosRegiao({ linhas, destravada, filtroNome, onLimparFiltro, onIngrediente }: {
   linhas: ProdutoRegiao[]; destravada: boolean
+  filtroNome?: string; onLimparFiltro?: () => void
   onIngrediente?: (ing: { id: number; nome: string }) => void
 }) {
   const [busca, setBusca] = useState('')
@@ -43,7 +44,14 @@ export default function TabelaProdutosRegiao({ linhas, destravada, onIngrediente
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
-        <h2 className="font-bold tracking-tight text-xl">Produtos por região</h2>
+        <h2 className="font-bold tracking-tight text-xl">Produtos por região
+          {filtroNome && onLimparFiltro && (
+            <button onClick={onLimparFiltro}
+              className="ml-2 align-middle text-xs bg-accent/10 text-accent border border-accent/30 rounded-full px-2.5 py-1 hover:bg-accent/20 transition cursor-pointer font-normal">
+              pratos com {filtroNome} · limpar ×
+            </button>
+          )}
+        </h2>
         {destravada && (
           <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto…"
             className="mt-0 w-full sm:w-56" />
