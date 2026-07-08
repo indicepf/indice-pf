@@ -1051,7 +1051,7 @@ export async function getPratosPorIngrediente(ingredienteId: number): Promise<Pr
 
 export type Anuncio = {
   id: number; slot: string; titulo: string; texto: string | null
-  imagem_url: string | null; link: string | null; anunciante: string | null
+  imagem_url: string | null; link: string | null; anunciante: string | null; escala: number
   ativo: boolean; inicio: string | null; fim: string | null; peso: number
 }
 
@@ -1059,7 +1059,7 @@ export type Anuncio = {
 // ainda não rodou — o slot simplesmente não renderiza)
 export async function getAnuncioParaSlot(slot: string): Promise<Anuncio | null> {
   const { data, error } = await supabase.from('anuncios')
-    .select('id,slot,titulo,texto,imagem_url,link,anunciante,ativo,inicio,fim,peso')
+    .select('id,slot,titulo,texto,imagem_url,link,anunciante,ativo,inicio,fim,peso,escala')
     .eq('slot', slot).eq('ativo', true)
   if (error || !data?.length) return null
   const total = data.reduce((s, a) => s + (a.peso || 1), 0)
@@ -1076,7 +1076,7 @@ export function registrarEventoAd(anuncioId: number, tipo: 'imp' | 'click', pagi
 // admin: lista completa + métricas agregadas
 export async function getAnuncios(): Promise<(Anuncio & { imps: number; clicks: number })[]> {
   const [ads, evs] = await Promise.all([
-    supabase.from('anuncios').select('id,slot,titulo,texto,imagem_url,link,anunciante,ativo,inicio,fim,peso').order('criado_em', { ascending: false }),
+    supabase.from('anuncios').select('id,slot,titulo,texto,imagem_url,link,anunciante,ativo,inicio,fim,peso,escala').order('criado_em', { ascending: false }),
     fetchAll<any>(() => supabase.from('anuncio_eventos').select('anuncio_id,tipo')),
   ])
   const m: Record<number, { imps: number; clicks: number }> = {}
@@ -1091,7 +1091,7 @@ export async function salvarAnuncio(a: Partial<Anuncio> & { id?: number }): Prom
   const campos = {
     slot: a.slot, titulo: a.titulo, texto: a.texto || null, imagem_url: a.imagem_url || null,
     link: a.link || null, anunciante: a.anunciante || null, ativo: a.ativo ?? true,
-    inicio: a.inicio || null, fim: a.fim || null, peso: a.peso || 1,
+    inicio: a.inicio || null, fim: a.fim || null, peso: a.peso || 1, escala: a.escala ?? 1,
   }
   const q = a.id
     ? supabase.from('anuncios').update(campos).eq('id', a.id)

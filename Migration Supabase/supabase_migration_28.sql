@@ -11,7 +11,9 @@
 -- 1. anuncios -----------------------------------------------------------------
 create table if not exists public.anuncios (
   id          bigserial primary key,
-  slot        text not null check (slot in ('hero', 'lateral', 'billboard', 'leaderboard', 'nativo')),
+  -- slots fixos: hero/lateral/billboard/leaderboard/nativo (blocos na página),
+  -- popup (modal 1×/sessão), gate-grafico e gate-tabela (cobrem o conteúdo até fechar)
+  slot        text not null check (slot in ('hero', 'lateral', 'billboard', 'leaderboard', 'nativo', 'popup', 'gate-grafico', 'gate-tabela')),
   titulo      text not null,
   texto       text,
   imagem_url  text,
@@ -21,6 +23,7 @@ create table if not exists public.anuncios (
   inicio      date,
   fim         date,
   peso        int not null default 1 check (peso >= 1),
+  escala      numeric not null default 1 check (escala > 0 and escala <= 1),  -- largura relativa do criativo (1 = 100% do slot)
   criado_em   timestamptz not null default now()
 );
 

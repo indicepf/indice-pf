@@ -18,6 +18,8 @@ import { Badge, Card, Input, Modal } from '@/components/ui'
 import Sparkline from '@/components/dashboard/Sparkline'
 import TabelaProdutosRegiao from '@/components/dashboard/TabelaProdutosRegiao'
 import AdSlot from '@/components/ads/AdSlot'
+import AdGate from '@/components/ads/AdGate'
+import AdPopup from '@/components/ads/AdPopup'
 import type { ModoKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
@@ -192,6 +194,7 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen">
+      <AdPopup />
       <div className="max-w-6xl mx-auto px-6 py-10">
         {/* hero */}
         <section className="mb-8">
@@ -318,7 +321,8 @@ export default function Dashboard() {
               </Card>
             </div>
 
-            {/* gráfico do índice */}
+            {/* gráfico do índice (gate opcional: slot 'gate-grafico' no admin) */}
+            <AdGate slot="gate-grafico">
             <Card className="p-4">
               <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
                 <h2 className="font-bold tracking-tight">Evolução do índice</h2>
@@ -353,6 +357,7 @@ export default function Dashboard() {
                 </p>
               )}
             </Card>
+            </AdGate>
 
             {/* movers */}
             {movers && (movers.altas.length > 0 || movers.quedas.length > 0) && (
@@ -458,9 +463,11 @@ export default function Dashboard() {
 
             <AdSlot slot="leaderboard" />
 
-            {/* produtos por região (premium; gating real na Fase 8) */}
+            {/* produtos por região (premium; gate opcional: slot 'gate-tabela') */}
             {produtosRegiao.length > 0 && (
-              <TabelaProdutosRegiao linhas={produtosRegiao} destravada={isAdmin || isPremium} onIngrediente={abrirIngrediente} />
+              <AdGate slot="gate-tabela">
+                <TabelaProdutosRegiao linhas={produtosRegiao} destravada={isAdmin || isPremium} onIngrediente={abrirIngrediente} />
+              </AdGate>
             )}
           </section>
         </div>
