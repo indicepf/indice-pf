@@ -39,9 +39,8 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
   const pct = (v: number | null) => v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-ink/40 px-4 py-6 overflow-y-auto" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
-        className="bg-surface rounded-[var(--r-lg)] shadow-[var(--shadow-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="modal-back z-[100]" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="modal-mk wide">
         <div className="modal-head">
           <div>
             <h2>{limparNome(dish.pratos.nome)}</h2>
@@ -50,7 +49,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
           <div className="modal-x" onClick={onClose}>×</div>
         </div>
 
-        <div className="p-5">
+        <div className="modal-body">
           <div className="segbar" style={{ marginBottom: 14 }}>
             {NIVEIS_PRECO.map(n => (
               <button key={n.key} disabled={!n.disponivel} className={nivel === n.key ? 'on' : ''}

@@ -1,56 +1,66 @@
 'use client'
 
-import { useState } from 'react'
-import { Button, Modal } from '@/components/ui'
+import { useCallback, useEffect, useState } from 'react'
 
-// Modal de compartilhamento: preview do card PNG (/api/card) + ações.
-export default function ShareModal({ onClose }: { onClose: () => void }) {
+// Modal de compartilhar no formato do mockup (openShare): abas
+// "Redes sociais" / "E-mail (completo)" com preview do card e legenda copiável.
+export default function ShareModal({ contexto, onClose }: { contexto?: string; onClose: () => void }) {
+  const [tab, setTab] = useState<'social' | 'email'>('social')
   const [msg, setMsg] = useState('')
-  const urlSite = typeof window !== 'undefined' ? window.location.href : ''
-  const urlCard = `${urlSite}/api/card`
+  const url = typeof window !== 'undefined' ? window.location.href : ''
 
-  async function compartilhar() {
-    setMsg('')
-    try {
-      // Web Share com a imagem quando suportado; senão cai para o link
-      if (navigator.share) {
-        try {
-          const blob = await (await fetch('/api/card')).blob()
-          const file = new File([blob], 'indice-pf.png', { type: 'image/png' })
-          if (navigator.canShare?.({ files: [file] })) {
-            await navigator.share({ files: [file], title: 'Índice PF', text: 'O custo do prato feito no Brasil' })
-            return
-          }
-        } catch { /* segue para o share de link */ }
-        await navigator.share({ title: 'Índice PF', text: 'O custo do prato feito no Brasil', url: urlSite })
-        return
-      }
-      await navigator.clipboard.writeText(urlSite)
-      setMsg('Link copiado.')
-    } catch { /* usuário cancelou */ }
-  }
+  const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
+  useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
 
-  async function copiarLink() {
-    await navigator.clipboard.writeText(urlSite)
-    setMsg('Link copiado.')
+  const rotulo = contexto ?? 'o custo do prato feito no Brasil'
+  const legendaSocial = `Índice PF — ${rotulo}. Comida de verdade, dados de verdade. ${url}`
+  const legendaEmail = `Assunto: Índice PF — ${rotulo}\n\nSegue o resumo do Índice PF da última coleta, com o link para o painel completo: ${url}\n\nDados coletados no varejo online e em campo, com margem de erro de ±5%.`
+  const legenda = tab === 'social' ? legendaSocial : legendaEmail
+
+  async function copiar() {
+    await navigator.clipboard.writeText(legenda)
+    setMsg('Legenda copiada.')
   }
 
   return (
-    <Modal title="Compartilhar o índice" onClose={onClose}>
-      <div className="border border-border rounded-[var(--r)] overflow-hidden bg-surface-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/api/card" alt="Card do Índice PF" className="w-full h-auto" />
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal-mk" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <h2>Compartilhar</h2>
+            <p>{rotulo}</p>
+          </div>
+          <div className="modal-x" onClick={onClose}>×</div>
+        </div>
+        <div className="modal-body">
+          <div className="share-tabs">
+            <button className={tab === 'social' ? 'on' : ''} onClick={() => setTab('social')}>Redes sociais</button>
+            <button className={tab === 'email' ? 'on' : ''} onClick={() => setTab('email')}>E-mail (completo)</button>
+          </div>
+          <div className="share-prev">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/api/card" alt="Card do Índice PF" />
+          </div>
+          <div style={{ marginTop: 12, padding: 12, background: 'var(--surface-2)', borderRadius: 10, fontSize: 13, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>
+            {legenda}
+          </div>
+          <div className="share-actions">
+            <a className="btn-mk primary" style={{ flex: 1, justifyContent: 'center' }} href="/api/card" download="indice-pf.png">
+              Baixar imagem
+            </a>
+            <button className="btn-mk" onClick={copiar}>Copiar legenda</button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'center' }}>
+            <a className="btn-mk sm" target="_blank" rel="noopener noreferrer"
+              href={`https://wa.me/?text=${encodeURIComponent(legendaSocial)}`}>WhatsApp</a>
+            <a className="btn-mk sm" target="_blank" rel="noopener noreferrer"
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(legendaSocial)}`}>X</a>
+            <a className="btn-mk sm" target="_blank" rel="noopener noreferrer"
+              href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`}>LinkedIn</a>
+          </div>
+          {msg && <p className="text-xs text-ok mt-2 text-center">{msg}</p>}
+        </div>
       </div>
-      <p className="text-xs text-dim mt-2">Card gerado com o índice da última coleta.</p>
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        <Button onClick={compartilhar}>Compartilhar</Button>
-        <Button variant="secondary" onClick={copiarLink}>Copiar link</Button>
-        <a href={urlCard} download="indice-pf.png"
-          className="col-span-2 inline-flex items-center justify-center rounded-[var(--r-sm)] px-4 py-2 text-sm font-medium bg-surface text-ink border border-border-2 hover:bg-surface-2 transition">
-          Baixar imagem
-        </a>
-      </div>
-      {msg && <p className="text-xs text-ok mt-2 text-center">{msg}</p>}
-    </Modal>
+    </div>
   )
 }

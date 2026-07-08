@@ -40,6 +40,8 @@ const ICO = {
   share: ico('M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7', 14),
   lock: ico('M5 11h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zm3 0V7a4 4 0 0 1 8 0v4', 24),
   info: ico('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-13.5v.5m0 3v5', 16),
+  dish: ico('M4 3v7a2 2 0 0 0 2 2v9M8 3v5M4 5.5h4M15 12c0-5 1.5-9 4-9v18m-4-9h4'),
+  box: ico('M21 8l-9-5-9 5v8l9 5 9-5V8zm-9 5L3 8m9 5l9-5m-9 5v8'),
 }
 
 type ColunaSort = 'nome' | 'regiao' | 'custo' | 'delta'
@@ -66,7 +68,8 @@ export default function Dashboard() {
   const [ingModal, setIngModal] = useState<{ id: number; nome: string } | null>(null)
   const [pratosDoIng, setPratosDoIng] = useState<PratoDeIngrediente[] | null>(null)
   const [serieIng, setSerieIng] = useState<PontoIngrediente[] | null>(null)
-  const [filtroIng, setFiltroIng] = useState<{ nome: string; ids: Set<number> } | null>(null)
+  const [filtroIng, setFiltroIng] = useState<{ id?: number; nome: string; ids: Set<number> } | null>(null)
+  const [pratoSel, setPratoSel] = useState<number | null>(null)   // select "Prato Feito" dos filtros (mockup)
   const [share, setShare] = useState(false)
   const [comparar, setComparar] = useState(false)                          // toggle do mockup: linha da coleta anterior + coluna "ant."
   const [legendOff, setLegendOff] = useState<Set<string>>(new Set())       // legenda clicável do gráfico geral
@@ -218,6 +221,7 @@ export default function Dashboard() {
   const lista = useMemo(() => {
     let l = custos
     if (regioes.size) l = l.filter(c => regioes.has(c.pratos.regiao))
+    if (pratoSel != null) l = l.filter(c => c.pratos.id === pratoSel)
     if (filtroIng) l = l.filter(c => filtroIng.ids.has(c.pratos.id))
     if (busca.trim()) {
       const q = busca.toLowerCase()
@@ -238,15 +242,23 @@ export default function Dashboard() {
       }
       return cmp * dir
     })
-  }, [custos, regioes, busca, sort, filtroIng, porPrato])
+  }, [custos, regioes, busca, sort, filtroIng, pratoSel, porPrato])
 
   const produtosRegiaoFiltrados = useMemo(() => {
-    const temFiltro = !!(filtroIng || regioes.size || busca.trim())
+    const temFiltro = !!(filtroIng || regioes.size || busca.trim() || pratoSel != null)
     if (!temFiltro || !detalhes) return produtosRegiao
     const ids = new Set<number>()
     for (const c of lista) for (const it of (detalhes[c.pratos.id] ?? [])) ids.add(it.ingrediente_id)
     return produtosRegiao.filter(p => ids.has(p.id))
-  }, [produtosRegiao, filtroIng, regioes, busca, lista, detalhes])
+  }, [produtosRegiao, filtroIng, regioes, busca, pratoSel, lista, detalhes])
+
+  // select "Produto" dos filtros: aplica o mesmo filtro de ingrediente do drill
+  function selecionarProduto(v: string) {
+    if (!v) { setFiltroIng(null); return }
+    const p = produtosRegiao.find(x => x.id === Number(v))
+    if (!p) return
+    getPratosPorIngrediente(p.id).then(ps => setFiltroIng({ id: p.id, nome: p.nome, ids: new Set(ps.map(x => x.prato_id)) }))
+  }
 
   function toggleSort(col: ColunaSort) {
     setSort(s => s.col === col ? { col, dir: s.dir === 1 ? -1 : 1 } : { col, dir: 1 })
@@ -313,7 +325,7 @@ export default function Dashboard() {
           <aside className="filters">
             <div className="filters-head">
               <h3>{ICO.gear} Filtros</h3>
-              <span className="clr" onClick={() => { setRegioes(new Set()); setBusca(''); setFiltroIng(null); setPendIni(''); setPendFim(''); setIni(''); setFim('') }}>Limpar</span>
+              <span className="clr" onClick={() => { setRegioes(new Set()); setBusca(''); setFiltroIng(null); setPratoSel(null); setComparar(false); setLegendOff(new Set()); setPendIni(''); setPendFim(''); setIni(''); setFim('') }}>Limpar</span>
             </div>
             <div className="f-group">
               <div className="f-label">{ICO.search} Busca</div>
@@ -359,6 +371,25 @@ export default function Dashboard() {
                   <span>Comparar com período anterior</span>
                 </div>
               </div>
+            </div>
+            <div className="f-group">
+              <div className="f-label">{ICO.dish} Prato Feito</div>
+              <select className="f-search" value={pratoSel ?? ''}
+                onChange={e => setPratoSel(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">Todos os pratos</option>
+                {[...custos].sort((a, b) => limparNome(a.pratos.nome).localeCompare(limparNome(b.pratos.nome))).map(c => (
+                  <option key={c.pratos.id} value={c.pratos.id}>{limparNome(c.pratos.nome)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="f-group">
+              <div className="f-label">{ICO.box} Produto</div>
+              <select className="f-search" value={filtroIng?.id ?? ''} onChange={e => selecionarProduto(e.target.value)}>
+                <option value="">Todos os produtos</option>
+                {[...produtosRegiao].sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).map(p => (
+                  <option key={p.id} value={p.id}>{p.nome}</option>
+                ))}
+              </select>
             </div>
             <div className="f-group">
               <AdSlot slot="lateral" />
@@ -681,13 +712,12 @@ export default function Dashboard() {
           onClose={() => setSelecionado(null)} />
       )}
 
-      {share && <ShareModal onClose={() => setShare(false)} />}
+      {share && <ShareModal contexto={`${rotuloRecorte} · ${nivel.label}`} onClose={() => setShare(false)} />}
 
       {/* drill de produto — modal central do mockup (openProductDrill) */}
       {ingModal && (
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-ink/40 px-4 py-6 overflow-y-auto" onClick={() => setIngModal(null)}>
-          <div onClick={e => e.stopPropagation()}
-            className="bg-surface rounded-[var(--r-lg)] shadow-[var(--shadow-lg)] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="modal-back z-[100]" onClick={() => setIngModal(null)}>
+          <div onClick={e => e.stopPropagation()} className="modal-mk wide">
             <div className="modal-head">
               <div>
                 <h2>{ingModal.nome}</h2>
@@ -695,12 +725,20 @@ export default function Dashboard() {
               </div>
               <div className="modal-x" onClick={() => setIngModal(null)}>×</div>
             </div>
-            <div className="p-5">
+            <div className="modal-body">
+              <div className="segbar" style={{ marginBottom: 14 }}>
+                {NIVEIS_PRECO.map(n => (
+                  <button key={n.key} disabled={!n.disponivel} className={modo === n.key ? 'on' : ''}
+                    onClick={() => n.disponivel && setModo(n.key as ModoKey)}>
+                    {n.grupo === 'consumidor' ? (n.key === 'online' ? 'Online' : 'Mercado') : n.label}
+                  </button>
+                ))}
+              </div>
               {serieIng && serieIng.length >= 2 ? (
                 <>
                   <div className="h-52 mb-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={serieIng.map(p => ({ data: fmtCurta(p.data), valor: p.valor }))}
+                      <LineChart data={serieIng.map(p => ({ data: fmtCurta(p.data), valor: +(p.valor * fator).toFixed(2) }))}
                         margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                         <XAxis dataKey="data" tick={{ fontSize: 11, fill: DIM }} />
@@ -713,7 +751,7 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   </div>
                   {(() => {
-                    const v = serieIng.map(p => p.valor)
+                    const v = serieIng.map(p => p.valor * fator)
                     const a = v[v.length - 1], p0 = v[v.length - 2], i0 = v[0]
                     const dA = p0 > 0 ? (a - p0) / p0 * 100 : null
                     const dI = i0 > 0 && v.length > 2 ? (a - i0) / i0 * 100 : null
@@ -731,7 +769,7 @@ export default function Dashboard() {
               ) : serieIng == null ? <p className="text-sm text-dim py-2">Carregando…</p>
                 : <p className="text-sm text-dim py-2">Série disponível a partir da 2ª coleta.</p>}
 
-              <h3 className="text-[13px] font-bold mb-2">Pratos que usam este produto</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wide text-dim mb-2">Pratos que usam este produto</h3>
               {!pratosDoIng ? (
                 <p className="text-sm text-dim py-2">Carregando…</p>
               ) : !pratosDoIng.length ? (
@@ -753,7 +791,7 @@ export default function Dashboard() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => {
-                        setFiltroIng({ nome: ingModal.nome, ids: new Set(pratosDoIng.map(p => p.prato_id)) })
+                        setFiltroIng({ id: ingModal.id, nome: ingModal.nome, ids: new Set(pratosDoIng.map(p => p.prato_id)) })
                         setIngModal(null)
                         document.getElementById('tabela-pratos')?.scrollIntoView({ behavior: 'smooth' })
                       }}
