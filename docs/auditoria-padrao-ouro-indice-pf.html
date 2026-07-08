@@ -1,474 +1,1023 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Índice PF — Auditoria para Padrão Ouro</title>
-<style>
-  :root {
-    --bg: #faf7f2;
-    --paper: #ffffff;
-    --ink: #1a1a1a;
-    --muted: #68615a;
-    --line: #ded4c7;
-    --paprika: #b94327;
-    --olive: #4a5d23;
-    --amber: #8a5a00;
-    --red: #9b1c1c;
-    --blue: #244d72;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--ink);
-    font: 16px/1.58 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 48px 24px 88px; }
-  header { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 28px; }
-  h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; line-height: 1.18; }
-  h1 { font-size: clamp(2rem, 5vw, 3.6rem); font-weight: 400; margin: 0 0 10px; letter-spacing: 0; }
-  h2 { font-size: 1.55rem; margin: 44px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-  h3 { font-size: 1.15rem; margin: 26px 0 10px; }
-  p { margin: 10px 0; }
-  a { color: var(--paprika); }
-  code {
-    font: 0.92em "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    background: #f4eee6;
-    border: 1px solid var(--line);
-    padding: 1px 5px;
-    border-radius: 4px;
-  }
-  table { width: 100%; border-collapse: collapse; margin: 14px 0 22px; background: var(--paper); }
-  th, td { border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; padding: 10px 12px; }
-  th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-  ul, ol { padding-left: 22px; }
-  li { margin: 7px 0; }
-  .subtitle { color: var(--muted); max-width: 780px; font-size: 1.05rem; }
-  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-  .pill {
-    border: 1px solid var(--line);
-    background: var(--paper);
-    color: var(--muted);
-    border-radius: 999px;
-    padding: 5px 10px;
-    font-size: 0.82rem;
-  }
-  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-  .card {
-    background: var(--paper);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 16px;
-  }
-  .card h3 { margin-top: 0; }
-  .score { font-size: 2rem; color: var(--paprika); font-family: Georgia, "Times New Roman", serif; }
-  .note {
-    background: #fff8ee;
-    border-left: 4px solid var(--amber);
-    padding: 12px 14px;
-    margin: 16px 0;
-  }
-  .risk-high { color: var(--red); font-weight: 700; }
-  .risk-med { color: var(--amber); font-weight: 700; }
-  .risk-low { color: var(--olive); font-weight: 700; }
-  .tag {
-    display: inline-block;
-    border-radius: 999px;
-    padding: 2px 8px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    margin-right: 4px;
-    border: 1px solid currentColor;
-  }
-  .p0 { color: var(--red); }
-  .p1 { color: var(--amber); }
-  .p2 { color: var(--blue); }
-  .p3 { color: var(--olive); }
-  .small { color: var(--muted); font-size: 0.9rem; }
-  .toc {
-    background: var(--paper);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 16px 18px;
-    margin: 24px 0 30px;
-  }
-  .toc ol { columns: 2; margin: 8px 0 0; }
-  footer { margin-top: 54px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.88rem; }
-  @media (max-width: 760px) {
-    .grid { grid-template-columns: 1fr; }
-    .toc ol { columns: 1; }
-    th, td { padding: 9px 8px; }
-  }
-</style>
-</head>
-<body>
-<main class="wrap">
-  <header>
-    <h1>Índice PF — Auditoria para Padrão Ouro</h1>
-    <p class="subtitle">
-      Revisão técnica e de produto baseada na documentação <code>documentacao-indice-pf.html</code>,
-      no código-fonte, nas migrations SQL e em verificações locais de lint, build e dependências.
-    </p>
-    <div class="meta">
-      <span class="pill">Data: 24/06/2026</span>
-      <span class="pill">Stack: Next.js 16, React 19, Supabase, Python</span>
-      <span class="pill">Escopo: UX/UI, segurança, compliance, eficiência, refatoração e governança</span>
-    </div>
-  </header>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Índice PF — Auditoria para Padrão Ouro</title>
+		<style>
+			:root {
+				--bg: #faf7f2;
+				--paper: #ffffff;
+				--ink: #1a1a1a;
+				--muted: #68615a;
+				--line: #ded4c7;
+				--paprika: #b94327;
+				--olive: #4a5d23;
+				--amber: #8a5a00;
+				--red: #9b1c1c;
+				--blue: #244d72;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--ink);
+				font:
+					16px/1.58 Inter,
+					ui-sans-serif,
+					system-ui,
+					-apple-system,
+					BlinkMacSystemFont,
+					"Segoe UI",
+					sans-serif;
+			}
+			.wrap {
+				max-width: 1080px;
+				margin: 0 auto;
+				padding: 48px 24px 88px;
+			}
+			header {
+				border-bottom: 1px solid var(--line);
+				padding-bottom: 24px;
+				margin-bottom: 28px;
+			}
+			h1,
+			h2,
+			h3 {
+				font-family: Georgia, "Times New Roman", serif;
+				line-height: 1.18;
+			}
+			h1 {
+				font-size: clamp(2rem, 5vw, 3.6rem);
+				font-weight: 400;
+				margin: 0 0 10px;
+				letter-spacing: 0;
+			}
+			h2 {
+				font-size: 1.55rem;
+				margin: 44px 0 14px;
+				padding-bottom: 8px;
+				border-bottom: 1px solid var(--line);
+			}
+			h3 {
+				font-size: 1.15rem;
+				margin: 26px 0 10px;
+			}
+			p {
+				margin: 10px 0;
+			}
+			a {
+				color: var(--paprika);
+			}
+			code {
+				font:
+					0.92em "SFMono-Regular",
+					Consolas,
+					"Liberation Mono",
+					monospace;
+				background: #f4eee6;
+				border: 1px solid var(--line);
+				padding: 1px 5px;
+				border-radius: 4px;
+			}
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				margin: 14px 0 22px;
+				background: var(--paper);
+			}
+			th,
+			td {
+				border-bottom: 1px solid var(--line);
+				text-align: left;
+				vertical-align: top;
+				padding: 10px 12px;
+			}
+			th {
+				font-size: 0.78rem;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--muted);
+			}
+			ul,
+			ol {
+				padding-left: 22px;
+			}
+			li {
+				margin: 7px 0;
+			}
+			.subtitle {
+				color: var(--muted);
+				max-width: 780px;
+				font-size: 1.05rem;
+			}
+			.meta {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin-top: 18px;
+			}
+			.pill {
+				border: 1px solid var(--line);
+				background: var(--paper);
+				color: var(--muted);
+				border-radius: 999px;
+				padding: 5px 10px;
+				font-size: 0.82rem;
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 14px;
+			}
+			.card {
+				background: var(--paper);
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				padding: 16px;
+			}
+			.card h3 {
+				margin-top: 0;
+			}
+			.score {
+				font-size: 2rem;
+				color: var(--paprika);
+				font-family: Georgia, "Times New Roman", serif;
+			}
+			.note {
+				background: #fff8ee;
+				border-left: 4px solid var(--amber);
+				padding: 12px 14px;
+				margin: 16px 0;
+			}
+			.risk-high {
+				color: var(--red);
+				font-weight: 700;
+			}
+			.risk-med {
+				color: var(--amber);
+				font-weight: 700;
+			}
+			.risk-low {
+				color: var(--olive);
+				font-weight: 700;
+			}
+			.tag {
+				display: inline-block;
+				border-radius: 999px;
+				padding: 2px 8px;
+				font-size: 0.75rem;
+				font-weight: 700;
+				margin-right: 4px;
+				border: 1px solid currentColor;
+			}
+			.p0 {
+				color: var(--red);
+			}
+			.p1 {
+				color: var(--amber);
+			}
+			.p2 {
+				color: var(--blue);
+			}
+			.p3 {
+				color: var(--olive);
+			}
+			.small {
+				color: var(--muted);
+				font-size: 0.9rem;
+			}
+			.toc {
+				background: var(--paper);
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				padding: 16px 18px;
+				margin: 24px 0 30px;
+			}
+			.toc ol {
+				columns: 2;
+				margin: 8px 0 0;
+			}
+			footer {
+				margin-top: 54px;
+				padding-top: 18px;
+				border-top: 1px solid var(--line);
+				color: var(--muted);
+				font-size: 0.88rem;
+			}
+			@media (max-width: 760px) {
+				.grid {
+					grid-template-columns: 1fr;
+				}
+				.toc ol {
+					columns: 1;
+				}
+				th,
+				td {
+					padding: 9px 8px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main class="wrap">
+			<header>
+				<h1>Índice PF — Auditoria para Padrão Ouro</h1>
+				<p class="subtitle">
+					Revisão técnica e de produto baseada na documentação
+					<code>documentacao-indice-pf.html</code>, no código-fonte, nas
+					migrations SQL e em verificações locais de lint, build e dependências.
+				</p>
+				<div class="meta">
+					<span class="pill">Data: 24/06/2026</span>
+					<span class="pill"
+						>Stack: Next.js 16, React 19, Supabase, Python</span
+					>
+					<span class="pill"
+						>Escopo: UX/UI, segurança, compliance, eficiência, refatoração e
+						governança</span
+					>
+				</div>
+			</header>
 
-  <section class="grid" aria-label="Resumo executivo">
-    <div class="card">
-      <h3>Maturidade atual</h3>
-      <p class="score">6,8/10</p>
-      <p class="small">Produto funcional, com arquitetura simples e boa evolução incremental. Ainda falta endurecimento para dados pessoais, operação e escala.</p>
-    </div>
-    <div class="card">
-      <h3>Maior risco</h3>
-      <p><span class="risk-high">Dados pessoais e fotos públicas.</span></p>
-      <p class="small">CPF, PIX, telefone, geolocalização e imagens precisam de política mais forte antes de produção ampla.</p>
-    </div>
-    <div class="card">
-      <h3>Maior ganho rápido</h3>
-      <p><span class="risk-med">Mover leitura pesada para Server Components/API.</span></p>
-      <p class="small">O dashboard carrega no cliente quase todo o detalhe e fontes; isso custa performance, banda e governança.</p>
-    </div>
-  </section>
+			<section class="grid" aria-label="Resumo executivo">
+				<div class="card">
+					<h3>Maturidade atual</h3>
+					<p class="score">6,8/10</p>
+					<p class="small">
+						Produto funcional, com arquitetura simples e boa evolução
+						incremental. Ainda falta endurecimento para dados pessoais, operação
+						e escala.
+					</p>
+				</div>
+				<div class="card">
+					<h3>Maior risco</h3>
+					<p><span class="risk-high">Dados pessoais e fotos públicas.</span></p>
+					<p class="small">
+						CPF, PIX, telefone, geolocalização e imagens precisam de política
+						mais forte antes de produção ampla.
+					</p>
+				</div>
+				<div class="card">
+					<h3>Maior ganho rápido</h3>
+					<p>
+						<span class="risk-med"
+							>Mover leitura pesada para Server Components/API.</span
+						>
+					</p>
+					<p class="small">
+						O dashboard carrega no cliente quase todo o detalhe e fontes; isso
+						custa performance, banda e governança.
+					</p>
+				</div>
+			</section>
 
-  <div class="toc">
-    <strong>Sumário</strong>
-    <ol>
-      <li><a href="#achados">Achados principais</a></li>
-      <li><a href="#ux">UX/UI</a></li>
-      <li><a href="#seguranca">Segurança de dados</a></li>
-      <li><a href="#compliance">Compliance</a></li>
-      <li><a href="#eficiencia">Eficiência e performance</a></li>
-      <li><a href="#refatoracao">Refatoração e qualidade</a></li>
-      <li><a href="#extras">Dimensões extras</a></li>
-      <li><a href="#roadmap">Roadmap recomendado</a></li>
-      <li><a href="#verificacoes">Verificações executadas</a></li>
-    </ol>
-  </div>
+			<div class="toc">
+				<strong>Sumário</strong>
+				<ol>
+					<li><a href="#achados">Achados principais</a></li>
+					<li><a href="#ux">UX/UI</a></li>
+					<li><a href="#seguranca">Segurança de dados</a></li>
+					<li><a href="#compliance">Compliance</a></li>
+					<li><a href="#eficiencia">Eficiência e performance</a></li>
+					<li><a href="#refatoracao">Refatoração e qualidade</a></li>
+					<li><a href="#extras">Dimensões extras</a></li>
+					<li><a href="#roadmap">Roadmap recomendado</a></li>
+					<li><a href="#verificacoes">Verificações executadas</a></li>
+				</ol>
+			</div>
 
-  <section id="achados">
-    <h2>1. Achados Principais</h2>
-    <table>
-      <thead>
-        <tr><th>Prioridade</th><th>Achado</th><th>Impacto</th><th>Ação recomendada</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><span class="tag p0">P0</span></td>
-          <td>CPF e chave PIX são gravados em texto puro em <code>profiles</code> e <code>pagamentos</code>.</td>
-          <td>Risco LGPD, vazamento financeiro e exposição indevida por admin/erro de policy.</td>
-          <td>Criptografar campos sensíveis, reduzir retenção, registrar consentimento granular e restringir leitura admin.</td>
-        </tr>
-        <tr>
-          <td><span class="tag p0">P0</span></td>
-          <td>Bucket <code>contribuicoes</code> é público e as URLs das fotos ficam no banco.</td>
-          <td>Fotos podem conter localização, rostos, metadados visuais e dados de etiqueta.</td>
-          <td>Tornar bucket privado, servir por URL assinada curta e remover EXIF no cliente/servidor.</td>
-        </tr>
-        <tr>
-          <td><span class="tag p0">P0</span></td>
-          <td><code>npm audit</code> apontou 13 vulnerabilidades: 9 high, 3 moderate, 1 low, incluindo Next.js e dependências de mapa.</td>
-          <td>Risco de DoS, SSRF, XSS/cache poisoning e ReDoS conforme advisories.</td>
-          <td>Atualizar Next para versão corrigida, rodar <code>npm audit fix</code> e avaliar substituição/upgrade de <code>react-simple-maps</code>.</td>
-        </tr>
-        <tr>
-          <td><span class="tag p1">P1</span></td>
-          <td>Dashboard inteiro é Client Component e pré-carrega detalhes/fontes de todos os pratos.</td>
-          <td>Mais JS, mais consultas, mais dados públicos no browser, pior TTI em redes móveis.</td>
-          <td>Separar shell server-rendered, carregar detalhes sob demanda e paginar fontes por ingrediente/prato.</td>
-        </tr>
-        <tr>
-          <td><span class="tag p1">P1</span></td>
-          <td>Admin, moderação, recompensa e preço manual rodam por cliente Supabase direto.</td>
-          <td>Superfície maior de abuso e validação descentralizada em UI/RPC.</td>
-          <td>Criar Route Handlers/Server Actions para operações sensíveis, com validação e auditoria server-side.</td>
-        </tr>
-        <tr>
-          <td><span class="tag p1">P1</span></td>
-          <td>Sem trilha de auditoria completa para ações admin, pagamento, aprovação e edição de preços.</td>
-          <td>Dificulta investigação, prestação de contas e correção de erros operacionais.</td>
-          <td>Criar tabela <code>audit_events</code> append-only com ator, ação, alvo, antes/depois e IP aproximado.</td>
-        </tr>
-        <tr>
-          <td><span class="tag p2">P2</span></td>
-          <td>Lint falha por <code>any</code> em arquivos centrais e avisos de <code>&lt;img&gt;</code>.</td>
-          <td>Menos segurança de tipo e risco de regressão silenciosa.</td>
-          <td>Tipar respostas Supabase com Database types gerados, trocar imagens persistentes para <code>next/image</code>.</td>
-        </tr>
-      </tbody>
-    </table>
+			<section id="achados">
+				<h2>1. Achados Principais</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Prioridade</th>
+							<th>Achado</th>
+							<th>Impacto</th>
+							<th>Ação recomendada</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><span class="tag p0">P0</span></td>
+							<td>
+								CPF e chave PIX são gravados em texto puro em
+								<code>profiles</code> e <code>pagamentos</code>.
+							</td>
+							<td>
+								Risco LGPD, vazamento financeiro e exposição indevida por
+								admin/erro de policy.
+							</td>
+							<td>
+								Criptografar campos sensíveis, reduzir retenção, registrar
+								consentimento granular e restringir leitura admin.
+							</td>
+						</tr>
+						<tr>
+							<td><span class="tag p0">P0</span></td>
+							<td>
+								Bucket <code>contribuicoes</code> é público e as URLs das fotos
+								ficam no banco.
+							</td>
+							<td>
+								Fotos podem conter localização, rostos, metadados visuais e
+								dados de etiqueta.
+							</td>
+							<td>
+								Tornar bucket privado, servir por URL assinada curta e remover
+								EXIF no cliente/servidor.
+							</td>
+						</tr>
+						<tr>
+							<td><span class="tag p0">P0</span></td>
+							<td>
+								<code>npm audit</code> apontou 13 vulnerabilidades: 9 high, 3
+								moderate, 1 low, incluindo Next.js e dependências de mapa.
+							</td>
+							<td>
+								Risco de DoS, SSRF, XSS/cache poisoning e ReDoS conforme
+								advisories.
+							</td>
+							<td>
+								Atualizar Next para versão corrigida, rodar
+								<code>npm audit fix</code> e avaliar substituição/upgrade de
+								<code>react-simple-maps</code>.
+							</td>
+						</tr>
+						<tr>
+							<td><span class="tag p1">P1</span></td>
+							<td>
+								Dashboard inteiro é Client Component e pré-carrega
+								detalhes/fontes de todos os pratos.
+							</td>
+							<td>
+								Mais JS, mais consultas, mais dados públicos no browser, pior
+								TTI em redes móveis.
+							</td>
+							<td>
+								Separar shell server-rendered, carregar detalhes sob demanda e
+								paginar fontes por ingrediente/prato.
+							</td>
+						</tr>
+						<tr>
+							<td><span class="tag p1">P1</span></td>
+							<td>
+								Admin, moderação, recompensa e preço manual rodam por cliente
+								Supabase direto.
+							</td>
+							<td>
+								Superfície maior de abuso e validação descentralizada em UI/RPC.
+							</td>
+							<td>
+								Criar Route Handlers/Server Actions para operações sensíveis,
+								com validação e auditoria server-side.
+							</td>
+						</tr>
+						<tr>
+							<td><span class="tag p1">P1</span></td>
+							<td>
+								Sem trilha de auditoria completa para ações admin, pagamento,
+								aprovação e edição de preços.
+							</td>
+							<td>
+								Dificulta investigação, prestação de contas e correção de erros
+								operacionais.
+							</td>
+							<td>
+								Criar tabela <code>audit_events</code> append-only com ator,
+								ação, alvo, antes/depois e IP aproximado.
+							</td>
+						</tr>
+						<tr>
+							<td><span class="tag p2">P2</span></td>
+							<td>
+								Lint falha por <code>any</code> em arquivos centrais e avisos de
+								<code>&lt;img&gt;</code>.
+							</td>
+							<td>Menos segurança de tipo e risco de regressão silenciosa.</td>
+							<td>
+								Tipar respostas Supabase com Database types gerados, trocar
+								imagens persistentes para <code>next/image</code>.
+							</td>
+						</tr>
+					</tbody>
+				</table>
 
-    <div class="note">
-      <strong>Leitura geral:</strong> o app tem uma boa tese e já resolve o ciclo principal de dados, índice,
-      contribuição e moderação. Para chegar a padrão ouro, a prioridade não é adicionar mais telas; é endurecer
-      dados pessoais, tornar a operação auditável e reduzir acoplamento cliente-banco.
-    </div>
-  </section>
+				<div class="note">
+					<strong>Leitura geral:</strong> o app tem uma boa tese e já resolve o
+					ciclo principal de dados, índice, contribuição e moderação. Para
+					chegar a padrão ouro, a prioridade não é adicionar mais telas; é
+					endurecer dados pessoais, tornar a operação auditável e reduzir
+					acoplamento cliente-banco.
+				</div>
+			</section>
 
-  <section id="ux">
-    <h2>2. UX/UI</h2>
-    <h3>O que está bom</h3>
-    <ul>
-      <li>Identidade visual consistente: creme, páprica, oliva, serif para marca e sans para dados.</li>
-      <li>Fluxo principal simples: índice nacional, mapa, lista de pratos, detalhe e fontes.</li>
-      <li>Contribuição móvel pensada para câmera, compressão de imagem e geolocalização.</li>
-      <li>Área de perfil já reúne dados, recompensas e histórico de contribuições.</li>
-    </ul>
+			<section id="ux">
+				<h2>2. UX/UI</h2>
+				<h3>O que está bom</h3>
+				<ul>
+					<li>
+						Identidade visual consistente: creme, páprica, oliva, serif para
+						marca e sans para dados.
+					</li>
+					<li>
+						Fluxo principal simples: índice nacional, mapa, lista de pratos,
+						detalhe e fontes.
+					</li>
+					<li>
+						Contribuição móvel pensada para câmera, compressão de imagem e
+						geolocalização.
+					</li>
+					<li>
+						Área de perfil já reúne dados, recompensas e histórico de
+						contribuições.
+					</li>
+				</ul>
 
-    <h3>O que impede padrão ouro</h3>
-    <ul>
-      <li><strong>Contexto insuficiente para confiança:</strong> o usuário vê "Mercado" e "Atacarejo" como descontos fixos, mas não há indicação visual forte de incerteza, cobertura ou metodologia no ponto de decisão.</li>
-      <li><strong>Contribuição com muitos campos opcionais sem progressão:</strong> a tela é correta, mas poderia guiar por etapas: foto/localização, produto/preço, revisão/envio.</li>
-      <li><strong>Admin denso demais em uma página:</strong> moderação, saques e preços manuais têm naturezas operacionais diferentes. A página de 410 linhas reflete isso na UX.</li>
-      <li><strong>Acessibilidade parcial:</strong> há botões só com caracteres como <code>×</code> e setas, modais sem foco preso, tabelas clicáveis sem affordance para teclado e imagens com <code>alt=""</code> em contextos informativos.</li>
-      <li><strong>Estados de erro genéricos:</strong> falhas de Supabase, upload, geolocalização e RPC ainda aparecem como mensagens técnicas em alguns pontos.</li>
-    </ul>
+				<h3>O que impede padrão ouro</h3>
+				<ul>
+					<li>
+						<strong>Contexto insuficiente para confiança:</strong> o usuário vê
+						"Mercado" e "Atacarejo" como descontos fixos, mas não há indicação
+						visual forte de incerteza, cobertura ou metodologia no ponto de
+						decisão.
+					</li>
+					<li>
+						<strong
+							>Contribuição com muitos campos opcionais sem progressão:</strong
+						>
+						a tela é correta, mas poderia guiar por etapas: foto/localização,
+						produto/preço, revisão/envio.
+					</li>
+					<li>
+						<strong>Admin denso demais em uma página:</strong> moderação, saques
+						e preços manuais têm naturezas operacionais diferentes. A página de
+						410 linhas reflete isso na UX.
+					</li>
+					<li>
+						<strong>Acessibilidade parcial:</strong> há botões só com caracteres
+						como <code>×</code> e setas, modais sem foco preso, tabelas
+						clicáveis sem affordance para teclado e imagens com
+						<code>alt=""</code> em contextos informativos.
+					</li>
+					<li>
+						<strong>Estados de erro genéricos:</strong> falhas de Supabase,
+						upload, geolocalização e RPC ainda aparecem como mensagens técnicas
+						em alguns pontos.
+					</li>
+				</ul>
 
-    <h3>Recomendações</h3>
-    <ol>
-      <li><strong>Adicionar um painel de confiança por prato:</strong> cobertura, ingredientes estimados, última coleta, origem do preço e intervalo de incerteza.</li>
-      <li><strong>Transformar contribuição em wizard curto:</strong> etapa 1 foto/local, etapa 2 preço/produto, etapa 3 revisão. Isso reduz abandono e melhora qualidade dos dados.</li>
-      <li><strong>Separar admin em sub-rotas:</strong> <code>/admin/contribuicoes</code>, <code>/admin/saques</code>, <code>/admin/precos</code> e futuramente <code>/admin/auditoria</code>.</li>
-      <li><strong>Melhorar modais:</strong> foco inicial, escape, aria-label, role dialog, bloqueio de scroll do fundo e retorno de foco ao botão que abriu.</li>
-      <li><strong>Dar feedback operacional:</strong> skeletons, progresso de upload, aviso de imagem grande, status de geolocalização e confirmação explícita de recompensa pendente.</li>
-      <li><strong>Usar componentes padronizados:</strong> Button, Field, Modal, Tabs, Table, EmptyState e Badge para reduzir inconsistência visual.</li>
-    </ol>
-  </section>
+				<h3>Recomendações</h3>
+				<ol>
+					<li>
+						<strong>Adicionar um painel de confiança por prato:</strong>
+						cobertura, ingredientes estimados, última coleta, origem do preço e
+						intervalo de incerteza.
+					</li>
+					<li>
+						<strong>Transformar contribuição em wizard curto:</strong> etapa 1
+						foto/local, etapa 2 preço/produto, etapa 3 revisão. Isso reduz
+						abandono e melhora qualidade dos dados.
+					</li>
+					<li>
+						<strong>Separar admin em sub-rotas:</strong>
+						<code>/admin/contribuicoes</code>, <code>/admin/saques</code>,
+						<code>/admin/precos</code> e futuramente
+						<code>/admin/auditoria</code>.
+					</li>
+					<li>
+						<strong>Melhorar modais:</strong> foco inicial, escape, aria-label,
+						role dialog, bloqueio de scroll do fundo e retorno de foco ao botão
+						que abriu.
+					</li>
+					<li>
+						<strong>Dar feedback operacional:</strong> skeletons, progresso de
+						upload, aviso de imagem grande, status de geolocalização e
+						confirmação explícita de recompensa pendente.
+					</li>
+					<li>
+						<strong>Usar componentes padronizados:</strong> Button, Field,
+						Modal, Tabs, Table, EmptyState e Badge para reduzir inconsistência
+						visual.
+					</li>
+				</ol>
+			</section>
 
-  <section id="seguranca">
-    <h2>3. Segurança de Dados</h2>
-    <h3>Riscos críticos</h3>
-    <ul>
-      <li><strong>PII financeira em texto puro:</strong> <code>cpf</code> e <code>chave_pix</code> aparecem em <code>profiles</code> e <code>pagamentos</code>. RLS ajuda, mas não substitui criptografia e minimização.</li>
-      <li><strong>Fotos públicas:</strong> a migration 8 cria bucket público e policy de leitura pública. Isso é inadequado para uma base de imagens enviada por usuários com localização obrigatória.</li>
-      <li><strong>Geolocalização precisa:</strong> <code>lat</code>, <code>lng</code>, <code>endereco</code> e <code>bairro</code> são úteis para validação, mas aumentam sensibilidade do dado.</li>
-      <li><strong>Dependências vulneráveis:</strong> <code>npm audit</code> encontrou vulnerabilidades high em <code>next</code>, <code>ws</code>, <code>d3-color</code> via <code>react-simple-maps</code>, <code>flatted</code> e <code>picomatch</code>.</li>
-      <li><strong>Fallback de anon key no bundle:</strong> a anon key pública em <code>lib/supabase.ts</code> é aceitável, mas o fallback fixa projeto e ambiente no código. Melhor falhar sem env pública configurada.</li>
-    </ul>
+			<section id="seguranca">
+				<h2>3. Segurança de Dados</h2>
+				<h3>Riscos críticos</h3>
+				<ul>
+					<li>
+						<strong>PII financeira em texto puro:</strong> <code>cpf</code> e
+						<code>chave_pix</code> aparecem em <code>profiles</code> e
+						<code>pagamentos</code>. RLS ajuda, mas não substitui criptografia e
+						minimização.
+					</li>
+					<li>
+						<strong>Fotos públicas:</strong> a migration 8 cria bucket público e
+						policy de leitura pública. Isso é inadequado para uma base de
+						imagens enviada por usuários com localização obrigatória.
+					</li>
+					<li>
+						<strong>Geolocalização precisa:</strong> <code>lat</code>,
+						<code>lng</code>, <code>endereco</code> e <code>bairro</code> são
+						úteis para validação, mas aumentam sensibilidade do dado.
+					</li>
+					<li>
+						<strong>Dependências vulneráveis:</strong>
+						<code>npm audit</code> encontrou vulnerabilidades high em
+						<code>next</code>, <code>ws</code>, <code>d3-color</code> via
+						<code>react-simple-maps</code>, <code>flatted</code> e
+						<code>picomatch</code>.
+					</li>
+					<li>
+						<strong>Fallback de anon key no bundle:</strong> a anon key pública
+						em <code>lib/supabase.ts</code> é aceitável, mas o fallback fixa
+						projeto e ambiente no código. Melhor falhar sem env pública
+						configurada.
+					</li>
+				</ul>
 
-    <h3>Endurecimento recomendado</h3>
-    <table>
-      <thead>
-        <tr><th>Área</th><th>Medida</th><th>Como implementar</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>CPF/PIX</td>
-          <td>Criptografia em repouso e mascaramento por padrão.</td>
-          <td>Usar Supabase Vault/pgsodium ou criptografia app-side com KMS. Admin só revela completo em ação auditada.</td>
-        </tr>
-        <tr>
-          <td>Fotos</td>
-          <td>Bucket privado com URLs assinadas.</td>
-          <td>Trocar <code>public=true</code>, remover policy pública e criar endpoint que gera signed URL por usuário/admin autorizado.</td>
-        </tr>
-        <tr>
-          <td>Upload</td>
-          <td>Validar MIME, tamanho e extensão no servidor.</td>
-          <td>Definir limite de MB, aceitar só JPEG/PNG/WebP, reprocessar imagem e remover EXIF.</td>
-        </tr>
-        <tr>
-          <td>Admin</td>
-          <td>Operações sensíveis via servidor.</td>
-          <td>Route Handlers com Supabase server client, validação forte e logs. Evitar chamadas diretas do browser para mutações críticas.</td>
-        </tr>
-        <tr>
-          <td>RLS/RPC</td>
-          <td>Revisar todas as funções <code>security definer</code>.</td>
-          <td>Manter <code>set search_path</code>, validar ownership, restringir grants e criar testes SQL de permissão.</td>
-        </tr>
-        <tr>
-          <td>Rate limit</td>
-          <td>Limitar login, upload, contribuição, saque e RPC.</td>
-          <td>Usar controles Supabase Auth, Vercel Firewall/Rate Limit ou tabela de quota por usuário/IP.</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+				<h3>Endurecimento recomendado</h3>
+				<table>
+					<thead>
+						<tr>
+							<th>Área</th>
+							<th>Medida</th>
+							<th>Como implementar</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>CPF/PIX</td>
+							<td>Criptografia em repouso e mascaramento por padrão.</td>
+							<td>
+								Usar Supabase Vault/pgsodium ou criptografia app-side com KMS.
+								Admin só revela completo em ação auditada.
+							</td>
+						</tr>
+						<tr>
+							<td>Fotos</td>
+							<td>Bucket privado com URLs assinadas.</td>
+							<td>
+								Trocar <code>public=true</code>, remover policy pública e criar
+								endpoint que gera signed URL por usuário/admin autorizado.
+							</td>
+						</tr>
+						<tr>
+							<td>Upload</td>
+							<td>Validar MIME, tamanho e extensão no servidor.</td>
+							<td>
+								Definir limite de MB, aceitar só JPEG/PNG/WebP, reprocessar
+								imagem e remover EXIF.
+							</td>
+						</tr>
+						<tr>
+							<td>Admin</td>
+							<td>Operações sensíveis via servidor.</td>
+							<td>
+								Route Handlers com Supabase server client, validação forte e
+								logs. Evitar chamadas diretas do browser para mutações críticas.
+							</td>
+						</tr>
+						<tr>
+							<td>RLS/RPC</td>
+							<td>Revisar todas as funções <code>security definer</code>.</td>
+							<td>
+								Manter <code>set search_path</code>, validar ownership,
+								restringir grants e criar testes SQL de permissão.
+							</td>
+						</tr>
+						<tr>
+							<td>Rate limit</td>
+							<td>Limitar login, upload, contribuição, saque e RPC.</td>
+							<td>
+								Usar controles Supabase Auth, Vercel Firewall/Rate Limit ou
+								tabela de quota por usuário/IP.
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
 
-  <section id="compliance">
-    <h2>4. Compliance</h2>
-    <h3>LGPD e privacidade</h3>
-    <ul>
-      <li><strong>Base legal:</strong> documentar separadamente execução de contrato/recompensa, consentimento para CPF/PIX, legítimo interesse para antifraude e analytics mínimo.</li>
-      <li><strong>Minimização:</strong> para relatórios, guardar geolocalização agregada ou arredondada depois da validação. Coordenada precisa deve ter retenção curta.</li>
-      <li><strong>Retenção:</strong> definir prazos: fotos rejeitadas, fotos aprovadas, CPF/PIX, pagamentos, logs e dados de auditoria.</li>
-      <li><strong>Direitos do titular:</strong> criar processo para exportar, corrigir e excluir dados pessoais, preservando registros fiscais/contábeis obrigatórios.</li>
-      <li><strong>Termos e política:</strong> antes de campanha pública, incluir Termos de Uso, Política de Privacidade, Política de Recompensa e regras antifraude.</li>
-      <li><strong>Consentimento granular:</strong> hoje há consentimento para CPF/PIX. Adicionar consentimento/aviso explícito para localização e uso da foto para validação/moderação.</li>
-    </ul>
+			<section id="compliance">
+				<h2>4. Compliance</h2>
+				<h3>LGPD e privacidade</h3>
+				<ul>
+					<li>
+						<strong>Base legal:</strong> documentar separadamente execução de
+						contrato/recompensa, consentimento para CPF/PIX, legítimo interesse
+						para antifraude e analytics mínimo.
+					</li>
+					<li>
+						<strong>Minimização:</strong> para relatórios, guardar
+						geolocalização agregada ou arredondada depois da validação.
+						Coordenada precisa deve ter retenção curta.
+					</li>
+					<li>
+						<strong>Retenção:</strong> definir prazos: fotos rejeitadas, fotos
+						aprovadas, CPF/PIX, pagamentos, logs e dados de auditoria.
+					</li>
+					<li>
+						<strong>Direitos do titular:</strong> criar processo para exportar,
+						corrigir e excluir dados pessoais, preservando registros
+						fiscais/contábeis obrigatórios.
+					</li>
+					<li>
+						<strong>Termos e política:</strong> antes de campanha pública,
+						incluir Termos de Uso, Política de Privacidade, Política de
+						Recompensa e regras antifraude.
+					</li>
+					<li>
+						<strong>Consentimento granular:</strong> hoje há consentimento para
+						CPF/PIX. Adicionar consentimento/aviso explícito para localização e
+						uso da foto para validação/moderação.
+					</li>
+				</ul>
 
-    <h3>Pagamentos e operação</h3>
-    <ul>
-      <li>Definir se recompensa gera obrigação fiscal, comprovante ou informe para usuário.</li>
-      <li>Registrar quem marcou saque como pago, quando, valor, chave usada e eventual comprovante.</li>
-      <li>Evitar armazenar CPF duplicado em <code>pagamentos</code>; preferir snapshot criptografado ou referência a dado de pagamento vigente com trilha de auditoria.</li>
-    </ul>
-  </section>
+				<h3>Pagamentos e operação</h3>
+				<ul>
+					<li>
+						Definir se recompensa gera obrigação fiscal, comprovante ou informe
+						para usuário.
+					</li>
+					<li>
+						Registrar quem marcou saque como pago, quando, valor, chave usada e
+						eventual comprovante.
+					</li>
+					<li>
+						Evitar armazenar CPF duplicado em <code>pagamentos</code>; preferir
+						snapshot criptografado ou referência a dado de pagamento vigente com
+						trilha de auditoria.
+					</li>
+				</ul>
+			</section>
 
-  <section id="eficiencia">
-    <h2>5. Eficiência e Performance</h2>
-    <h3>Frontend</h3>
-    <ul>
-      <li><strong>Client-side excessivo:</strong> <code>app/page.tsx</code> é <code>'use client'</code> e busca snapshot, pratos, receitas, fontes online e fontes manuais no browser.</li>
-      <li><strong>Pré-carregamento pesado:</strong> <code>getAllDetalhes</code>, <code>getAllFontes</code> e <code>getAllFontesManuais</code> rodam em segundo plano para todos os pratos. Isso melhora a gaveta, mas piora a primeira visita e expõe volume desnecessário.</li>
-      <li><strong>Imagens sem otimização Next:</strong> lint aponta <code>&lt;img&gt;</code> em admin, perfil e contribuir. Para fotos públicas/privadas, criar loader ou usar signed URL com <code>next/image</code>.</li>
-      <li><strong>Mapa client-only:</strong> faz sentido para interatividade, mas deve ficar isolado. O restante do dashboard pode ser Server Component com dados iniciais já prontos.</li>
-    </ul>
+			<section id="eficiencia">
+				<h2>5. Eficiência e Performance</h2>
+				<h3>Frontend</h3>
+				<ul>
+					<li>
+						<strong>Client-side excessivo:</strong> <code>app/page.tsx</code> é
+						<code>'use client'</code> e busca snapshot, pratos, receitas, fontes
+						online e fontes manuais no browser.
+					</li>
+					<li>
+						<strong>Pré-carregamento pesado:</strong>
+						<code>getAllDetalhes</code>, <code>getAllFontes</code> e
+						<code>getAllFontesManuais</code> rodam em segundo plano para todos
+						os pratos. Isso melhora a gaveta, mas piora a primeira visita e
+						expõe volume desnecessário.
+					</li>
+					<li>
+						<strong>Imagens sem otimização Next:</strong> lint aponta
+						<code>&lt;img&gt;</code> em admin, perfil e contribuir. Para fotos
+						públicas/privadas, criar loader ou usar signed URL com
+						<code>next/image</code>.
+					</li>
+					<li>
+						<strong>Mapa client-only:</strong> faz sentido para interatividade,
+						mas deve ficar isolado. O restante do dashboard pode ser Server
+						Component com dados iniciais já prontos.
+					</li>
+				</ul>
 
-    <h3>Banco e dados</h3>
-    <ul>
-      <li>Adicionar índices para consultas frequentes: <code>custos_pratos(snapshot_id)</code>, <code>precos(snapshot_id, ingrediente_id)</code>, <code>resultados_brutos(snapshot_id, ingrediente_id)</code>, <code>contribuicoes(user_id, status, criado_em)</code>, <code>pagamentos(user_id, status)</code>.</li>
-      <li>Evitar <code>DELETE + INSERT</code> em massa quando possível; para snapshots append-only, preferir upsert idempotente e preservar histórico.</li>
-      <li>Materializar resumos públicos: índice nacional, rankings por região, top pratos e cobertura em uma view/table própria para reduzir leituras no frontend.</li>
-      <li>Separar dados públicos de dados operacionais. Fontes brutas completas podem ser endpoint paginado, não payload inicial.</li>
-    </ul>
+				<h3>Banco e dados</h3>
+				<ul>
+					<li>
+						Adicionar índices para consultas frequentes:
+						<code>custos_pratos(snapshot_id)</code>,
+						<code>precos(snapshot_id, ingrediente_id)</code>,
+						<code>resultados_brutos(snapshot_id, ingrediente_id)</code>,
+						<code>contribuicoes(user_id, status, criado_em)</code>,
+						<code>pagamentos(user_id, status)</code>.
+					</li>
+					<li>
+						Evitar <code>DELETE + INSERT</code> em massa quando possível; para
+						snapshots append-only, preferir upsert idempotente e preservar
+						histórico.
+					</li>
+					<li>
+						Materializar resumos públicos: índice nacional, rankings por região,
+						top pratos e cobertura em uma view/table própria para reduzir
+						leituras no frontend.
+					</li>
+					<li>
+						Separar dados públicos de dados operacionais. Fontes brutas
+						completas podem ser endpoint paginado, não payload inicial.
+					</li>
+				</ul>
 
-    <h3>Pipeline Python</h3>
-    <ul>
-      <li>Adicionar retries com backoff, timeout consistente e logs estruturados para SerpAPI e Supabase.</li>
-      <li>Persistir qualidade por ingrediente: quantidade de resultados, rejeitados, outliers, fallback, manual/online e score de confiança.</li>
-      <li>Gerar backup off-site automático dos snapshots e tabelas essenciais antes/depois da coleta.</li>
-    </ul>
-  </section>
+				<h3>Pipeline Python</h3>
+				<ul>
+					<li>
+						Adicionar retries com backoff, timeout consistente e logs
+						estruturados para SerpAPI e Supabase.
+					</li>
+					<li>
+						Persistir qualidade por ingrediente: quantidade de resultados,
+						rejeitados, outliers, fallback, manual/online e score de confiança.
+					</li>
+					<li>
+						Gerar backup off-site automático dos snapshots e tabelas essenciais
+						antes/depois da coleta.
+					</li>
+				</ul>
+			</section>
 
-  <section id="refatoracao">
-    <h2>6. Refatoração e Qualidade de Código</h2>
-    <h3>Problemas observados</h3>
-    <ul>
-      <li><code>app/admin/page.tsx</code> tem 410 linhas e concentra autenticação, tabs, moderação, saques, preços manuais, histórico e recalculo.</li>
-      <li><code>lib/queries.ts</code> tem 236 linhas e mistura leitura pública, perfil, admin, pagamentos e RPCs sensíveis.</li>
-      <li>O lint falha com 24 erros de <code>@typescript-eslint/no-explicit-any</code> e 5 warnings.</li>
-      <li>Há acoplamento forte entre UI e schema Supabase. Mudanças de migration podem quebrar em runtime sem tipo gerado.</li>
-      <li>Não há testes automatizados visíveis para cálculo de custo, parsing de preço, RLS, moderação ou fluxo de recompensa.</li>
-    </ul>
+			<section id="refatoracao">
+				<h2>6. Refatoração e Qualidade de Código</h2>
+				<h3>Problemas observados</h3>
+				<ul>
+					<li>
+						<code>app/admin/page.tsx</code> tem 410 linhas e concentra
+						autenticação, tabs, moderação, saques, preços manuais, histórico e
+						recalculo.
+					</li>
+					<li>
+						<code>lib/queries.ts</code> tem 236 linhas e mistura leitura
+						pública, perfil, admin, pagamentos e RPCs sensíveis.
+					</li>
+					<li>
+						O lint falha com 24 erros de
+						<code>@typescript-eslint/no-explicit-any</code> e 5 warnings.
+					</li>
+					<li>
+						Há acoplamento forte entre UI e schema Supabase. Mudanças de
+						migration podem quebrar em runtime sem tipo gerado.
+					</li>
+					<li>
+						Não há testes automatizados visíveis para cálculo de custo, parsing
+						de preço, RLS, moderação ou fluxo de recompensa.
+					</li>
+				</ul>
 
-    <h3>Plano de refatoração</h3>
-    <ol>
-      <li><strong>Gerar tipos do Supabase:</strong> criar <code>lib/database.types.ts</code> com CLI do Supabase e tipar <code>supabase.from()</code>.</li>
-      <li><strong>Dividir queries por domínio:</strong> <code>queries/public.ts</code>, <code>queries/auth.ts</code>, <code>queries/admin.ts</code>, <code>queries/rewards.ts</code> e <code>queries/contributions.ts</code>.</li>
-      <li><strong>Extrair componentes:</strong> <code>AdminTabs</code>, <code>ModerationQueue</code>, <code>PayoutQueue</code>, <code>ManualPricePanel</code>, <code>ContributionForm</code>, <code>DishDrawer</code>.</li>
-      <li><strong>Criar camada server:</strong> operações de aprovar, pagar, salvar preço manual, solicitar saque e gerar signed URL devem passar por servidor.</li>
-      <li><strong>Introduzir testes:</strong> unitários para format/normalização, integration para RLS/RPC, Playwright para fluxos críticos.</li>
-      <li><strong>Padronizar validação:</strong> usar schemas compartilhados (ex.: Zod) para preço, peso, CPF, PIX, telefone e payloads admin.</li>
-    </ol>
-  </section>
+				<h3>Plano de refatoração</h3>
+				<ol>
+					<li>
+						<strong>Gerar tipos do Supabase:</strong> criar
+						<code>lib/database.types.ts</code> com CLI do Supabase e tipar
+						<code>supabase.from()</code>.
+					</li>
+					<li>
+						<strong>Dividir queries por domínio:</strong>
+						<code>queries/public.ts</code>, <code>queries/auth.ts</code>,
+						<code>queries/admin.ts</code>, <code>queries/rewards.ts</code> e
+						<code>queries/contributions.ts</code>.
+					</li>
+					<li>
+						<strong>Extrair componentes:</strong> <code>AdminTabs</code>,
+						<code>ModerationQueue</code>, <code>PayoutQueue</code>,
+						<code>ManualPricePanel</code>, <code>ContributionForm</code>,
+						<code>DishDrawer</code>.
+					</li>
+					<li>
+						<strong>Criar camada server:</strong> operações de aprovar, pagar,
+						salvar preço manual, solicitar saque e gerar signed URL devem passar
+						por servidor.
+					</li>
+					<li>
+						<strong>Introduzir testes:</strong> unitários para
+						format/normalização, integration para RLS/RPC, Playwright para
+						fluxos críticos.
+					</li>
+					<li>
+						<strong>Padronizar validação:</strong> usar schemas compartilhados
+						(ex.: Zod) para preço, peso, CPF, PIX, telefone e payloads admin.
+					</li>
+				</ol>
+			</section>
 
-  <section id="extras">
-    <h2>7. Dimensões Extras Que Fazem Sentido</h2>
-    <h3>Governança e qualidade estatística</h3>
-    <ul>
-      <li>Criar score de confiança por ingrediente e prato: cobertura, frescor, dispersão, fonte, manual/online/campo e fallback histórico.</li>
-      <li>Mostrar intervalo ou faixa provável, não apenas ponto único, quando houver baixa cobertura.</li>
-      <li>Separar preço online nacional, preço de campo regional e estimativas por tipo de loja em tabelas próprias.</li>
-      <li>Manter catálogo de ingredientes versionado: cada mudança de mapeamento ou peso de referência deve ter versão e justificativa.</li>
-    </ul>
+			<section id="extras">
+				<h2>7. Dimensões Extras Que Fazem Sentido</h2>
+				<h3>Governança e qualidade estatística</h3>
+				<ul>
+					<li>
+						Criar score de confiança por ingrediente e prato: cobertura,
+						frescor, dispersão, fonte, manual/online/campo e fallback histórico.
+					</li>
+					<li>
+						Mostrar intervalo ou faixa provável, não apenas ponto único, quando
+						houver baixa cobertura.
+					</li>
+					<li>
+						Separar preço online nacional, preço de campo regional e estimativas
+						por tipo de loja em tabelas próprias.
+					</li>
+					<li>
+						Manter catálogo de ingredientes versionado: cada mudança de
+						mapeamento ou peso de referência deve ter versão e justificativa.
+					</li>
+				</ul>
 
-    <h3>Observabilidade e operação</h3>
-    <ul>
-      <li>Monitorar coletas: sucesso/falha, chamadas SerpAPI usadas, ingredientes sem resultado, custo total, variação anômala e tempo de execução.</li>
-      <li>Criar alertas para falha de GitHub Action, queda de cobertura, custo de prato fora do esperado e erro de RPC.</li>
-      <li>Adicionar healthcheck público simples e página admin de status do pipeline.</li>
-    </ul>
+				<h3>Observabilidade e operação</h3>
+				<ul>
+					<li>
+						Monitorar coletas: sucesso/falha, chamadas SerpAPI usadas,
+						ingredientes sem resultado, custo total, variação anômala e tempo de
+						execução.
+					</li>
+					<li>
+						Criar alertas para falha de GitHub Action, queda de cobertura, custo
+						de prato fora do esperado e erro de RPC.
+					</li>
+					<li>
+						Adicionar healthcheck público simples e página admin de status do
+						pipeline.
+					</li>
+				</ul>
 
-    <h3>Produto e monetização</h3>
-    <ul>
-      <li>Criar páginas públicas por prato/região com SEO, histórico e fontes resumidas.</li>
-      <li>Gerar relatórios pagos por região, tipo de loja, cesta de ingredientes e tendência temporal.</li>
-      <li>Adicionar metodologia transparente: o que é coletado, como normaliza, limitações e margem de erro.</li>
-    </ul>
+				<h3>Produto e monetização</h3>
+				<ul>
+					<li>
+						Criar páginas públicas por prato/região com SEO, histórico e fontes
+						resumidas.
+					</li>
+					<li>
+						Gerar relatórios pagos por região, tipo de loja, cesta de
+						ingredientes e tendência temporal.
+					</li>
+					<li>
+						Adicionar metodologia transparente: o que é coletado, como
+						normaliza, limitações e margem de erro.
+					</li>
+				</ul>
 
-    <h3>Resiliência e continuidade</h3>
-    <ul>
-      <li>Backup automático fora do Supabase, com restauração testada.</li>
-      <li>Ambientes separados: desenvolvimento, staging e produção, cada um com Supabase próprio.</li>
-      <li>Runbooks para incidente de dados, falha de scraping, revogação de chaves e pagamento indevido.</li>
-    </ul>
-  </section>
+				<h3>Resiliência e continuidade</h3>
+				<ul>
+					<li>Backup automático fora do Supabase, com restauração testada.</li>
+					<li>
+						Ambientes separados: desenvolvimento, staging e produção, cada um
+						com Supabase próprio.
+					</li>
+					<li>
+						Runbooks para incidente de dados, falha de scraping, revogação de
+						chaves e pagamento indevido.
+					</li>
+				</ul>
+			</section>
 
-  <section id="roadmap">
-    <h2>8. Roadmap Recomendado</h2>
-    <h3>0 a 7 dias — estabilização</h3>
-    <ol>
-      <li>Atualizar dependências vulneráveis e confirmar <code>npm audit</code> sem high severity.</li>
-      <li>Corrigir lint: remover <code>any</code>, variáveis não usadas e warnings de imagem onde aplicável.</li>
-      <li>Remover fallback hardcoded de Supabase no frontend e exigir env pública configurada.</li>
-      <li>Tornar explícito no app que preço Mercado/Atacarejo ainda é estimativa.</li>
-      <li>Adicionar limites básicos: tamanho de upload, tipo de imagem e número de contribuições por usuário/dia.</li>
-    </ol>
+			<section id="roadmap">
+				<h2>8. Roadmap Recomendado</h2>
+				<h3>0 a 7 dias — estabilização</h3>
+				<ol>
+					<li>
+						Atualizar dependências vulneráveis e confirmar
+						<code>npm audit</code> sem high severity.
+					</li>
+					<li>
+						Corrigir lint: remover <code>any</code>, variáveis não usadas e
+						warnings de imagem onde aplicável.
+					</li>
+					<li>
+						Remover fallback hardcoded de Supabase no frontend e exigir env
+						pública configurada.
+					</li>
+					<li>
+						Tornar explícito no app que preço Mercado/Atacarejo ainda é
+						estimativa.
+					</li>
+					<li>
+						Adicionar limites básicos: tamanho de upload, tipo de imagem e
+						número de contribuições por usuário/dia.
+					</li>
+				</ol>
 
-    <h3>1 a 4 semanas — segurança e compliance</h3>
-    <ol>
-      <li>Migrar fotos para bucket privado com signed URLs.</li>
-      <li>Criptografar CPF/PIX e reduzir duplicação em <code>pagamentos</code>.</li>
-      <li>Criar Termos, Política de Privacidade, Política de Recompensa e consentimentos granulares.</li>
-      <li>Criar <code>audit_events</code> para admin, pagamentos, aprovação, rejeição e preço manual.</li>
-      <li>Mover mutações sensíveis para Route Handlers ou Server Actions.</li>
-    </ol>
+				<h3>1 a 4 semanas — segurança e compliance</h3>
+				<ol>
+					<li>Migrar fotos para bucket privado com signed URLs.</li>
+					<li>
+						Criptografar CPF/PIX e reduzir duplicação em
+						<code>pagamentos</code>.
+					</li>
+					<li>
+						Criar Termos, Política de Privacidade, Política de Recompensa e
+						consentimentos granulares.
+					</li>
+					<li>
+						Criar <code>audit_events</code> para admin, pagamentos, aprovação,
+						rejeição e preço manual.
+					</li>
+					<li>
+						Mover mutações sensíveis para Route Handlers ou Server Actions.
+					</li>
+				</ol>
 
-    <h3>1 a 2 meses — performance e escala</h3>
-    <ol>
-      <li>Refatorar dashboard para Server Components com detalhes/fontes sob demanda.</li>
-      <li>Materializar resumos públicos e adicionar índices de consulta.</li>
-      <li>Separar admin em sub-rotas e componentes menores.</li>
-      <li>Adicionar Playwright para login, contribuir, moderar, aprovar, solicitar saque e visualizar detalhe do prato.</li>
-      <li>Implementar observabilidade do pipeline e backup off-site automático.</li>
-    </ol>
+				<h3>1 a 2 meses — performance e escala</h3>
+				<ol>
+					<li>
+						Refatorar dashboard para Server Components com detalhes/fontes sob
+						demanda.
+					</li>
+					<li>
+						Materializar resumos públicos e adicionar índices de consulta.
+					</li>
+					<li>Separar admin em sub-rotas e componentes menores.</li>
+					<li>
+						Adicionar Playwright para login, contribuir, moderar, aprovar,
+						solicitar saque e visualizar detalhe do prato.
+					</li>
+					<li>
+						Implementar observabilidade do pipeline e backup off-site
+						automático.
+					</li>
+				</ol>
 
-    <h3>2 a 4 meses — padrão ouro</h3>
-    <ol>
-      <li>Score de confiança e metodologia pública por prato/ingrediente.</li>
-      <li>Calibração regional real com dados de campo e outlier detection antifraude.</li>
-      <li>Páginas SEO por prato/região e histórico temporal.</li>
-      <li>Ambiente staging com seed sintético e checks antes de deploy.</li>
-      <li>Processo formal de resposta a incidentes e revisão periódica de acessos admin.</li>
-    </ol>
-  </section>
+				<h3>2 a 4 meses — padrão ouro</h3>
+				<ol>
+					<li>
+						Score de confiança e metodologia pública por prato/ingrediente.
+					</li>
+					<li>
+						Calibração regional real com dados de campo e outlier detection
+						antifraude.
+					</li>
+					<li>Páginas SEO por prato/região e histórico temporal.</li>
+					<li>Ambiente staging com seed sintético e checks antes de deploy.</li>
+					<li>
+						Processo formal de resposta a incidentes e revisão periódica de
+						acessos admin.
+					</li>
+				</ol>
+			</section>
 
-  <section id="verificacoes">
-    <h2>9. Verificações Executadas</h2>
-    <table>
-      <thead>
-        <tr><th>Comando/verificação</th><th>Resultado</th><th>Interpretação</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><code>npm run build</code></td>
-          <td><span class="risk-low">Passou</span> com rede liberada para baixar fontes do Google.</td>
-          <td>O app compila em produção. Em ambiente sem rede, <code>next/font/google</code> falha ao buscar Inter/Lora.</td>
-        </tr>
-        <tr>
-          <td><code>npm run lint</code></td>
-          <td><span class="risk-high">Falhou</span>: 24 erros e 5 warnings.</td>
-          <td>Principal causa: <code>any</code> em <code>MapaBrasil</code>, <code>admin</code> e <code>lib/queries</code>; warnings de <code>&lt;img&gt;</code>.</td>
-        </tr>
-        <tr>
-          <td><code>npm audit --audit-level=low</code></td>
-          <td><span class="risk-high">Falhou</span>: 13 vulnerabilidades, 9 high.</td>
-          <td>Atualizar Next/dependências e revisar <code>react-simple-maps</code> por cadeia vulnerável de D3.</td>
-        </tr>
-        <tr>
-          <td>Leitura de migrations RLS</td>
-          <td><span class="risk-med">Parcialmente bom</span>.</td>
-          <td>RLS existe para perfis, contribuições e pagamentos; fotos públicas e PII em texto ainda são gargalos.</td>
-        </tr>
-        <tr>
-          <td>Contagem de arquivos/linhas</td>
-          <td>Arquivos críticos: <code>admin/page.tsx</code> 410 linhas, <code>contribuir/page.tsx</code> 247, <code>perfil/page.tsx</code> 268, <code>lib/queries.ts</code> 236.</td>
-          <td>Há concentração de responsabilidades e bom potencial de extração de componentes/domínios.</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
+			<section id="verificacoes">
+				<h2>9. Verificações Executadas</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Comando/verificação</th>
+							<th>Resultado</th>
+							<th>Interpretação</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>npm run build</code></td>
+							<td>
+								<span class="risk-low">Passou</span> com rede liberada para
+								baixar fontes do Google.
+							</td>
+							<td>
+								O app compila em produção. Em ambiente sem rede,
+								<code>next/font/google</code> falha ao buscar Inter/Lora.
+							</td>
+						</tr>
+						<tr>
+							<td><code>npm run lint</code></td>
+							<td>
+								<span class="risk-high">Falhou</span>: 24 erros e 5 warnings.
+							</td>
+							<td>
+								Principal causa: <code>any</code> em <code>MapaBrasil</code>,
+								<code>admin</code> e <code>lib/queries</code>; warnings de
+								<code>&lt;img&gt;</code>.
+							</td>
+						</tr>
+						<tr>
+							<td><code>npm audit --audit-level=low</code></td>
+							<td>
+								<span class="risk-high">Falhou</span>: 13 vulnerabilidades, 9
+								high.
+							</td>
+							<td>
+								Atualizar Next/dependências e revisar
+								<code>react-simple-maps</code> por cadeia vulnerável de D3.
+							</td>
+						</tr>
+						<tr>
+							<td>Leitura de migrations RLS</td>
+							<td><span class="risk-med">Parcialmente bom</span>.</td>
+							<td>
+								RLS existe para perfis, contribuições e pagamentos; fotos
+								públicas e PII em texto ainda são gargalos.
+							</td>
+						</tr>
+						<tr>
+							<td>Contagem de arquivos/linhas</td>
+							<td>
+								Arquivos críticos: <code>admin/page.tsx</code> 410 linhas,
+								<code>contribuir/page.tsx</code> 247,
+								<code>perfil/page.tsx</code> 268,
+								<code>lib/queries.ts</code> 236.
+							</td>
+							<td>
+								Há concentração de responsabilidades e bom potencial de extração
+								de componentes/domínios.
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
 
-  <footer>
-    Documento gerado a partir do repositório local <code>indice-pf</code>. Ele não altera o app; é uma auditoria
-    técnica e de produto para orientar as próximas decisões.
-  </footer>
-</main>
-</body>
+			<footer>
+				Documento gerado a partir do repositório local <code>indice-pf</code>.
+				Ele não altera o app; é uma auditoria técnica e de produto para orientar
+				as próximas decisões.
+			</footer>
+		</main>
+	</body>
 </html>
