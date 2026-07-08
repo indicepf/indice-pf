@@ -2,7 +2,7 @@
 // Dados públicos (snapshots via REST com a anon key); sem service role.
 import { ImageResponse } from 'next/og'
 
-export const revalidate = 3600   // cache de 1h — o índice muda 2×/mês
+export const revalidate = 3600   // cache de 1h — o índice muda 1×/semana
 
 const URL_SB = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yhgdlmmtiyvdgeoxavzn.supabase.co'
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloZ2RsbW10aXl2ZGdlb3hhdnpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAyNzMzMzYsImV4cCI6MjA2NTg0OTMzNn0.kdjSuqEXfp1LmnDA6voNC1WCUDV18XG1QVQtj4L2SN8'

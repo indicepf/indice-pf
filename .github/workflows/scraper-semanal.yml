@@ -2,9 +2,9 @@ name: Scraper Semanal — Índice PF
 
 on:
   schedule:
-    # Dias 1 e 15 às 8h (Brasília = 11h UTC) = 2 coletas/mês.
-    # 115 ingredientes × 2 = 230 chamadas/mês (2 contas SerpAPI = 500 grátis/mês).
-    - cron: '0 11 1,15 * *'
+    # Toda segunda às 8h (Brasília = 11h UTC) = 4–5 coletas/mês.
+    # 115 ingredientes × 5 = ~575 chamadas/mês (3 contas SerpAPI = 750 grátis/mês).
+    - cron: '0 11 * * 1'
     # coleta extraordinária pedida pelo responsável para 09/07/2026 — remover depois
     - cron: '0 11 9 7 *'
   workflow_dispatch:  # permite rodar manualmente pelo GitHub
