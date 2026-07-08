@@ -55,11 +55,35 @@ export default function Dashboard() {
   const [fontes, setFontes]     = useState<Record<number, Fonte[]>>({})
   const [fontesManuais, setFontesManuais] = useState<Record<number, FonteManual[]>>({})
 
+  const [pratoUrl, setPratoUrl] = useState<number | null>(null)
   useEffect(() => {
     getSnapshotsNovos().then(setSnapsNovos)
     getStatsPublicas().then(setStats)
     getSeriePratos().then(setSerie)
+    // deep-link (compartilhar filtro/prato): ?nivel=&regioes=&q=&prato=
+    const q = new URLSearchParams(window.location.search)
+    const n = q.get('nivel'); if (n && NIVEIS_PRECO.some(x => x.key === n && x.disponivel)) setModo(n as ModoKey)
+    const r = q.get('regioes'); if (r) setRegioes(new Set(r.split(',').filter(x => (REGIOES as readonly string[]).includes(x))))
+    const b = q.get('q'); if (b) setBusca(b)
+    const p = q.get('prato'); if (p && Number(p) > 0) setPratoUrl(Number(p))
   }, [])
+  // abre o prato do deep-link quando os custos chegam
+  useEffect(() => {
+    if (pratoUrl == null || !custos.length) return
+    const c = custos.find(x => x.pratos.id === pratoUrl)
+    if (c) setSelecionado(c)
+    setPratoUrl(null)
+  }, [pratoUrl, custos])
+  // mantém a URL espelhando o estado — é o que o Compartilhar copia
+  useEffect(() => {
+    const q = new URLSearchParams()
+    if (modo !== 'online') q.set('nivel', modo)
+    if (regioes.size) q.set('regioes', [...regioes].join(','))
+    if (busca.trim()) q.set('q', busca.trim())
+    if (selecionado) q.set('prato', String(selecionado.pratos.id))
+    const qs = q.toString()
+    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
+  }, [modo, regioes, busca, selecionado])
   useEffect(() => {
     if (!snapsNovos.length) return
     ;(async () => {
@@ -147,13 +171,6 @@ export default function Dashboard() {
 
   // item 1: com filtro por ingrediente ativo, a tabela de produtos mostra só
   // os ingredientes que entram nos pratos filtrados (via composição carregada)
-  const produtosRegiaoFiltrados = useMemo(() => {
-    if (!filtroIng || !detalhes) return produtosRegiao
-    const ids = new Set<number>()
-    for (const pid of filtroIng.ids) for (const it of (detalhes[pid] ?? [])) ids.add(it.ingrediente_id)
-    return produtosRegiao.filter(p => ids.has(p.id))
-  }, [produtosRegiao, filtroIng, detalhes])
-
   const lista = useMemo(() => {
     let l = custos
     if (regioes.size) l = l.filter(c => regioes.has(c.pratos.regiao))
@@ -178,6 +195,14 @@ export default function Dashboard() {
       return cmp * dir
     })
   }, [custos, regioes, busca, sort, filtroIng, porPrato])
+
+  const produtosRegiaoFiltrados = useMemo(() => {
+    const temFiltro = !!(filtroIng || regioes.size || busca.trim())
+    if (!temFiltro || !detalhes) return produtosRegiao
+    const ids = new Set<number>()
+    for (const c of lista) for (const it of (detalhes[c.pratos.id] ?? [])) ids.add(it.ingrediente_id)
+    return produtosRegiao.filter(p => ids.has(p.id))
+  }, [produtosRegiao, filtroIng, regioes, busca, lista, detalhes])
 
   function toggleSort(col: ColunaSort) {
     setSort(s => s.col === col ? { col, dir: s.dir === 1 ? -1 : 1 } : { col, dir: 1 })

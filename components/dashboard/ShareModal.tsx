@@ -6,7 +6,7 @@ import { Button, Modal } from '@/components/ui'
 // Modal de compartilhamento: preview do card PNG (/api/card) + ações.
 export default function ShareModal({ onClose }: { onClose: () => void }) {
   const [msg, setMsg] = useState('')
-  const urlSite = typeof window !== 'undefined' ? window.location.origin : ''
+  const urlSite = typeof window !== 'undefined' ? window.location.href : ''
   const urlCard = `${urlSite}/api/card`
 
   async function compartilhar() {
