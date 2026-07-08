@@ -24,7 +24,7 @@ const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia
 type ColunaSort = 'nome' | 'regiao' | 'custo' | 'delta'
 
 export default function Dashboard() {
-  const { profile } = useAuth()
+  const { profile, isPremium } = useAuth()
   const isAdmin = !!profile?.is_admin
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [custos, setCustos]     = useState<DishCost[]>([])
@@ -445,7 +445,7 @@ export default function Dashboard() {
 
             {/* produtos por região (premium; gating real na Fase 8) */}
             {produtosRegiao.length > 0 && (
-              <TabelaProdutosRegiao linhas={produtosRegiao} destravada={isAdmin} onIngrediente={abrirIngrediente} />
+              <TabelaProdutosRegiao linhas={produtosRegiao} destravada={isAdmin || isPremium} onIngrediente={abrirIngrediente} />
             )}
           </section>
         </div>
