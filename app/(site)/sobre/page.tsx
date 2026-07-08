@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 // layout e texto do mockup (page-sobre)
 export default function SobrePage() {
   return (
-    <main className="max-w-3xl mx-auto px-6 py-10">
+    <main className="site-main" style={{ marginTop: 0, paddingTop: 40 }}>
       <div className="box" style={{ maxWidth: 760, margin: '0 auto' }}>
         <h2>Sobre o Índice PF</h2>
         <p className="hint">Um produto Infinity Inc.</p>

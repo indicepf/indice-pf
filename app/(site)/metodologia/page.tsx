@@ -17,10 +17,10 @@ const FONTES = [
 
 export default function MetodologiaPage() {
   return (
-    <main className="max-w-3xl mx-auto px-6 py-10">
-      <div className="box">
-        <h2>Metodologia</h2>
-        <p className="hint">Como o Índice PF é construído</p>
+    <main className="site-main" style={{ marginTop: 0, paddingTop: 40 }}>
+      <div className="box" style={{ maxWidth: 820, margin: '0 auto 20px' }}>
+        <h2>Metodologia do Índice PF</h2>
+        <p className="hint">Como o índice é construído e por que ele é confiável.</p>
         <p style={{ color: 'var(--ink-2)', lineHeight: 1.7, marginBottom: 16 }}>
           O Índice PF mede a variação de preço dos alimentos que compõem o <b>prato feito</b> brasileiro —
           a refeição mais representativa do país — em múltiplos níveis da cadeia e cinco regiões.
@@ -43,7 +43,7 @@ export default function MetodologiaPage() {
         </div>
       </div>
 
-      <div className="box">
+      <div className="box" style={{ maxWidth: 820, margin: '0 auto' }}>
         <h2>Como o índice é calculado</h2>
         <p className="hint">Do preço do ingrediente ao custo do prato</p>
         <ol className="list-decimal pl-5 space-y-2 text-sm" style={{ color: 'var(--ink-2)', lineHeight: 1.7 }}>

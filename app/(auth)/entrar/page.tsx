@@ -30,7 +30,7 @@ function EntrarInner() {
   return (
     <>
       <h1>Entrar</h1>
-      <p className="sub">Bem-vindo de volta ao Índice PF</p>
+      <p className="sub">Acesse sua conta do Índice PF</p>
 
       <div className="field">
         <label>E-mail</label>
@@ -39,16 +39,19 @@ function EntrarInner() {
       </div>
       <div className="field">
         <label>Senha</label>
-        <input type="password" value={senha} onChange={e => setSenha(e.target.value)}
+        <input type="password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••••••"
           onKeyDown={e => e.key === 'Enter' && onEntrar()} autoComplete="current-password" />
+      </div>
+      <div style={{ textAlign: 'right', marginBottom: 6 }}>
+        <Link href="/esqueci-senha" style={{ fontSize: 12.5, color: 'var(--azul)', fontWeight: 600 }}>Esqueci minha senha</Link>
       </div>
 
       {erro && <p className="text-xs text-danger mt-2">{erro}</p>}
       <button className="btn-primary" disabled={busy} onClick={onEntrar}>{busy ? '…' : 'Entrar'}</button>
 
-      <div className="auth-alt">Não tem conta? <Link href={`/cadastro${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`}>Criar conta</Link></div>
+      <div className="auth-alt">Não tem conta? <Link href={`/cadastro${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`}>Criar conta grátis</Link></div>
       <div className="auth-alt" style={{ marginTop: 8 }}>
-        <Link href="/esqueci-senha">Esqueci minha senha</Link> · <Link href="/">← Voltar ao site</Link>
+        <Link href="/">← Voltar ao site</Link>
       </div>
     </>
   )

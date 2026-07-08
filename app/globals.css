@@ -292,6 +292,8 @@ body {
 .auth-wrap{min-height:100vh;display:grid;grid-template-columns:1.05fr 1fr}
 @media (max-width:900px){.auth-wrap{grid-template-columns:1fr}.auth-hero{display:none}}
 .auth-hero{background:var(--grad-marca);position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:48px;color:#fff}
+.auth-hero::after{content:"";position:absolute;inset:0;background:radial-gradient(700px 400px at 80% 20%,rgba(255,255,255,.18),transparent 60%)}
+.auth-hero .inf-bg{position:absolute;right:-70px;bottom:-50px;width:400px;height:400px;opacity:.14;z-index:0}
 .auth-hero h2{font-size:30px;font-weight:800;letter-spacing:-.025em;line-height:1.15;max-width:420px}
 .auth-hero .hero-sub{font-size:14.5px;color:rgba(255,255,255,.85);margin-top:12px;max-width:400px;line-height:1.6}
 .hstats{display:flex;gap:28px;margin-top:26px}
