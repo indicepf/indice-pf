@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { getIngredientes, getProfile } from '@/lib/queries'
+import { getIngredientes, getProfile, comRetry } from '@/lib/queries'
 import { perfilCompleto } from '../../useAuth'
 import { rotuloQtd, exemploQtd } from '@/lib/format'
 import type { Ing } from '@/lib/types'
@@ -79,8 +79,9 @@ export default function ContribuirPage() {
       const u = data.session?.user
       if (!u) { router.replace('/entrar?next=%2Fcontribuir'); setUserId(null); return }
       // perfil completo é pré-requisito para contribuir (valida as contribuições)
-      const p = await getProfile(u.id)
-      if (!perfilCompleto(p)) { router.replace('/completar-perfil?next=%2Fcontribuir'); setUserId(null); return }
+      // falha na busca do perfil não redireciona — deixa passar e o envio valida
+      const p = await comRetry(() => getProfile(u.id)).catch(() => undefined)
+      if (p !== undefined && !perfilCompleto(p)) { router.replace('/completar-perfil?next=%2Fcontribuir'); setUserId(null); return }
       setUserId(u.id)
     })
   }, [router])

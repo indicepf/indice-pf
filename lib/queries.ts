@@ -550,15 +550,27 @@ export async function getIngredientes(): Promise<Ing[]> {
   return (data as Ing[]) || []
 }
 
+// uma tentativa extra após pausa curta — cobre falha transitória de rede/token
+export async function comRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn() } catch {
+    await new Promise(r => setTimeout(r, 800))
+    return fn()
+  }
+}
+
+// as queries de dados do usuário lançam em erro de rede/auth (em vez de
+// devolver vazio) para as telas poderem tentar de novo em vez de ficar em "—"
 export async function getProfile(uid: string): Promise<Profile | null> {
-  const { data } = await supabase.from('profiles').select('id,nome,telefone,regiao,is_admin,sexo,data_nascimento,avatar_url').eq('id', uid).single()
+  const { data, error } = await supabase.from('profiles').select('id,nome,telefone,regiao,is_admin,sexo,data_nascimento,avatar_url').eq('id', uid).maybeSingle()
+  if (error) throw error
   return (data as Profile) ?? null
 }
 
 export async function getMinhasContribuicoes(uid: string): Promise<Contribuicao[]> {
-  const { data } = await supabase.from('contribuicoes')
+  const { data, error } = await supabase.from('contribuicoes')
     .select('id,produto,preco,status,foto_url,criado_em,cidade,endereco,lat,lng,ingredientes(nome)')
     .eq('user_id', uid).order('criado_em', { ascending: false })
+  if (error) throw error
   return (data as unknown as Contribuicao[]) || []
 }
 
@@ -642,9 +654,11 @@ export async function excluirContribuicao(id: number) {
 }
 
 export async function getRecompensa(uid: string) {
-  const { count } = await supabase.from('contribuicoes')
+  const { count, error: e1 } = await supabase.from('contribuicoes')
     .select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('status', 'aprovada')
-  const { data: pags } = await supabase.from('pagamentos').select('valor,status').eq('user_id', uid)
+  if (e1) throw e1
+  const { data: pags, error: e2 } = await supabase.from('pagamentos').select('valor,status').eq('user_id', uid)
+  if (e2) throw e2
   const aprovadas = count || 0
   const ganho = aprovadas * VALOR_POR_FOTO
   const reservado = (pags || []).filter((p: any) => p.status !== 'rejeitada').reduce((s: number, p: any) => s + Number(p.valor), 0)
@@ -652,7 +666,8 @@ export async function getRecompensa(uid: string) {
 }
 
 export async function getDadosRecompensa(uid: string) {
-  const { data } = await supabase.from('profiles').select('cpf,chave_pix').eq('id', uid).single()
+  const { data, error } = await supabase.from('profiles').select('cpf,chave_pix').eq('id', uid).maybeSingle()
+  if (error) throw error
   return data as { cpf: string | null; chave_pix: string | null } | null
 }
 
@@ -681,9 +696,10 @@ export async function getSaques(status: string) {
 
 // histórico de saques do próprio usuário (todos os status), mais recentes primeiro
 export async function getMeusSaques(uid: string) {
-  const { data } = await supabase.from('pagamentos')
+  const { data, error } = await supabase.from('pagamentos')
     .select('id,valor,status,criado_em,pago_em')
     .eq('user_id', uid).order('criado_em', { ascending: false })
+  if (error) throw error
   return (data as { id: number; valor: number; status: string; criado_em: string; pago_em: string | null }[]) || []
 }
 
