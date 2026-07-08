@@ -560,6 +560,7 @@ export default function Dashboard() {
           fontesPorIngrediente={fontes} manuaisPorIngrediente={fontesManuais} fator={fator} modo={modo}
           dataColeta={snapshot.data}
           serie={serie ? { labels: serie.snaps.map(s => fmtCurta(s.data)), valores: serie.custos[selecionado.pratos.id] ?? [] } : undefined}
+          onShare={() => setShare(true)}
           onClose={() => setSelecionado(null)} />
       )}
 
