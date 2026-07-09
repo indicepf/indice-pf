@@ -26,7 +26,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Usuario | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [isPremium, setIsPremium] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [sessaoPronta, setSessaoPronta] = useState(false)
+  const [perfilPronto, setPerfilPronto] = useState(false)
   const uidCarregado = useRef<string | null>(null)
 
   const refresh = useCallback(async (uid: string) => {
@@ -40,6 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // falha transitória (token em renovação etc.) — mantém o estado atual
       return null
+    } finally {
+      setPerfilPronto(true)
     }
   }, [])
 
@@ -52,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (uidCarregado.current !== u.id) refresh(u.id)
       } else {
         setUser(null); setProfile(null); setIsPremium(false); uidCarregado.current = null
+        setPerfilPronto(true)   // deslogado: não há perfil a esperar
       }
     }
     // seed do storage no primeiro efeito (não no estado inicial: o HTML do
@@ -62,7 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // sem sessão real ainda não desloga aqui: pode ser token em renovação —
       // o onAuthStateChange resolve o estado final
       if (data.session?.user) aplicar(data.session.user)
-      if (vivo) setLoading(false)
+      else if (!semente) aplicar(null)
+      if (vivo) setSessaoPronta(true)
     })
     // sem await dentro do callback: o supabase-js trava a fila de auth se o
     // callback aguardar outras chamadas ao Supabase — despacho para fora dele
@@ -76,6 +81,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
     return () => { vivo = false; sub.subscription.unsubscribe() }
   }, [refresh])
+
+  // loading só termina quando a sessão resolveu E o perfil do usuário logado
+  // chegou — RequireAdmin depende disso para não redirecionar cedo demais
+  const loading = !sessaoPronta || (!!user && !perfilPronto)
 
   return createElement(AuthCtx.Provider, { value: { user, profile, isPremium, loading, refresh } }, children)
 }

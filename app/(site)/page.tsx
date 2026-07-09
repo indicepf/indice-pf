@@ -72,7 +72,9 @@ export default function Dashboard() {
   const [pratoSel, setPratoSel] = useState<number | null>(null)   // select "Prato Feito" dos filtros (mockup)
   const [share, setShare] = useState(false)
   const [comparar, setComparar] = useState(false)                          // toggle do mockup: linha da coleta anterior + coluna "ant."
-  const [legendOff, setLegendOff] = useState<Set<string>>(new Set())       // legenda clicável do gráfico geral
+  // legenda clicável: o gráfico abre só com a linha do nível ativo — as outras
+  // entram quando o usuário clica na legenda (decisão do responsável, 09/07)
+  const [legendOff, setLegendOff] = useState<Set<string>>(() => new Set(MODOS.filter(n => n.key !== 'online').map(n => n.key)))
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]> | null>(null)
   const [fontes, setFontes]     = useState<Record<number, Fonte[]>>({})
   const [fontesManuais, setFontesManuais] = useState<Record<number, FonteManual[]>>({})
@@ -135,6 +137,11 @@ export default function Dashboard() {
   const nivel = NIVEIS_PRECO.find(n => n.key === modo)!
   const fator = 1 - nivel.desc
 
+  // ao trocar o nível ativo, garante a linha dele visível no gráfico
+  useEffect(() => {
+    setLegendOff(prev => { if (!prev.has(modo)) return prev; const nx = new Set(prev); nx.delete(modo); return nx })
+  }, [modo])
+
   const custosRegiao = useMemo(() => regioes.size ? custos.filter(c => regioes.has(c.pratos.regiao)) : custos, [custos, regioes])
   const indice = useMemo(() => mediana(custosRegiao.map(c => c.custo_total)), [custosRegiao])
 
@@ -146,7 +153,11 @@ export default function Dashboard() {
 
   const serieIndice = useMemo(() => {
     if (!serie) return []
-    return serie.snaps.map((s, i) => {
+    // o período aplicado (ini/fim) vale para os gráficos também — não só tabelas
+    return serie.snaps
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => (!ini || s.data >= ini) && (!fim || s.data <= fim))
+      .map(({ s, i }) => {
       const vals = serie.pratos.filter(p => idsRecorte.has(p.id))
         .map(p => serie.custos[p.id]?.[i]).filter((v): v is number => v != null && v > 0)
       const med = mediana(vals)
@@ -159,7 +170,7 @@ export default function Dashboard() {
       }
       return row
     })
-  }, [serie, idsRecorte, fator])
+  }, [serie, idsRecorte, fator, ini, fim])
 
   // Δ% do índice do recorte entre as duas últimas coletas (por nível o Δ é o mesmo)
   const deltaIndice = useMemo(() => {
@@ -174,14 +185,6 @@ export default function Dashboard() {
     if (!comparar) return serieIndice
     return serieIndice.map((row, i) => ({ ...row, anterior: i > 0 ? serieIndice[i - 1][modo] : null }))
   }, [serieIndice, comparar, modo])
-
-  // Δ% do índice desde a 1ª coleta do histórico (linha secundária do KPI)
-  const deltaTotal = useMemo(() => {
-    if (serieIndice.length < 2) return null
-    const a = serieIndice[0].indice as number
-    const b = serieIndice[serieIndice.length - 1].indice as number
-    return a > 0 ? (b - a) / a * 100 : null
-  }, [serieIndice])
 
   function toggleLegend(key: string) {
     setLegendOff(prev => { const nx = new Set(prev); if (nx.has(key)) nx.delete(key); else nx.add(key); return nx })
@@ -274,6 +277,13 @@ export default function Dashboard() {
 
   const temSerie = serieIndice.length >= 2
   const rotuloRecorte = regioes.size === 0 ? 'Brasil' : regioes.size === 1 ? [...regioes][0] : `${regioes.size} regiões`
+  // contexto do número dos KPIs: sem filtro = última coleta; com filtro de
+  // 1 coleta = a data dela; com intervalo = média das coletas do intervalo
+  const rotuloPeriodo = (!ini && !fim)
+    ? (snapshot ? `última coleta · ${fmtData(snapshot.data)}` : '')
+    : nColetasHome <= 1
+      ? (snapshot ? `coleta de ${fmtData(snapshot.data)}` : 'sem coleta no período')
+      : `média de ${nColetasHome} coletas do período`
 
   if (loading) {
     return (
@@ -415,8 +425,9 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* KPIs — um por nível de preço; scorecard composto (decisão de 08/07):
-                variação % como número principal + valor em R$ no canto inferior direito */}
+            {/* KPIs — um por nível de preço. Número principal = custo do PF em R$,
+                com o contexto explícito (última coleta / data / média do intervalo);
+                a variação % vs coleta anterior fica como linha secundária (09/07). */}
             <div className="grid sm:grid-cols-3 gap-[14px]">
               {MODOS.map(n => {
                 const f = 1 - n.desc
@@ -429,15 +440,13 @@ export default function Dashboard() {
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: NIVEL_HEX[n.key], display: 'inline-block' }} />
                       {n.label}
                     </div>
-                    <div className="kval tnum">
-                      {deltaIndice != null ? `${deltaIndice > 0 ? '+' : ''}${deltaIndice.toFixed(2)}%` : '—'}
-                    </div>
+                    <div className="kval tnum">{brl(indice * f)}</div>
                     <div className={`ktrend ${cls}`}>
-                      {deltaIndice != null ? <>{arrow} coleta · <span style={{ color: 'var(--dim)', fontWeight: 600 }}>
-                        {deltaTotal != null ? `${deltaTotal > 0 ? '+' : ''}${deltaTotal.toFixed(1)}% desde a 1ª` : '—'}
-                      </span></> : 'primeira coleta do recorte'}
+                      {deltaIndice != null
+                        ? `${arrow} ${deltaIndice > 0 ? '+' : ''}${deltaIndice.toFixed(2)}% vs coleta anterior`
+                        : 'primeira coleta do recorte'}
                     </div>
-                    <div className="kbrl tnum">{brl(indice * f)}</div>
+                    <div className="kctx">{rotuloPeriodo}</div>
                   </button>
                 )
               })}
@@ -502,7 +511,8 @@ export default function Dashboard() {
                       ))}
                       {comparar && (
                         <div className="lg" style={{ cursor: 'default' }}>
-                          <span className="sw" style={{ background: 'none', height: 0, borderTop: '2px dashed var(--dim)' }} />Período anterior
+                          <span className="sw" style={{ background: 'none', height: 0, borderTop: '2px dashed var(--dim)' }} />
+                          Período anterior{serieIndice.length < 3 ? ' — visível a partir da 3ª coleta do recorte' : ''}
                         </div>
                       )}
                     </div>
