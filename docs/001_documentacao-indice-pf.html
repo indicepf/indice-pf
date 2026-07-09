@@ -128,6 +128,12 @@
   <ol class="steps">
     <li><strong>Cache diário</strong> — antes de chamar a API, verifica se já existe uma resposta salva em <code>cache_serpapi.json</code> para aquele ingrediente na data de hoje. Se sim, reutiliza (evita gastar cota da SerpAPI em reexecuções no mesmo dia).</li>
     <li><strong>Chamada à SerpAPI</strong> — requisição GET para <code>https://serpapi.com/search</code> com <code>engine=google_shopping</code>, <code>gl=br</code>, <code>hl=pt</code>, <code>location=Brazil</code> e o termo de busca do ingrediente. Retorna a lista de <code>shopping_results</code>.</li>
+    <li><strong>Retry em "no results" (PR #104, 09/07/2026)</strong> — o <em>"Google hasn't returned any results"</em> da
+      SerpAPI é <u>intermitente</u>: a mesma busca re-tentada em outra conta costuma trazer resultados. O scraper re-tenta
+      a query nas contas seguintes e só aceita o vazio se <strong>todas</strong> devolverem vazio. Histórico que motivou:
+      a coleta de 01/07 (com retry) teve 0 não-encontrados; a de 09/07 rodou sem retry (otimização de cota de 02/07,
+      revertida) e teve 22 itens sem preço, incluindo triviais como ovo e alface. Erros de chave (401/429/cota) também
+      rotacionam para a próxima conta re-tentando a mesma busca — nada se perde na transição.</li>
     <li><strong>Limita aos 15 primeiros resultados</strong> de cada busca.</li>
     <li><strong>Validação do produto</strong> (<code>produto_valido</code>) — aplica as regras <code>palavras_ok</code> / <code>palavras_nao</code> sobre o título em minúsculo. Produtos fora do escopo são descartados e contados como "rejeitados".</li>
     <li><strong>Limpeza do preço</strong> (<code>limpar_preco</code>) — remove tudo que não é dígito, vírgula ou ponto do campo <code>price</code> da SerpAPI; trata formatos BR (<code>1.234,56</code>) e US (<code>1234.56</code>) antes de converter para <code>float</code>.</li>
@@ -222,16 +228,29 @@
   <p>O workflow <code>.github/workflows/scraper-semanal.yml</code> roda (atualizado em 08/07/2026):</p>
   <ul>
     <li><strong>Agendamento:</strong> <u>toda segunda-feira</u> às 11h UTC (8h em Brasília) — <code>cron: '0 11 * * 1'</code> = 4–5 coletas/mês. Antes eram 2 coletas/mês (dias 1 e 15); a cadência semanal foi pedida pelo responsável em 08/07/2026.</li>
-    <li><strong>Cota:</strong> ~115 ingredientes × 4–5 coletas = 460–575 chamadas/mês. São <strong>4 contas SerpAPI</strong> nos secrets (<code>SERPAPI_KEY</code>, <code>SERPAPI_KEY_2</code>, <code>SERPAPI_KEY_3</code>, <code>SERPAPI_KEY_4</code> = 1000 chamadas grátis/mês) e o scraper rotaciona automaticamente para a próxima conta quando uma esgota (401/429/cota). Folga de ~425 chamadas para rodadas manuais.</li>
+    <li><strong>Cota:</strong> ~115 buscas base + ~15–25 retries de "no results" = <strong>~130–140 chamadas por coleta</strong>
+      (~560–600/mês na cadência semanal). São <strong>4 contas SerpAPI</strong> nos secrets (<code>SERPAPI_KEY</code>,
+      <code>SERPAPI_KEY_2</code>, <code>SERPAPI_KEY_3</code>, <code>SERPAPI_KEY_4</code> = 1000 chamadas grátis/mês) e o
+      scraper rotaciona automaticamente para a próxima conta quando uma esgota (401/429/cota). Folga de ~400 chamadas.
+      Se a folga apertar, o primeiro ajuste é limitar o retry de "no results" a 2 tentativas (hoje tenta as 4 contas).</li>
+    <li><strong>Itens cronicamente ausentes</strong> (sem oferta no Google Shopping — em 09/07/2026: carne de bode,
+      matambre bovino e piranha): cobrir <u>uma vez</u> com preço manual em /admin → Coleta; continuam sendo tentados a
+      cada coleta (custo: ~4 chamadas cada) e entram sozinhos se aparecerem.</li>
     <li><strong>Disparo manual:</strong> via <code>workflow_dispatch</code>, pela aba Actions do GitHub — modo <code>faltantes</code> (default; só raspa o que não veio nos últimos 6 dias e soma ao último snapshot) ou <code>completo</code> (raspa os 115).</li>
+    <li><strong>Reparo de coleta incompleta:</strong> se uma coleta terminar com muitos "não encontrados" (ver /admin →
+      Coleta), rodar o workflow manualmente em modo <code>faltantes</code> — pula o que já veio e mescla só os buracos no
+      último snapshot (foi assim que os 26 faltantes de 09/07 viraram 3). Com o retry no scraper isso deve ser exceção,
+      não rotina.</li>
     <li><strong>Passos:</strong> checkout → Python 3.11 + <code>requests</code>/<code>python-dotenv</code> → <code>scraper_pf.py</code> → <code>salvar_supabase.py</code>. <code>calcular_custos_pratos.py</code> <strong>não roda mais no workflow</strong>: a coleta fica em staging e só entra no índice após aprovação em /admin → Coleta.</li>
     <li><strong>Segredos usados:</strong> <code>SUPABASE_URL</code>, <code>SUPABASE_KEY</code> (service role), <code>SERPAPI_KEY</code>, <code>SERPAPI_KEY_2</code>, <code>SERPAPI_KEY_3</code>, <code>SERPAPI_KEY_4</code>.</li>
-    <li><strong>Temporário:</strong> há um cron extraordinário <code>0 11 9 7 *</code> (coleta única de 09/07/2026) a remover após rodar.</li>
+    <li><strong>Atraso do cron:</strong> o agendamento do GitHub Actions é "melhor esforço" e neste repositório costuma
+      disparar <u>horas</u> depois do horário (runs históricos: agendados para 11h UTC, executados ~18–19h UTC). O dia
+      da coleta é o que vale, não a hora. O cron extraordinário de 09/07/2026 rodou e foi removido (PR #103).</li>
   </ul>
   <div class="note">
     <p><strong>Para mudar a frequência da coleta:</strong> solicite a alteração — não basta editar o cron. Uma mudança de
     cadência envolve três pontos que precisam andar juntos: (1) o <code>cron</code> do workflow; (2) a cota da SerpAPI —
-    cada coleta completa gasta ~115 chamadas e o teto atual é 1000/mês com 4 contas; se a nova cadência estourar isso,
+    cada coleta completa gasta ~130–140 chamadas (base + retries) e o teto atual é 1000/mês com 4 contas; se a nova cadência estourar isso,
     é preciso criar outra conta e adicionar <code>SERPAPI_KEY_5</code> aos secrets, ao workflow e ao scraper; e (3) os textos do
     site que citam a frequência (banner "Como coletamos estes dados" e o aviso do gráfico na home). Sobre aprovação:
     cada coleta fica em staging até ser aprovada em <strong>/admin → Coleta</strong>; se ninguém aprovar, a migração 29
