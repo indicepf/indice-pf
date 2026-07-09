@@ -202,6 +202,8 @@ body {
 .btn-mk.primary:hover{transform:translateY(-1px);box-shadow:0 14px 30px rgba(0,105,212,.38)}
 .btn-mk.ghost{background:transparent;border-color:transparent}
 .btn-mk.ghost:hover{background:var(--surface-3)}
+.btn-mk.danger{color:var(--danger);border-color:#f3c9c9}
+.btn-mk.danger:hover{background:var(--danger-bg)}
 .btn-mk svg{width:16px;height:16px}
 
 .filters{position:sticky;top:74px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:auto;max-height:calc(100vh - 92px)}

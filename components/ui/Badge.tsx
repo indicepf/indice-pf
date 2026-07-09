@@ -2,11 +2,12 @@ import type { HTMLAttributes } from 'react'
 
 export type BadgeTone = 'neutral' | 'ok' | 'warn' | 'danger'
 
+// pill do mockup (formato do .premium-tag): raio 99px, caixa alta, peso forte
 const tones: Record<BadgeTone, string> = {
-  neutral: 'text-dim border-border',
-  ok: 'text-ok border-ok/30 bg-ok/5',
-  warn: 'text-warn border-warn/30 bg-warn/5',
-  danger: 'text-danger border-danger/30 bg-danger/5',
+  neutral: 'text-dim bg-surface-3',
+  ok: 'text-ok bg-ok/10',
+  warn: 'text-warn bg-warn/10',
+  danger: 'text-danger bg-danger/10',
 }
 
 type Props = HTMLAttributes<HTMLSpanElement> & { tone?: BadgeTone }
@@ -14,7 +15,7 @@ type Props = HTMLAttributes<HTMLSpanElement> & { tone?: BadgeTone }
 export default function Badge({ tone = 'neutral', className = '', ...props }: Props) {
   return (
     <span
-      className={`text-[0.65rem] uppercase tracking-wide border rounded px-1.5 py-0.5 ${tones[tone]} ${className}`}
+      className={`text-[10px] font-bold uppercase tracking-[0.04em] rounded-full px-2 py-0.5 ${tones[tone]} ${className}`}
       {...props}
     />
   )
