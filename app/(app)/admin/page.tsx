@@ -400,7 +400,7 @@ export default function AdminPage() {
             <input value={aprBusca} onChange={e => setAprBusca(e.target.value)} placeholder="ex: cebola" className={inputCls} />
           </label>
           <button onClick={() => carregarAprovadas()} disabled={aprBusy}
-            className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+            className="btn-mk primary sm disabled:opacity-60">
             {aprBusy ? 'Filtrando…' : 'Aplicar filtros'}
           </button>
         </div>
@@ -461,7 +461,7 @@ export default function AdminPage() {
               </div>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <button onClick={() => salvarAprovada(c)} disabled={salvandoId === c.id}
-                  className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+                  className="btn-mk primary sm disabled:opacity-60">
                   {salvandoId === c.id ? 'Salvando…' : 'Salvar'}
                 </button>
                 <span className={`text-xs px-2 py-1 rounded ${rk == null ? 'text-dim' : rk > 100 ? 'bg-accent/10 text-accent font-medium' : 'text-dim'}`}>
@@ -555,7 +555,7 @@ export default function AdminPage() {
                   <input value={editSaque.cpf ?? ''} onChange={e => setEditSaque(v => v && ({ ...v, cpf: e.target.value || null }))} className={inputCls} />
                 </label>
                 <button onClick={() => salvarSaqueSuper(editSaque)}
-                  className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition col-span-2 sm:col-span-1 self-end">Salvar</button>
+                  className="btn-mk primary sm col-span-2 sm:col-span-1 self-end">Salvar</button>
               </div>
             )}
           </div>
@@ -670,7 +670,7 @@ export default function AdminPage() {
                 </label>
               </div>
               <button onClick={adicionarManual}
-                className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition mt-3">Definir</button>
+                className="btn-mk primary sm mt-3">Definir</button>
             </div>
           )}
         </div>
@@ -738,7 +738,7 @@ export default function AdminPage() {
               </div>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <button onClick={() => salvarManual(m)}
-                  className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition">Salvar</button>
+                  className="btn-mk primary sm">Salvar</button>
                 <button onClick={() => removerManual(m)}
                   className="text-sm border border-border text-dim px-4 py-1.5 rounded-md hover:bg-surface-2 transition">
                   Remover (voltar ao online)

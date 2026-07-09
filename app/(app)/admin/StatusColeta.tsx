@@ -269,7 +269,7 @@ export default function StatusColeta() {
                 </div>
                 <div className="flex items-center gap-2 mt-3 flex-wrap">
                   <button onClick={() => salvarManual(item)} disabled={salvandoId === item.id}
-                    className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+                    className="btn-mk primary sm disabled:opacity-60">
                     {salvandoId === item.id ? 'Salvando…' : 'Salvar'}
                   </button>
                   <button onClick={() => verHistorico(item.id)}

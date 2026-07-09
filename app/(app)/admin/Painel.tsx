@@ -70,7 +70,7 @@ function FormEdicao({ edit, setEdit, ings, salvando, onSalvar }: {
         </label>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        <button onClick={onSalvar} disabled={salvando} className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">{salvando ? 'Salvando…' : 'Salvar'}</button>
+        <button onClick={onSalvar} disabled={salvando} className="btn-mk primary sm disabled:opacity-60">{salvando ? 'Salvando…' : 'Salvar'}</button>
         <button onClick={() => setEdit(null)} className="text-sm border border-border text-dim px-3 py-1.5 rounded-md hover:bg-surface-2 transition">Cancelar</button>
         <span className={`text-xs px-2 py-1 rounded ${rk == null ? 'text-dim' : rk > 100 ? 'bg-accent/10 text-accent font-medium' : 'text-dim'}`}>{rk == null ? 'não calibra o índice' : `${brl(rk)}/kg${rk > 100 ? ' · confira' : ''}`}</span>
         <span className="text-[0.6rem] uppercase tracking-wide text-dim ml-auto">{edit.status}</span>
@@ -259,7 +259,7 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
                 <input type="checkbox" checked={!!editPerfil.is_super} onChange={e => setEditPerfil(v => v && ({ ...v, is_super: e.target.checked }))} /> superusuário
               </label>
               <button onClick={() => salvarPerfil(editPerfil)}
-                className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition col-span-2 sm:col-span-1 self-end">Salvar perfil</button>
+                className="btn-mk primary sm col-span-2 sm:col-span-1 self-end">Salvar perfil</button>
             </div>
           )}
         </div>

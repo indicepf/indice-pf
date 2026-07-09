@@ -56,7 +56,7 @@ export default function SuperAcoes() {
           <input type="date" value={desde} onChange={e => setDesde(e.target.value)} className={inputCls} />
         </label>
         <button onClick={carregar} disabled={busy}
-          className="text-sm bg-accent text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-60">
+          className="btn-mk primary sm disabled:opacity-60">
           {busy ? 'Filtrando…' : 'Aplicar'}
         </button>
       </div>

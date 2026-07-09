@@ -46,7 +46,7 @@ export default function MeusEnviosPage() {
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-dim">Suas fotos de preço enviadas e o status de cada uma.</p>
         <button onClick={() => router.push('/contribuir')}
-          className="text-sm border border-accent text-accent px-3 py-1.5 rounded-[var(--r-sm)] hover:bg-accent hover:text-white transition cursor-pointer shrink-0">
+          className="btn-mk sm shrink-0">
           Enviar preços
         </button>
       </div>
