@@ -27,7 +27,7 @@ export default function PainelPage() {
   const aprovadas = contribs?.filter(c => c.status === 'aprovada').length ?? 0
 
   return (
-    <main className="max-w-3xl mx-auto px-6 py-8">
+    <main className="max-w-6xl mx-auto px-6 py-8">
       <h2 className="text-2xl font-bold tracking-tight">
         {profile?.nome ? `Olá, ${profile.nome.split(' ')[0]}` : 'Olá'}
       </h2>

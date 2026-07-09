@@ -300,11 +300,11 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen">
       <header className="border-b border-border sticky top-0 bg-surface/80 backdrop-blur z-10">
-        <div className="max-w-3xl mx-auto px-6 pt-4 flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-6 pt-4 flex items-center gap-3">
           <BotaoInicio />
           <h1 className="font-bold tracking-tight text-xl ml-1">Administração</h1>
         </div>
-        <div className="max-w-3xl mx-auto px-6 mt-3">
+        <div className="max-w-6xl mx-auto px-6 mt-3">
           {/* mobile: dropdown (evita o menu correndo pro lado) */}
           <select value={aba} onChange={e => setAba(e.target.value as typeof aba)}
             className="sm:hidden w-full bg-surface-2 border border-border rounded-md px-3 py-2 text-sm mb-2 focus:outline-none focus:border-accent">
@@ -323,7 +323,7 @@ export default function AdminPage() {
       </header>
 
       {aba === 'mod' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6" key="mod">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6" key="mod">
         {!itens.length && <p className="text-sm text-dim text-center py-10">Nenhuma contribuição pendente.</p>}
         {itens.slice(0, visiveisMod).map(c => (
           <div key={c.id} className="border border-border rounded-lg bg-surface overflow-hidden sm:flex">
@@ -381,7 +381,7 @@ export default function AdminPage() {
         )}
       </div>
       ) : aba === 'aprovadas' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-5" key="aprovadas">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-5" key="aprovadas">
         <p className="text-sm text-dim">
           Esteira de auditoria das contribuições já aprovadas. Editar aqui propaga para o
           índice (a leitura de campo é reescrita). O <strong>R$/kg</strong> ao lado do preço é o
@@ -490,15 +490,15 @@ export default function AdminPage() {
         )}
       </div>
       ) : aba === 'painel' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8" key="painel">
+      <div className="max-w-6xl mx-auto px-6 py-8" key="painel">
         <Painel ings={ings} souSuper={souSuper} />
       </div>
       ) : aba === 'auditoria' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8" key="auditoria">
+      <div className="max-w-6xl mx-auto px-6 py-8" key="auditoria">
         <Auditoria souSuper={souSuper} />
       </div>
       ) : aba === 'saques' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-3" key="saques">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-3" key="saques">
         {!saques.length && <p className="text-sm text-dim text-center py-6">Nenhuma solicitação de saque pendente.</p>}
         {saques.map(s => (
           <div key={s.id} className="border border-border rounded-lg bg-surface p-4">
@@ -609,23 +609,23 @@ export default function AdminPage() {
         </div>
       </div>
       ) : aba === 'anuncios' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8" key="anuncios">
+      <div className="max-w-6xl mx-auto px-6 py-8" key="anuncios">
         <Anuncios />
       </div>
       ) : aba === 'coleta' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8" key="coleta">
+      <div className="max-w-6xl mx-auto px-6 py-8" key="coleta">
         <StatusColeta />
       </div>
       ) : aba === 'dados' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8" key="dados">
+      <div className="max-w-6xl mx-auto px-6 py-8" key="dados">
         <AuditoriaDados ings={ings} />
       </div>
       ) : aba === 'super' ? (
-      <div className="max-w-3xl mx-auto px-6 py-8" key="super">
+      <div className="max-w-6xl mx-auto px-6 py-8" key="super">
         <SuperAcoes />
       </div>
       ) : (
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6" key="precos">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6" key="precos">
         <p className="text-sm text-dim">
           Preços definidos manualmente (R$/kg) para itens sem cotação online confiável. Editar grava direto em
           <code className="mx-1">ingredientes</code>; depois clique em “Recalcular custos” para refletir no índice.

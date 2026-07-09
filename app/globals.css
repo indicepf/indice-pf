@@ -119,6 +119,10 @@ body {
 
 ::selection { background: #0069d422; }
 
+/* Componentes do mockup em @layer components: os utilities do Tailwind
+   (hidden, max-sm:*, etc.) ficam na layer utilities e precisam vencer estas
+   regras — fora de layer elas ganhariam de qualquer utility. */
+@layer components {
 /* ===== shell do site público (portado 1:1 do mockup indice-pf-ads2) ===== */
 .inf-logo{width:40px;height:40px;flex:none;border-radius:11px;display:grid;place-items:center;background:var(--grad-marca);box-shadow:var(--shadow-brand)}
 .inf-logo svg{width:24px;height:24px}
@@ -151,7 +155,7 @@ body {
 .site-main{max-width:1320px;margin:-84px auto 0;padding:0 24px 80px;position:relative;z-index:2}
 .layout{display:grid;grid-template-columns:264px 1fr;gap:22px;align-items:start}
 .content{display:flex;flex-direction:column;gap:22px;min-width:0}
-@media (max-width:960px){.layout{grid-template-columns:1fr}.filters{position:static}}
+@media (max-width:960px){.layout{grid-template-columns:1fr}}
 @media (max-width:1024px){.site-nav{display:none}}
 
 .site-footer{background:var(--ink);color:rgba(255,255,255,.7);margin-top:40px}
@@ -207,6 +211,9 @@ body {
 .btn-mk svg{width:16px;height:16px}
 
 .filters{position:sticky;top:74px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:auto;max-height:calc(100vh - 92px)}
+/* mobile: painel deixa de ser sticky (senão cobre o conteúdo ao rolar) — este
+   media query precisa vir DEPOIS da definição acima para vencer a cascata */
+@media (max-width:960px){.filters{position:static;max-height:none;overflow:visible}}
 .f-group{padding:14px 18px;border-bottom:1px solid var(--border)}
 .f-group:last-child{border-bottom:none}
 .f-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:700;margin-bottom:9px;display:flex;align-items:center;gap:6px}
@@ -247,6 +254,7 @@ body {
 .mover .mp{font-weight:750;font-size:13.5px;flex:none;min-width:56px;text-align:right;white-space:nowrap}
 .mover .mp.up{color:var(--danger)}
 .mover .mp.down{color:var(--ok)}
+.mover-col{min-width:0}
 .mover-col h3{font-size:13px;font-weight:750;display:flex;align-items:center;gap:8px;margin-bottom:12px}
 
 .tbl-mk{width:100%;border-collapse:collapse;font-size:13.5px}
@@ -279,6 +287,7 @@ body {
 
 .movers-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:960px){.movers-grid{grid-template-columns:1fr}}
+@media (max-width:420px){.mover .spark{display:none}}
 
 .hero-stats{display:flex;gap:34px;margin-top:26px;flex-wrap:wrap}
 .hs b{font-size:28px;font-weight:800;display:block;letter-spacing:-.02em}
@@ -382,3 +391,5 @@ body {
 .stat-mini{padding:12px;background:var(--surface-2);border-radius:12px}
 .stat-mini .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);display:block}
 .stat-mini b{font-size:20px;letter-spacing:-.02em}
+
+}
