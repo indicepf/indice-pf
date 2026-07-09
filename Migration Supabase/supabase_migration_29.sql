@@ -3,6 +3,11 @@
 -- Rode no SQL Editor do Supabase. Idempotente. (depende da 12: eh_admin;
 -- da 16: refresh_precos_manuais)
 --
+-- ⚠️ ORDEM: se rodar esta migração DEPOIS da 31, rode a 31 de novo em seguida —
+-- a §2 abaixo recria a versão antiga de recalcular_custos_ultimo_snapshot
+-- (que integra o snapshot pendente), e a 31 é quem a corrige.
+-- O "schedule N" no resultado é o id do job criado no pg_cron (esperado).
+--
 -- Contexto: a coleta fica em staging (snapshots/precos/resultados_brutos, sem
 -- linhas em custos_pratos) até o admin aprovar em /admin → Coleta. Com a
 -- cadência semanal, uma coleta não aprovada seria sobrescrita pela seguinte
