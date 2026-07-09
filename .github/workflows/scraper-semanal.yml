@@ -7,8 +7,6 @@ on:
     # Obs.: o cron do GitHub é "melhor esforço" — costuma atrasar horas em
     # horários cheios; o dia da coleta é o que importa, não a hora exata.
     - cron: '0 11 * * 1'
-    # coleta extraordinária pedida pelo responsável para 09/07/2026 — remover depois
-    - cron: '0 11 9 7 *'
   workflow_dispatch:  # permite rodar manualmente pelo GitHub
     inputs:
       modo:
