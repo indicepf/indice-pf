@@ -3,7 +3,9 @@ name: Scraper Semanal — Índice PF
 on:
   schedule:
     # Toda segunda às 8h (Brasília = 11h UTC) = 4–5 coletas/mês.
-    # 115 ingredientes × 5 = ~575 chamadas/mês (3 contas SerpAPI = 750 grátis/mês).
+    # 115 ingredientes × 5 = ~575 chamadas/mês (4 contas SerpAPI = 1000 grátis/mês).
+    # Obs.: o cron do GitHub é "melhor esforço" — costuma atrasar horas em
+    # horários cheios; o dia da coleta é o que importa, não a hora exata.
     - cron: '0 11 * * 1'
     # coleta extraordinária pedida pelo responsável para 09/07/2026 — remover depois
     - cron: '0 11 9 7 *'
@@ -45,6 +47,7 @@ jobs:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           SERPAPI_KEY_2: ${{ secrets.SERPAPI_KEY_2 }}
           SERPAPI_KEY_3: ${{ secrets.SERPAPI_KEY_3 }}
+          SERPAPI_KEY_4: ${{ secrets.SERPAPI_KEY_4 }}
           # modo 'completo' (cron ou dispatch default) = full run dos 115.
           # modo 'faltantes' (dispatch) = skip de 6 dias liga + merge no último snapshot,
           #   raspando só os que não vieram (manuais/não-encontrados).

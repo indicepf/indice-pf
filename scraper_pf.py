@@ -12,11 +12,12 @@ except ImportError:
     pass
 
 # ─── Configuração ─────────────────────────────────────────────────────────────
-# Aceita até três contas SerpAPI (250 chamadas grátis cada). Quando uma esgota a
-# cota, o scraper passa automaticamente para a próxima na ordem.
+# Aceita até quatro contas SerpAPI (250 chamadas grátis cada = 1000/mês). Quando
+# uma esgota a cota, o scraper passa automaticamente para a próxima na ordem.
 SERP_API_KEYS = [k for k in (os.getenv("SERPAPI_KEY", ""),
                              os.getenv("SERPAPI_KEY_2", ""),
-                             os.getenv("SERPAPI_KEY_3", "")) if k]
+                             os.getenv("SERPAPI_KEY_3", ""),
+                             os.getenv("SERPAPI_KEY_4", "")) if k]
 _serp_idx     = 0
 SUPABASE_URL  = os.getenv("SUPABASE_URL", "https://yhgdlmmtiyvdgeoxavzn.supabase.co")
 SUPABASE_KEY  = os.getenv("SUPABASE_KEY", "")
