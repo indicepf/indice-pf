@@ -42,7 +42,7 @@ export default function MeusEnviosPage() {
   }
 
   return (
-    <main className="max-w-3xl mx-auto px-6 py-8">
+    <main className="max-w-4xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-dim">Suas fotos de preço enviadas e o status de cada uma.</p>
         <button onClick={() => router.push('/contribuir')}

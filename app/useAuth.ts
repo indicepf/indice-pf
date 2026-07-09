@@ -2,7 +2,7 @@
 
 import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { supabase, usuarioDoStorage } from '@/lib/supabase'
-import { getProfile } from '@/lib/queries'
+import { getProfile, comRetry } from '@/lib/queries'
 import type { Profile } from '@/lib/types'
 
 export const perfilCompleto = (p?: Profile | null) => !!(p?.nome && p?.telefone && p?.regiao)
@@ -30,16 +30,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [perfilPronto, setPerfilPronto] = useState(false)
   const uidCarregado = useRef<string | null>(null)
 
-  const refresh = useCallback(async (uid: string) => {
+  const tentativas = useRef(0)
+  const refresh = useCallback(async (uid: string): Promise<Profile | null> => {
     try {
-      const p = await getProfile(uid)
+      const p = await comRetry(() => getProfile(uid))
       setProfile(p)
       uidCarregado.current = uid
+      tentativas.current = 0
       // RPC is_premium (migração 27); erro (migração não rodada) → free
       supabase.rpc('is_premium', { uid }).then(({ data }) => setIsPremium(data === true))
       return p
     } catch {
-      // falha transitória (token em renovação etc.) — mantém o estado atual
+      // falha transitória (comum logo após o login, com o token assentando):
+      // sem retry o perfil ficava vazio até um reload — menus de admin/premium
+      // não apareciam. Re-tenta em 4s, até 3 vezes.
+      if (tentativas.current < 3) {
+        tentativas.current += 1
+        setTimeout(() => { if (uidCarregado.current !== uid) refresh(uid) }, 4000)
+      }
       return null
     } finally {
       setPerfilPronto(true)

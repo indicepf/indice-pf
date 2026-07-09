@@ -277,13 +277,17 @@ export default function Dashboard() {
 
   const temSerie = serieIndice.length >= 2
   const rotuloRecorte = regioes.size === 0 ? 'Brasil' : regioes.size === 1 ? [...regioes][0] : `${regioes.size} regiões`
-  // contexto do número dos KPIs: sem filtro = última coleta; com filtro de
-  // 1 coleta = a data dela; com intervalo = média das coletas do intervalo
-  const rotuloPeriodo = (!ini && !fim)
-    ? (snapshot ? `última coleta · ${fmtData(snapshot.data)}` : '')
-    : nColetasHome <= 1
-      ? (snapshot ? `coleta de ${fmtData(snapshot.data)}` : 'sem coleta no período')
-      : `média de ${nColetasHome} coletas do período`
+  // contexto do número dos KPIs — explica exatamente como o valor foi calculado:
+  // default = última coleta; com filtro de região entra o recorte; com intervalo
+  // de datas vira média das coletas do período
+  const rotuloPeriodo = [
+    regioes.size ? `${custosRegiao.length} pratos · ${rotuloRecorte}` : null,
+    (!ini && !fim)
+      ? (snapshot ? `última coleta · ${fmtData(snapshot.data)}` : '')
+      : nColetasHome <= 1
+        ? (snapshot ? `coleta de ${fmtData(snapshot.data)}` : 'sem coleta no período')
+        : `média de ${nColetasHome} coletas do período`,
+  ].filter(Boolean).join(' · ')
 
   if (loading) {
     return (

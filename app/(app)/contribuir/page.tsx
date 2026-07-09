@@ -214,7 +214,7 @@ export default function ContribuirPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="max-w-lg mx-auto px-6 py-8">
+      <div className="max-w-3xl mx-auto px-6 py-8">
         {resultado ? (
           <div className="text-center py-10">
             <h2 className="text-2xl font-bold tracking-tight mb-2">Obrigado!</h2>
