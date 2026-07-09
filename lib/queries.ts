@@ -22,7 +22,7 @@ export async function getLatestSnapshot(): Promise<Snapshot | null> {
   return (data?.[0] as Snapshot) ?? null
 }
 
-export type ItemColeta = { id: number; nome: string; preco_manual: number | null }
+export type ItemColeta = { id: number; nome: string; preco_manual: number | null; unidade: string | null; peso_ref_g: number | null }
 export type StatusColeta = { snapshotId: number; data: string; achados: ItemColeta[]; naoAchados: ItemColeta[] }
 
 // Status da última coleta: data + ingredientes achados (qtd_resultados>0) vs
@@ -34,16 +34,58 @@ export async function getStatusUltimaColeta(): Promise<StatusColeta | null> {
   const snap = snaps?.[0] as { id: number; data: string } | undefined
   if (!snap) return null
   const { data } = await supabase.from('precos')
-    .select('ingrediente_id,nome_ingrediente,qtd_resultados,ingredientes(preco_manual)')
+    .select('ingrediente_id,nome_ingrediente,qtd_resultados,ingredientes(preco_manual,unidade,peso_ref_g)')
     .eq('snapshot_id', snap.id).order('nome_ingrediente')
   const rows = (data || []) as any[]
   const achados: ItemColeta[] = [], naoAchados: ItemColeta[] = []
   for (const r of rows) {
     if (r.ingrediente_id == null) continue
-    const item: ItemColeta = { id: r.ingrediente_id, nome: r.nome_ingrediente, preco_manual: r.ingredientes?.preco_manual ?? null }
+    const item: ItemColeta = {
+      id: r.ingrediente_id, nome: r.nome_ingrediente,
+      preco_manual: r.ingredientes?.preco_manual ?? null,
+      unidade: r.ingredientes?.unidade ?? null, peso_ref_g: r.ingredientes?.peso_ref_g ?? null,
+    }
     ;((r.qtd_resultados || 0) > 0 ? achados : naoAchados).push(item)
   }
   return { snapshotId: snap.id, data: snap.data, achados, naoAchados }
+}
+
+// Coletas anteriores (histórico da aba Coleta): data, índice, nº de itens
+// achados/não-achados e status de integração. Filtro por intervalo + paginação.
+export type ColetaResumo = {
+  id: number; data: string; custo_total_pf: number | null
+  achados: number; naoAchados: number; integrada: boolean
+}
+export async function getColetas(opts: { ini?: string; fim?: string; page?: number; porPagina?: number } = {}):
+  Promise<{ coletas: ColetaResumo[]; total: number }> {
+  const { ini, fim, page = 0, porPagina = 10 } = opts
+  let q = supabase.from('snapshots').select('id,data,custo_total_pf', { count: 'exact' })
+  if (ini) q = q.gte('data', ini)
+  if (fim) q = q.lte('data', fim)
+  const { data: snaps, count } = await q.order('id', { ascending: false })
+    .range(page * porPagina, page * porPagina + porPagina - 1)
+  const lista = (snaps || []) as { id: number; data: string; custo_total_pf: number | null }[]
+  if (!lista.length) return { coletas: [], total: count || 0 }
+  const ids = lista.map(s => s.id)
+  const [{ data: precosRows }, { data: cpRows }] = await Promise.all([
+    supabase.from('precos').select('snapshot_id,qtd_resultados').in('snapshot_id', ids),
+    supabase.from('custos_pratos').select('snapshot_id').in('snapshot_id', ids),
+  ])
+  const conta = new Map<number, { a: number; n: number }>()
+  ;((precosRows || []) as any[]).forEach(r => {
+    const c = conta.get(r.snapshot_id) || { a: 0, n: 0 }
+    if ((r.qtd_resultados || 0) > 0) c.a++; else c.n++
+    conta.set(r.snapshot_id, c)
+  })
+  const integrados = new Set(((cpRows || []) as any[]).map(r => r.snapshot_id))
+  return {
+    total: count || 0,
+    coletas: lista.map(s => ({
+      id: s.id, data: s.data, custo_total_pf: s.custo_total_pf != null ? Number(s.custo_total_pf) : null,
+      achados: conta.get(s.id)?.a ?? 0, naoAchados: conta.get(s.id)?.n ?? 0,
+      integrada: integrados.has(s.id),
+    })),
+  }
 }
 
 export async function getDishCosts(snapshotId: number): Promise<DishCost[]> {
@@ -895,10 +937,18 @@ export type ItemEncontrado = {
   delta: number | null             // % vs coleta anterior (null = sem referência)
   amplitude: number | null         // maximo/minimo (× — null com <2 resultados)
 }
-export async function getDetalheEncontrados(): Promise<ItemEncontrado[]> {
-  const { data: snaps } = await supabase.from('snapshots')
-    .select('id').order('id', { ascending: false }).limit(2)
-  const [atual, anterior] = (snaps || []) as { id: number }[]
+export async function getDetalheEncontrados(snapshotId?: number): Promise<ItemEncontrado[]> {
+  let atual: { id: number } | undefined, anterior: { id: number } | undefined
+  if (snapshotId) {
+    atual = { id: snapshotId }
+    const { data: ant } = await supabase.from('snapshots')
+      .select('id').lt('id', snapshotId).order('id', { ascending: false }).limit(1)
+    anterior = (ant || [])[0] as { id: number } | undefined
+  } else {
+    const { data: snaps } = await supabase.from('snapshots')
+      .select('id').order('id', { ascending: false }).limit(2)
+    ;[atual, anterior] = (snaps || []) as { id: number }[]
+  }
   if (!atual) return []
   const cols = 'ingrediente_id,nome_ingrediente,mediana_exibicao,minimo_exibicao,maximo_exibicao,label,qtd_resultados'
   const [{ data: rows }, { data: antRows }] = await Promise.all([
