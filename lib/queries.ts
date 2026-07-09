@@ -23,7 +23,7 @@ export async function getLatestSnapshot(): Promise<Snapshot | null> {
 }
 
 export type ItemColeta = { id: number; nome: string; preco_manual: number | null }
-export type StatusColeta = { data: string; achados: ItemColeta[]; naoAchados: ItemColeta[] }
+export type StatusColeta = { snapshotId: number; data: string; achados: ItemColeta[]; naoAchados: ItemColeta[] }
 
 // Status da última coleta: data + ingredientes achados (qtd_resultados>0) vs
 // não-achados (=0), a partir do snapshot mais recente. Usado na aba de superuser.
@@ -43,7 +43,7 @@ export async function getStatusUltimaColeta(): Promise<StatusColeta | null> {
     const item: ItemColeta = { id: r.ingrediente_id, nome: r.nome_ingrediente, preco_manual: r.ingredientes?.preco_manual ?? null }
     ;((r.qtd_resultados || 0) > 0 ? achados : naoAchados).push(item)
   }
-  return { data: snap.data, achados, naoAchados }
+  return { snapshotId: snap.id, data: snap.data, achados, naoAchados }
 }
 
 export async function getDishCosts(snapshotId: number): Promise<DishCost[]> {
@@ -865,6 +865,19 @@ export async function getOrigensManuais(): Promise<Record<number, { net: boolean
   return out
 }
 
+// edita uma leitura do histórico (tipo/fonte/link/preço) e recalcula o efetivo
+export async function editarLeituraManual(id: number, campos: {
+  preco_manual?: number | null; loja?: string; link?: string; tipo?: string
+}) {
+  return supabase.rpc('editar_leitura_manual', {
+    p_id: id,
+    p_preco: campos.preco_manual ?? null,
+    p_loja: campos.loja || null,
+    p_link: campos.link || null,
+    p_tipo: campos.tipo || null,
+  })
+}
+
 export async function getHistoricoManual(ingredienteId: number): Promise<PrecoManualHist[]> {
   const { data } = await supabase.from('precos_manuais_hist')
     .select('id,preco_manual,custo_fixo,loja,link,tipo_local,criado_em')
@@ -909,6 +922,14 @@ export async function getDetalheEncontrados(): Promise<ItemEncontrado[]> {
   })
 }
 
+// aprova (integra) a última coleta. Fallback: antes da migração 31 a RPC
+// dedicada não existe — recalcular_custos_ultimo_snapshot cumpre o papel.
+export async function aprovarUltimaColeta() {
+  const r = await supabase.rpc('aprovar_ultima_coleta')
+  if (r.error && /aprovar_ultima_coleta/.test(r.error.message)) return recalcularCustos()
+  return r
+}
+
 export async function recalcularCustos() {
   return supabase.rpc('recalcular_custos_ultimo_snapshot')
 }
@@ -934,10 +955,15 @@ export async function getVariacoesFortes(limiar = 0.3): Promise<VariacaoForte[]>
 }
 
 export type EntradaBruta = { id: number; titulo: string; loja: string; preco_bruto: number | null; preco_normalizado: number | null; exibicao: string; link: string }
-// Entradas brutas (resultados_brutos) de um ingrediente na coleta mais recente.
-export async function getEntradasIngrediente(ingredienteId: number): Promise<{ snapshotId: number; entradas: EntradaBruta[] }> {
-  const novos = await getSnapshotsNovos()
-  const snapId = novos[0]?.id
+// Entradas brutas (resultados_brutos) de um ingrediente. Sem snapshotId usa a
+// coleta integrada mais recente (aba Dados); com snapshotId usa a indicada
+// (modal da aba Coleta, que audita também a coleta pendente).
+export async function getEntradasIngrediente(ingredienteId: number, snapshotId?: number): Promise<{ snapshotId: number; entradas: EntradaBruta[] }> {
+  let snapId = snapshotId
+  if (!snapId) {
+    const novos = await getSnapshotsNovos()
+    snapId = novos[0]?.id
+  }
   if (!snapId) return { snapshotId: 0, entradas: [] }
   const { data } = await supabase.from('resultados_brutos')
     .select('id,titulo,loja,preco_bruto,preco_normalizado,exibicao,link')
