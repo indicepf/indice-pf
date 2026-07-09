@@ -31,7 +31,20 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  const [aba, setAba] = useState<'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'anuncios' | 'auditoria' | 'coleta' | 'dados' | 'super'>('mod')
+  type Aba = 'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'anuncios' | 'auditoria' | 'coleta' | 'dados' | 'super'
+  const ABAS_VALIDAS: Aba[] = ['mod', 'aprovadas', 'painel', 'saques', 'precos', 'anuncios', 'auditoria', 'coleta', 'dados', 'super']
+  // aba persistida na URL (?aba=): sobrevive a reload e é compartilhável
+  const [aba, setAbaState] = useState<Aba>(() => {
+    if (typeof window === 'undefined') return 'mod'
+    const q = new URLSearchParams(window.location.search).get('aba') as Aba | null
+    return q && ABAS_VALIDAS.includes(q) ? q : 'mod'
+  })
+  const abaDaUrl = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('aba')
+  const setAba = (a: Aba) => {
+    setAbaState(a)
+    const url = new URL(window.location.href); url.searchParams.set('aba', a)
+    window.history.replaceState(null, '', url)
+  }
   const [souSuper, setSouSuper] = useState(false)
   const [itens, setItens] = useState<ContribuicaoFull[]>([])
   const [aprovadas, setAprovadas] = useState<ContribuicaoFull[]>([])
@@ -82,7 +95,11 @@ export default function AdminPage() {
     ;(async () => {
       const [adminOk, superOk] = await Promise.all([isAdmin(uid), isSuper(uid)])
       if (!adminOk && !superOk) { if (!cancelado) setEstado('negado'); return }
-      if (!cancelado) setSouSuper(superOk)
+      if (!cancelado) {
+        setSouSuper(superOk)
+        // sem aba na URL, o super cai direto na Coleta (operação semanal)
+        if (superOk && !abaDaUrl) setAbaState('coleta')
+      }
       const [ings, itens, saques, manuais, origens] = await Promise.all([
         getIngredientes(), getContribuicoes('pendente'), getSaques('solicitado'),
         getIngredientesManuais(), getOrigensManuais(),
@@ -270,11 +287,14 @@ export default function AdminPage() {
     return true
   })
 
+  // ordem por fluxo de trabalho: operação do índice → comunidade → negócio → sistema
   const abas: [typeof aba, string][] = [
+    ...(souSuper ? [['coleta', 'Coleta'] as [typeof aba, string], ['dados', 'Variações'] as [typeof aba, string]] : []),
+    ['precos', `Preços manuais (${manuais.length})`],
     ['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`],
-    ['painel', 'Painel'], ['auditoria', 'Auditoria'], ['saques', `Saques (${saques.length})`],
-    ['precos', `Preços manuais (${manuais.length})`], ['anuncios', 'Anúncios'],
-    ...(souSuper ? [['coleta', 'Coleta'] as [typeof aba, string], ['dados', 'Dados'] as [typeof aba, string], ['super', 'Ações do super'] as [typeof aba, string]] : []),
+    ['saques', `Saques (${saques.length})`], ['anuncios', 'Anúncios'], ['painel', 'Painel'],
+    ['auditoria', 'Auditoria'],
+    ...(souSuper ? [['super', 'Ações do super'] as [typeof aba, string]] : []),
   ]
 
   return (
@@ -291,7 +311,7 @@ export default function AdminPage() {
             {abas.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
           {/* desktop: abas */}
-          <div className="hidden sm:flex gap-5">
+          <div className="hidden sm:flex gap-5 overflow-x-auto overflow-y-hidden">
             {abas.map(([k, label]) => (
               <button key={k} onClick={() => setAba(k)}
                 className={`text-sm pb-2 border-b-2 -mb-px transition whitespace-nowrap ${aba === k ? 'border-accent text-ink' : 'border-transparent text-dim hover:text-ink'}`}>

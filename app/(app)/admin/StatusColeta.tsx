@@ -183,7 +183,7 @@ export default function StatusColeta() {
           <p className="text-sm font-medium">Coleta em auditoria — ainda fora do índice</p>
           <p className="text-xs text-dim mt-1 leading-relaxed">
             Esta coleta foi gravada mas <strong>não entrou no índice</strong>. Revise as variações fortes e as
-            entradas na aba <strong>Dados</strong> (exclua fontes erradas) e então aprove abaixo — a aprovação
+            entradas na aba <strong>Variações</strong> (exclua fontes erradas) e então aprove abaixo — a aprovação
             calcula os custos dos pratos e publica a coleta no dashboard. Sem aprovação manual, ela entra
             <strong> automaticamente no índice após 5 dias</strong> (migração 29).
           </p>
