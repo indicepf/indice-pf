@@ -245,6 +245,7 @@ def _buscar_serp(query):
     if not SERP_API_KEYS:
         print("  ❌ Nenhuma SERPAPI_KEY configurada")
         return None
+    vazio = None
     for _ in range(len(SERP_API_KEYS)):
         key = SERP_API_KEYS[_serp_idx]
         params = {
@@ -263,13 +264,19 @@ def _buscar_serp(query):
         erro = dados.get("error", "")
         if resp.status_code == 200 and not erro:
             return dados
-        # "Google hasn't returned any results" = busca válida que só não trouxe nada.
-        # Não é falha de chave: retorna vazio sem rotacionar (não gasta outra conta à toa).
+        # "Google hasn't returned any results" é intermitente no Google Shopping:
+        # re-tentar a mesma busca em outra conta resgata a maioria (na coleta de
+        # 01/07 o retry zerou os não-encontrados; em 09/07, sem retry, foram 22).
         if "returned any results" in erro:
-            return dados
+            vazio = dados
+            print(f"  ↻ sem resultados na conta #{_serp_idx + 1}; re-tentando na próxima")
+            _serp_idx = (_serp_idx + 1) % len(SERP_API_KEYS)
+            continue
         # 401/429 ou erro de cota → tenta a próxima conta
         print(f"  ⚠️  chave #{_serp_idx + 1} falhou ({resp.status_code} {erro}); tentando próxima")
         _serp_idx = (_serp_idx + 1) % len(SERP_API_KEYS)
+    if vazio is not None:
+        return vazio   # todas as contas devolveram vazio: sem resultados mesmo
     print("  ❌ Todas as chaves SerpAPI falharam/esgotaram")
     return None
 
