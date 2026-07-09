@@ -825,7 +825,7 @@ export type IngManual = {
 
 export type PrecoManualHist = {
   id: number; preco_manual: number | null; custo_fixo: number | null
-  loja: string | null; link: string | null; criado_em: string
+  loja: string | null; link: string | null; tipo_local: string | null; criado_em: string
 }
 
 export async function getIngredientesManuais(): Promise<IngManual[]> {
@@ -837,7 +837,7 @@ export async function getIngredientesManuais(): Promise<IngManual[]> {
 
 // registra uma LEITURA manual (R$/kg) e recalcula o preço efetivo (mediana 5 dias).
 export async function setPrecoManual(id: number, campos: {
-  preco_manual?: number | null; custo_fixo?: number | null; loja?: string; link?: string
+  preco_manual?: number | null; custo_fixo?: number | null; loja?: string; link?: string; tipo?: string
 }) {
   return supabase.rpc('salvar_leitura_manual', {
     p_id: id,
@@ -845,6 +845,7 @@ export async function setPrecoManual(id: number, campos: {
     p_fixo: campos.custo_fixo ?? null,
     p_loja: campos.loja || null,
     p_link: campos.link || null,
+    p_tipo: campos.tipo || null,
   })
 }
 
@@ -866,9 +867,46 @@ export async function getOrigensManuais(): Promise<Record<number, { net: boolean
 
 export async function getHistoricoManual(ingredienteId: number): Promise<PrecoManualHist[]> {
   const { data } = await supabase.from('precos_manuais_hist')
-    .select('id,preco_manual,custo_fixo,loja,link,criado_em')
+    .select('id,preco_manual,custo_fixo,loja,link,tipo_local,criado_em')
     .eq('ingrediente_id', ingredienteId).order('criado_em', { ascending: false })
   return (data as PrecoManualHist[]) || []
+}
+
+// Detalhe dos ENCONTRADOS da última coleta, com sinais para auditoria visual:
+// Δ% da mediana vs a coleta anterior e amplitude min→max dentro da própria
+// coleta (amplitude alta = itens premium/gourmet/preparados misturados na busca).
+export type ItemEncontrado = {
+  id: number; nome: string; label: string | null; n: number
+  mediana: number | null           // mediana_exibicao (R$/kg ou R$/L)
+  minimo: number | null; maximo: number | null
+  delta: number | null             // % vs coleta anterior (null = sem referência)
+  amplitude: number | null         // maximo/minimo (× — null com <2 resultados)
+}
+export async function getDetalheEncontrados(): Promise<ItemEncontrado[]> {
+  const { data: snaps } = await supabase.from('snapshots')
+    .select('id').order('id', { ascending: false }).limit(2)
+  const [atual, anterior] = (snaps || []) as { id: number }[]
+  if (!atual) return []
+  const cols = 'ingrediente_id,nome_ingrediente,mediana_exibicao,minimo_exibicao,maximo_exibicao,label,qtd_resultados'
+  const [{ data: rows }, { data: antRows }] = await Promise.all([
+    supabase.from('precos').select(cols).eq('snapshot_id', atual.id).gt('qtd_resultados', 0),
+    anterior
+      ? supabase.from('precos').select('ingrediente_id,mediana_exibicao').eq('snapshot_id', anterior.id).gt('qtd_resultados', 0)
+      : Promise.resolve({ data: [] as any[] }),
+  ])
+  const ant = new Map(((antRows || []) as any[]).map(r => [r.ingrediente_id, Number(r.mediana_exibicao)]))
+  return ((rows || []) as any[]).map(r => {
+    const med = r.mediana_exibicao != null ? Number(r.mediana_exibicao) : null
+    const ref = ant.get(r.ingrediente_id)
+    const mn = r.minimo_exibicao != null ? Number(r.minimo_exibicao) : null
+    const mx = r.maximo_exibicao != null ? Number(r.maximo_exibicao) : null
+    return {
+      id: r.ingrediente_id, nome: r.nome_ingrediente, label: r.label, n: r.qtd_resultados || 0,
+      mediana: med, minimo: mn, maximo: mx,
+      delta: med != null && ref != null && ref > 0 ? (med - ref) / ref * 100 : null,
+      amplitude: mn != null && mx != null && mn > 0 && (r.qtd_resultados || 0) >= 2 ? mx / mn : null,
+    }
+  })
 }
 
 export async function recalcularCustos() {
