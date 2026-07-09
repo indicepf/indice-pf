@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { inputBase } from '@/components/ui'
-import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, getHistoricoManual, getLatestSnapshot, getSnapshotsNovos, getDetalheEncontrados, type StatusColeta, type ItemColeta, type PrecoManualHist, type ItemEncontrado } from '@/lib/queries'
+import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, aprovarUltimaColeta, getHistoricoManual, editarLeituraManual, getLatestSnapshot, getSnapshotsNovos, getDetalheEncontrados, getEntradasIngrediente, excluirEntradaERecalcular, type StatusColeta, type ItemColeta, type PrecoManualHist, type ItemEncontrado, type EntradaBruta } from '@/lib/queries'
+import { capturarContexto } from '@/lib/contexto'
 import { brl } from '@/lib/format'
 
 // tipos de local para leituras manuais (pedido de 09/07)
@@ -12,11 +13,16 @@ export default function StatusColeta() {
   const [status, setStatus] = useState<StatusColeta | null | undefined>(undefined)
   const [modal, setModal] = useState(false)
   const [encontrados, setEncontrados] = useState<ItemEncontrado[] | null>(null)   // modal de auditoria dos achados
+  const [fontes, setFontes] = useState<Record<number, EntradaBruta[]>>({})        // fontes expandidas por ingrediente
+  const [excluindo, setExcluindo] = useState<number | null>(null)
   const [valores, setValores] = useState<Record<number, string>>({})
   const [lojas, setLojas] = useState<Record<number, string>>({})
   const [links, setLinks] = useState<Record<number, string>>({})
   const [tipos, setTipos] = useState<Record<number, string>>({})
   const [hist, setHist] = useState<Record<number, PrecoManualHist[]>>({})
+  // edição inline de uma leitura do histórico (leituras antigas sem tipo de local)
+  const [editando, setEditando] = useState<{ histId: number; ingId: number; preco: string; tipo: string; loja: string; link: string } | null>(null)
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false)
   const [salvandoId, setSalvandoId] = useState<number | null>(null)
   const [msg, setMsg] = useState('')
   const [pendente, setPendente] = useState(false)   // staging: coleta gravada sem custos_pratos
@@ -33,7 +39,7 @@ export default function StatusColeta() {
 
   async function aprovarColeta() {
     setAprovando(true); setMsg('')
-    const { error } = await recalcularCustos()
+    const { error } = await aprovarUltimaColeta()
     setAprovando(false)
     if (error) { setMsg(`Erro ao integrar a coleta: ${error.message}`); return }
     setMsg('Coleta aprovada e integrada ao índice.')
@@ -55,8 +61,48 @@ export default function StatusColeta() {
   }
 
   async function abrirEncontrados() {
-    setEncontrados([])                        // abre (carregando)
+    setEncontrados([]); setFontes({})         // abre (carregando)
     setEncontrados(await getDetalheEncontrados())
+  }
+
+  async function toggleFontes(ingId: number) {
+    if (ingId in fontes) { setFontes(f => { const c = { ...f }; delete c[ingId]; return c }); return }
+    setFontes(f => ({ ...f, [ingId]: [] }))   // abre (carregando)
+    const { entradas } = await getEntradasIngrediente(ingId, status?.snapshotId)
+    setFontes(f => ({ ...f, [ingId]: entradas }))
+  }
+
+  async function excluirFonte(ingId: number, e: EntradaBruta) {
+    if (!status) return
+    if (!confirm(`Excluir esta fonte? A mediana do ingrediente será recalculada.\n\n${e.titulo}\n${e.exibicao}`)) return
+    setExcluindo(e.id); setMsg('')
+    const ctx = await capturarContexto()
+    const { error } = await excluirEntradaERecalcular(e.id, status.snapshotId, ingId, ctx)
+    setExcluindo(null)
+    if (error) { setMsg(`Erro ao excluir: ${error.message}`); return }
+    setFontes(f => ({ ...f, [ingId]: (f[ingId] || []).filter(x => x.id !== e.id) }))
+    setEncontrados(await getDetalheEncontrados())   // mediana/Δ/amplitude mudaram
+    recarregar()
+  }
+
+  async function salvarEdicao() {
+    if (!editando) return
+    const preco = Number(editando.preco.replace(',', '.'))
+    if (!(preco > 0)) { setMsg('Informe um preço válido (R$/kg).'); return }
+    setSalvandoEdicao(true); setMsg('')
+    const { error } = await editarLeituraManual(editando.histId, {
+      preco_manual: preco, tipo: editando.tipo, loja: editando.loja, link: editando.link,
+    })
+    setSalvandoEdicao(false)
+    if (error) { setMsg(`Erro ao editar: ${error.message}`); return }
+    const ingId = editando.ingId
+    setEditando(null)
+    setHist(h => ({ ...h }))   // mantém aberto; recarrega abaixo
+    const d = await getHistoricoManual(ingId)
+    setHist(h => ({ ...h, [ingId]: d }))
+    await recalcularCustos()
+    setMsg('Leitura atualizada e custos recalculados.')
+    recarregar()
   }
 
   async function verHistorico(id: number) {
@@ -159,15 +205,56 @@ export default function StatusColeta() {
                             <th className="font-medium py-1 text-right">R$/kg</th>
                             <th className="font-medium py-1">Tipo</th>
                             <th className="font-medium py-1">Fonte</th>
+                            <th className="py-1" />
                           </tr>
                         </thead>
                         <tbody>
-                          {hist[item.id].map(h => (
+                          {hist[item.id].map(h => editando?.histId === h.id ? (
+                            <tr key={h.id} className="border-t border-border/60 bg-surface-2">
+                              <td colSpan={5} className="py-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  <label>R$/kg
+                                    <input value={editando.preco} inputMode="decimal"
+                                      onChange={e => setEditando(ed => ed && { ...ed, preco: e.target.value })} className={inputCls} />
+                                  </label>
+                                  <label>Tipo de local
+                                    <select value={editando.tipo}
+                                      onChange={e => setEditando(ed => ed && { ...ed, tipo: e.target.value })} className={inputCls}>
+                                      <option value="">—</option>
+                                      {TIPOS_LOCAL.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                  </label>
+                                  <label>Fonte (nome do local)
+                                    <input value={editando.loja}
+                                      onChange={e => setEditando(ed => ed && { ...ed, loja: e.target.value })} className={inputCls} />
+                                  </label>
+                                  <label>Link
+                                    <input value={editando.link}
+                                      onChange={e => setEditando(ed => ed && { ...ed, link: e.target.value })} className={inputCls} />
+                                  </label>
+                                </div>
+                                <div className="flex gap-3 mt-2">
+                                  <button onClick={salvarEdicao} disabled={salvandoEdicao}
+                                    className="text-xs bg-accent text-white px-3 py-1 rounded-md hover:brightness-95 transition disabled:opacity-60 cursor-pointer">
+                                    {salvandoEdicao ? 'Salvando…' : 'Salvar edição'}
+                                  </button>
+                                  <button onClick={() => setEditando(null)} className="text-xs text-dim hover:text-ink cursor-pointer">cancelar</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
                             <tr key={h.id} className="border-t border-border/60">
                               <td className="py-1 text-dim">{new Date(h.criado_em).toLocaleString('pt-BR')}</td>
                               <td className="py-1 text-right tnum">{h.preco_manual != null ? brl(Number(h.preco_manual)) : '—'}</td>
                               <td className="py-1 text-dim">{h.tipo_local || '—'}</td>
                               <td className="py-1">{h.loja || (h.link ? <a href={h.link} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">fonte</a> : '—')}</td>
+                              <td className="py-1 text-right">
+                                <button onClick={() => setEditando({
+                                  histId: h.id, ingId: item.id,
+                                  preco: h.preco_manual != null ? String(h.preco_manual).replace('.', ',') : '',
+                                  tipo: h.tipo_local || '', loja: h.loja || '', link: h.link || '',
+                                })} className="text-accent hover:underline cursor-pointer">editar</button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -209,9 +296,10 @@ export default function StatusColeta() {
             <p className="text-xs text-dim mb-4 leading-relaxed">
               Ordenado pelo maior sinal de distorção. <strong>Δ anterior</strong> = variação da mediana vs a coleta
               anterior; <strong>amplitude</strong> = razão entre o resultado mais caro e o mais barato da busca —
-              amplitude alta indica itens premium/gourmet/preparados misturados. Para excluir uma fonte errada, use a
-              aba <strong>Dados</strong>.
+              amplitude alta indica itens premium/gourmet/preparados misturados. <strong>Clique no item</strong> para
+              ver as fontes e excluir as erradas — a mediana recalcula na hora.
             </p>
+            {msg && <p className="text-xs text-danger mb-3">{msg}</p>}
             {!encontrados.length ? <p className="text-sm text-dim">Carregando…</p> : (
               <table className="w-full text-xs">
                 <thead>
@@ -231,21 +319,51 @@ export default function StatusColeta() {
                       const deltaForte = e.delta != null && Math.abs(e.delta) > 20
                       const ampForte = e.amplitude != null && e.amplitude > 4
                       const novoFraco = e.delta == null && e.n <= 2   // sem referência e 1–2 resultados: conferir na mão
+                      const aberto = e.id in fontes
                       return (
-                        <tr key={e.id} className={`border-t border-border/60 ${deltaForte || ampForte || novoFraco ? 'bg-warn/5' : ''}`}>
-                          <td className="py-1.5">{e.nome}</td>
-                          <td className="py-1.5 text-right tnum whitespace-nowrap">{e.mediana != null ? `${brl(e.mediana)}/${e.label || 'kg'}` : '—'}</td>
-                          <td className={`py-1.5 text-right tnum font-medium ${deltaForte ? 'text-danger' : e.delta != null && e.delta < 0 ? 'text-ok' : 'text-dim'}`}>
-                            {e.delta != null ? `${e.delta > 0 ? '+' : ''}${e.delta.toFixed(1)}%` : 'novo'}
-                          </td>
-                          <td className="py-1.5 text-right tnum text-dim whitespace-nowrap">
-                            {e.minimo != null && e.maximo != null ? `${brl(e.minimo)} – ${brl(e.maximo)}` : '—'}
-                          </td>
-                          <td className={`py-1.5 text-right tnum font-medium ${ampForte ? 'text-danger' : 'text-dim'}`}>
-                            {e.amplitude != null ? `${e.amplitude.toFixed(1)}×` : '—'}
-                          </td>
-                          <td className="py-1.5 text-right tnum text-dim">{e.n}</td>
-                        </tr>
+                        <Fragment key={e.id}>
+                          <tr onClick={() => toggleFontes(e.id)}
+                            className={`border-t border-border/60 cursor-pointer hover:bg-surface ${deltaForte || ampForte || novoFraco ? 'bg-warn/5' : ''}`}>
+                            <td className="py-1.5">{aberto ? '▾ ' : '▸ '}{e.nome}</td>
+                            <td className="py-1.5 text-right tnum whitespace-nowrap">{e.mediana != null ? `${brl(e.mediana)}/${e.label || 'kg'}` : '—'}</td>
+                            <td className={`py-1.5 text-right tnum font-medium ${deltaForte ? 'text-danger' : e.delta != null && e.delta < 0 ? 'text-ok' : 'text-dim'}`}>
+                              {e.delta != null ? `${e.delta > 0 ? '+' : ''}${e.delta.toFixed(1)}%` : 'novo'}
+                            </td>
+                            <td className="py-1.5 text-right tnum text-dim whitespace-nowrap">
+                              {e.minimo != null && e.maximo != null ? `${brl(e.minimo)} – ${brl(e.maximo)}` : '—'}
+                            </td>
+                            <td className={`py-1.5 text-right tnum font-medium ${ampForte ? 'text-danger' : 'text-dim'}`}>
+                              {e.amplitude != null ? `${e.amplitude.toFixed(1)}×` : '—'}
+                            </td>
+                            <td className="py-1.5 text-right tnum text-dim">{e.n}</td>
+                          </tr>
+                          {aberto && (
+                            <tr className="border-t border-border/40 bg-surface">
+                              <td colSpan={6} className="py-2 pl-4">
+                                {!fontes[e.id].length ? <p className="text-dim py-1">Carregando fontes…</p> : (
+                                  <ul className="space-y-1">
+                                    {fontes[e.id].map(f => (
+                                      <li key={f.id} className="flex items-center gap-2">
+                                        <span className="tnum shrink-0 w-24 text-right">{f.exibicao}</span>
+                                        <span className="truncate flex-1" title={f.titulo}>
+                                          {f.link
+                                            ? <a href={f.link} target="_blank" rel="noopener noreferrer" className="hover:underline">{f.titulo}</a>
+                                            : f.titulo}
+                                          {f.loja ? <span className="text-dim"> · {f.loja}</span> : null}
+                                        </span>
+                                        <button onClick={ev => { ev.stopPropagation(); excluirFonte(e.id, f) }}
+                                          disabled={excluindo === f.id}
+                                          className="text-danger hover:underline shrink-0 disabled:opacity-50 cursor-pointer">
+                                          {excluindo === f.id ? 'excluindo…' : 'excluir'}
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       )
                     })}
                 </tbody>
