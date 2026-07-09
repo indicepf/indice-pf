@@ -35,11 +35,11 @@ const ICONES: Record<string, React.ReactNode> = {
   '/': ico('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm-9-9h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z'),
 }
 
-// menu por papel (item 3 do feedback): contribuição / assinatura / conta / administração
+// menu por papel: contribuição / assinatura / administração; Configurações
+// vive no rodapé, junto do cartão do usuário (pedido de 09/07)
 const SECOES: { titulo: string; itens: readonly (readonly [string, string])[]; admin?: boolean }[] = [
   { titulo: 'Contribuição', itens: [['/painel', 'Meu painel'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios']] },
   { titulo: 'Assinatura', itens: [['/plano', 'Plano & assinatura']] },
-  { titulo: 'Conta', itens: [['/configuracoes', 'Configurações']] },
   { titulo: 'Administração', admin: true, itens: [['/admin', 'Administração'], ['/evolucao', 'Histórico'], ['/contribuidores', 'Ranking']] },
 ]
 
@@ -98,6 +98,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="nav-section">Site</div>
         <Link href="/" className="nav-item">{ICONES['/']}Ver site público</Link>
         <div className="nav-spacer" />
+        <Link href="/configuracoes" className={`nav-item ${pathname === '/configuracoes' ? 'active' : ''}`}>
+          {ICONES['/configuracoes']}Configurações
+        </Link>
         <Link href="/configuracoes" className="nav-user">
           <span className="avatar">{inicial}</span>
           <span className="who">
