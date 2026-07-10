@@ -45,7 +45,7 @@ export default function AssinarPage() {
 
   if (isPremium) {
     return (
-      <main className="max-w-lg mx-auto px-6 py-8">
+      <main className="max-w-3xl mx-auto px-6 py-8">
         <Card className="p-6 text-center">
           <p className="text-2xl mb-2">✓</p>
           <h2 className="font-bold tracking-tight text-lg">Você já é Premium</h2>

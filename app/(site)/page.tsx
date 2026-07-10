@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 import DetalhePrato from '../DetalhePrato'
 import { useAuth } from '../useAuth'
@@ -137,9 +137,11 @@ export default function Dashboard() {
   const nivel = NIVEIS_PRECO.find(n => n.key === modo)!
   const fator = 1 - nivel.desc
 
-  // ao trocar o nível ativo, garante a linha dele visível no gráfico
+  // trocar o nível ativo RESETA o gráfico para só a linha dele — linhas extras
+  // entram (e saem) pela legenda clicável; sem isso, alternar níveis ia
+  // acumulando linhas sem caminho óbvio de remoção
   useEffect(() => {
-    setLegendOff(prev => { if (!prev.has(modo)) return prev; const nx = new Set(prev); nx.delete(modo); return nx })
+    setLegendOff(new Set(MODOS.filter(n => n.key !== modo).map(n => n.key)))
   }, [modo])
 
   const custosRegiao = useMemo(() => regioes.size ? custos.filter(c => regioes.has(c.pratos.regiao)) : custos, [custos, regioes])
@@ -488,22 +490,30 @@ export default function Dashboard() {
                   <>
                     <div className="h-60">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartGeral} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                        <ComposedChart data={chartGeral} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                          <defs>
+                            {MODOS.map(n => (
+                              <linearGradient key={n.key} id={`grad-${n.key}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={NIVEL_HEX[n.key]} stopOpacity={0.22} />
+                                <stop offset="100%" stopColor={NIVEL_HEX[n.key]} stopOpacity={0} />
+                              </linearGradient>
+                            ))}
+                          </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                           <XAxis dataKey="data" tick={{ fontSize: 12, fill: DIM }} />
                           <YAxis tick={{ fontSize: 12, fill: DIM }} width={52} domain={['auto', 'auto']}
                             tickFormatter={(v: number) => `R$${v}`} />
                           <Tooltip formatter={(v) => brl(Number(v))} />
                           {MODOS.filter(n => !legendOff.has(n.key)).map(n => (
-                            <Line key={n.key} type="monotone" dataKey={n.key} name={n.label}
+                            <Area key={n.key} type="monotone" dataKey={n.key} name={n.label}
                               stroke={NIVEL_HEX[n.key]} strokeWidth={n.key === modo ? 2.5 : 1.8}
-                              dot={{ r: n.key === modo ? 4 : 3 }} />
+                              dot={{ r: n.key === modo ? 4 : 3 }} fill={`url(#grad-${n.key})`} />
                           ))}
                           {comparar && (
                             <Line type="monotone" dataKey="anterior" name="Período anterior"
                               stroke="var(--dim)" strokeWidth={1.8} strokeDasharray="5 4" dot={false} />
                           )}
-                        </LineChart>
+                        </ComposedChart>
                       </ResponsiveContainer>
                     </div>
                     {/* legenda clicável do mockup: liga/desliga a linha de cada nível */}
@@ -555,17 +565,26 @@ export default function Dashboard() {
                 {temSerie ? (
                   <div className="h-60">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={serieIndice} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                      <ComposedChart data={serieIndice} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                        <defs>
+                          {REGIOES.map(r => (
+                            <linearGradient key={r} id={`grad-reg-${r}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={CORES_REGIAO[r]} stopOpacity={0.18} />
+                              <stop offset="100%" stopColor={CORES_REGIAO[r]} stopOpacity={0} />
+                            </linearGradient>
+                          ))}
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                         <XAxis dataKey="data" tick={{ fontSize: 12, fill: DIM }} />
                         <YAxis tick={{ fontSize: 12, fill: DIM }} width={52} domain={['auto', 'auto']}
                           tickFormatter={(v: number) => `R$${v}`} />
                         <Tooltip formatter={(v) => brl(Number(v))} />
                         {REGIOES.filter(r => !regioes.size || regioes.has(r)).map(r => (
-                          <Line key={r} type="monotone" dataKey={r} name={r}
-                            stroke={CORES_REGIAO[r]} strokeWidth={regioes.has(r) ? 2.5 : 1.8} dot={{ r: 3 }} />
+                          <Area key={r} type="monotone" dataKey={r} name={r}
+                            stroke={CORES_REGIAO[r]} strokeWidth={regioes.has(r) ? 2.5 : 1.8} dot={{ r: 3 }}
+                            fill={`url(#grad-reg-${r})`} />
                         ))}
-                      </LineChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 ) : (
@@ -752,16 +771,22 @@ export default function Dashboard() {
                 <>
                   <div className="h-52 mb-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={serieIng.map(p => ({ data: fmtCurta(p.data), valor: +(p.valor * fator).toFixed(2) }))}
+                      <ComposedChart data={serieIng.map(p => ({ data: fmtCurta(p.data), valor: +(p.valor * fator).toFixed(2) }))}
                         margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                        <defs>
+                          <linearGradient id="grad-drill-ing" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={NIVEL_HEX[modo]} stopOpacity={0.22} />
+                            <stop offset="100%" stopColor={NIVEL_HEX[modo]} stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                         <XAxis dataKey="data" tick={{ fontSize: 11, fill: DIM }} />
                         <YAxis tick={{ fontSize: 11, fill: DIM }} width={46} domain={['auto', 'auto']}
                           tickFormatter={(v: number) => `R$${v}`} />
                         <Tooltip formatter={(v) => `${brl(Number(v))}${serieIng[0]?.label ? `/${serieIng[0].label}` : ''}`} />
-                        <Line type="monotone" dataKey="valor" name="Preço"
-                          stroke={NIVEL_HEX[modo]} strokeWidth={2.5} dot={{ r: 4 }} />
-                      </LineChart>
+                        <Area type="monotone" dataKey="valor" name="Preço"
+                          stroke={NIVEL_HEX[modo]} strokeWidth={2.5} dot={{ r: 4 }} fill="url(#grad-drill-ing)" />
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                   {(() => {

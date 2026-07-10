@@ -32,7 +32,7 @@ function ContribuidoresInner() {
   return (
     <main className="min-h-screen">
       <header className="border-b border-border bg-surface/80 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
           <div>
             <a href="/" className="text-2xl font-bold tracking-tight leading-none hover:text-accent transition-colors">Índice PF</a>
             <p className="text-xs text-dim mt-1">quem mais contribui com preços</p>
@@ -44,7 +44,7 @@ function ContribuidoresInner() {
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-5">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-5">
         <div className="flex items-end justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Top 10 contribuidores</h1>

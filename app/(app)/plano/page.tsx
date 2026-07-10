@@ -61,7 +61,7 @@ export default function PlanoPage() {
   const st = assinatura ? (STATUS[assinatura.status] ?? STATUS.cancelada) : null
 
   return (
-    <main className="max-w-lg mx-auto px-6 py-8">
+    <main className="max-w-3xl mx-auto px-6 py-8">
       {assinatura === undefined ? (
         <p className="text-sm text-dim">Carregando…</p>
       ) : viva ? (
