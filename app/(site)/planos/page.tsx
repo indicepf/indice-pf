@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { ChevronVoltar } from '@/components/ui'
+import { FASE_LANCAMENTO } from '@/lib/format'
 
 export const metadata: Metadata = {
   title: 'Planos — Índice PF',
@@ -37,13 +39,20 @@ export default function PlanosPage() {
           <div className="pop">Premium</div>
           <h3>Premium</h3>
           <div className="p-price">R$ 99,99<small>/mês</small></div>
+          {FASE_LANCAMENTO && (
+            <p className="hint" style={{ marginTop: 4 }}>
+              Grátis durante a fase de lançamento — ative sem cartão e sem cobrança.
+            </p>
+          )}
           <ul>
             <li><Check />Tudo do Gratuito</li>
             <li><Check />Detalhamento por produto e região</li>
             <li><Check />Exportação de dados</li>
             <li><Check />Comparativos históricos</li>
           </ul>
-          <a href="/assinar" className="btn-mk primary w-full justify-center">Assinar Premium →</a>
+          <a href="/assinar" className="group btn-mk primary w-full justify-center">
+            {FASE_LANCAMENTO ? 'Ativar Premium gratuito' : 'Assinar Premium'}<ChevronVoltar dir="dir" />
+          </a>
         </div>
       </div>
       </div>

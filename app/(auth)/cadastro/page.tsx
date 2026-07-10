@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { criarConta } from '@/lib/auth-actions'
+import { ChevronVoltar } from '@/components/ui'
 import { supabase } from '@/lib/supabase'
 
 export default function CadastroPage() {
@@ -62,7 +63,7 @@ function CadastroInner() {
       <button className="btn-primary" disabled={busy} onClick={onCriar}>{busy ? '…' : 'Criar conta'}</button>
 
       <div className="auth-alt">Já tem conta? <Link href={`/entrar${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`}>Entrar</Link></div>
-      <div className="auth-alt" style={{ marginTop: 8 }}><Link href="/">← Voltar ao site</Link></div>
+      <div className="auth-alt" style={{ marginTop: 8 }}><Link href="/" className="group"><ChevronVoltar />Voltar ao site</Link></div>
     </>
   )
 }
