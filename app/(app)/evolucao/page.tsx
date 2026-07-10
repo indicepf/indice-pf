@@ -176,7 +176,7 @@ function EvolucaoInner() {
   return (
     <main className="min-h-screen">
       <header className="border-b border-border bg-surface-2/80 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
           <div>
             <a href="/" className="font-bold tracking-tight text-2xl leading-none hover:text-accent transition-colors">Índice PF</a>
             <p className="text-xs text-dim mt-1">histórico do custo do prato feito</p>
@@ -189,7 +189,7 @@ function EvolucaoInner() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-6">
+      <div className="max-w-6xl mx-auto px-6">
         {/* abas */}
         <div className="flex gap-5 border-b border-border pt-2">
           {([['indice', 'Índice'], ['variacao', 'Variação'], ['ingredientes', 'Ingredientes'], ['mapa', 'Mapa'], ['calibracao', 'Calibração']] as const).map(([k, label]) => (
@@ -202,9 +202,9 @@ function EvolucaoInner() {
       </div>
 
       {aba === 'ingredientes' ? (
-        <div className="max-w-5xl mx-auto px-6 py-8"><TabelaIngredientes /></div>
+        <div className="max-w-6xl mx-auto px-6 py-8"><TabelaIngredientes /></div>
       ) : aba === 'calibracao' ? (
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-5">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-5">
         <p className="text-sm text-dim">
           Calibração dos preços de Mercado e Atacarejo com dados de campo. Para cada região e tipo de loja, compara o
           preço de campo aprovado com o preço online do mesmo ingrediente e mede o desconto real.
@@ -363,7 +363,7 @@ function EvolucaoInner() {
         )}
       </div>
       ) : aba === 'mapa' ? (
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-4">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-4">
         <p className="text-sm text-dim">
           Contribuições de campo aprovadas com localização. Filtre por período, região, tipo de mercado e ingrediente.
           <InfoTip texto="Cada ponto é uma foto aprovada de preço enviada por um usuário, na coordenada onde foi coletada. Os filtros combinam entre si." />
@@ -448,9 +448,9 @@ function EvolucaoInner() {
         )}
       </div>
       ) : !ev ? (
-        <p className="max-w-5xl mx-auto px-6 py-10 text-sm text-dim">Carregando…</p>
+        <p className="max-w-6xl mx-auto px-6 py-10 text-sm text-dim">Carregando…</p>
       ) : aba === 'variacao' ? (
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-5">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
           <div className="text-xs text-dim">Prato
             <SeletorPrato pratos={ev.pratos} value={pratoId} onChange={setPratoId} />
@@ -531,7 +531,7 @@ function EvolucaoInner() {
         </div>
       </div>
       ) : (
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
         {/* controles */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
           <div className="text-xs text-dim">Prato

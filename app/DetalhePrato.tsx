@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { NIVEIS_PRECO, brl, limparNome } from '@/lib/format'
 import { DIM, NIVEL_HEX } from '@/lib/theme'
 import ModalFontes from './ModalFontes'
@@ -62,13 +62,19 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
           {pontos.length >= 2 && (
             <div className="h-52 mb-4">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={pontos} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                <ComposedChart data={pontos} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="grad-drill-prato" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={NIVEL_HEX[nivel]} stopOpacity={0.22} />
+                      <stop offset="100%" stopColor={NIVEL_HEX[nivel]} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="data" tick={{ fontSize: 11, fill: DIM }} />
                   <YAxis tick={{ fontSize: 11, fill: DIM }} width={46} domain={['auto', 'auto']} tickFormatter={(v: number) => `R$${v}`} />
                   <Tooltip formatter={(v) => brl(Number(v))} />
-                  <Line type="monotone" dataKey="valor" name="Custo" stroke={NIVEL_HEX[nivel]} strokeWidth={2.5} dot={{ r: 4 }} />
-                </LineChart>
+                  <Area type="monotone" dataKey="valor" name="Custo" stroke={NIVEL_HEX[nivel]} strokeWidth={2.5} dot={{ r: 4 }} fill="url(#grad-drill-prato)" />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           )}
