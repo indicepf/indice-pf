@@ -25,7 +25,7 @@ HEADERS = {
 
 def supabase_post(tabela, dados):
     url  = f"{SUPABASE_URL}/rest/v1/{tabela}"
-    resp = requests.post(url, headers=HEADERS, json=dados)
+    resp = requests.post(url, headers=HEADERS, json=dados, timeout=60)
     if resp.status_code not in (200, 201):
         print(f"  ❌ Erro ao salvar em '{tabela}': {resp.status_code} - {resp.text[:200]}")
         return None
@@ -33,10 +33,19 @@ def supabase_post(tabela, dados):
 
 def supabase_get(tabela, filtro=""):
     url  = f"{SUPABASE_URL}/rest/v1/{tabela}?{filtro}"
-    resp = requests.get(url, headers=HEADERS)
+    resp = requests.get(url, headers=HEADERS, timeout=60)
     if resp.status_code != 200:
         return []
     return resp.json()
+
+def supabase_delete(url_relativa):
+    """DELETE verificado: se a limpeza falhar (rede/permissão), aborta em vez de
+    seguir para o INSERT — senão os dados antigos duplicam com os novos."""
+    resp = requests.delete(f"{SUPABASE_URL}/rest/v1/{url_relativa}", headers=HEADERS, timeout=60)
+    if resp.status_code not in (200, 204):
+        print(f"  ❌ DELETE falhou ({resp.status_code}): {url_relativa} - {resp.text[:200]}")
+        return False
+    return True
 
 def calcular_stats(precos_norm):
     if not precos_norm:
@@ -92,8 +101,10 @@ def main():
         snapshot_id = ult[0]["id"]
         print(f"\n🔀 Modo merge: atualizando {len(resumo)} ingrediente(s) no snapshot id={snapshot_id} ({ult[0]['data']})")
         ids_csv = ",".join(str(r["ingrediente_id"]) for r in resumo)
-        requests.delete(f"{SUPABASE_URL}/rest/v1/precos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})", headers=HEADERS)
-        requests.delete(f"{SUPABASE_URL}/rest/v1/resultados_brutos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})", headers=HEADERS)
+        if not supabase_delete(f"precos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})"):
+            print("🛑 Abortado: limpeza dos preços do merge falhou."); return
+        if not supabase_delete(f"resultados_brutos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})"):
+            print("🛑 Abortado: limpeza dos resultados brutos do merge falhou."); return
         _salvar_precos(snapshot_id, resumo, resultados)
         print(f"\n✅ Merge concluído. Rode calcular_custos_pratos.py para recalcular os custos.")
         return
@@ -115,8 +126,10 @@ def main():
 
     # ── 2-4. Limpa tudo do snapshot e regrava (run completo) ──────────────────
     print(f"\n🗑️  Limpando preços e resultados anteriores do snapshot {snapshot_id}...")
-    requests.delete(f"{SUPABASE_URL}/rest/v1/precos?snapshot_id=eq.{snapshot_id}", headers=HEADERS)
-    requests.delete(f"{SUPABASE_URL}/rest/v1/resultados_brutos?snapshot_id=eq.{snapshot_id}", headers=HEADERS)
+    if not supabase_delete(f"precos?snapshot_id=eq.{snapshot_id}"):
+        print("🛑 Abortado: limpeza dos preços falhou."); return
+    if not supabase_delete(f"resultados_brutos?snapshot_id=eq.{snapshot_id}"):
+        print("🛑 Abortado: limpeza dos resultados brutos falhou."); return
     _salvar_precos(snapshot_id, resumo, resultados)
 
     print(f"\n{'='*50}")

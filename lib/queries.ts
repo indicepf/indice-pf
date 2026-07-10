@@ -102,7 +102,10 @@ export async function getDishCostsRange(ini: string, fim: string): Promise<DishC
   const novos = await getSnapshotsNovos()
   if (!ini && !fim) return novos[0] ? getDishCosts(novos[0].id) : []   // default: última coleta
   const range = novos.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim))
-  if (range.length <= 1) return getDishCosts(range[0]?.id ?? novos[0]?.id)
+  if (range.length <= 1) {
+    const id = range[0]?.id ?? novos[0]?.id
+    return id != null ? getDishCosts(id) : []   // sem nenhuma coleta: nada a buscar
+  }
   const ids = range.map(s => s.id)
   const rows = await fetchAll(() => supabase.from('custos_pratos')
     .select('prato_id,custo_total,ingredientes_cobertos,ingredientes_estimados,ingredientes_total,pratos(id,regiao,nome)')
@@ -117,7 +120,7 @@ function montarItens(rec: any[], precoMap: Record<number, number>, manRecMap: Re
     const ing = r.ingredientes
     const qtd = Number(r.qtd_g)
     let preco_g: number | null = null, origem: ItemDetalhe['origem'] = 'sem', custo = 0, link: string | null = null
-    const mRec  = manRecMap[r.ingrediente_id] ?? null                               // manual recente (5 dias) R$/g
+    const mRec  = manRecMap[r.ingrediente_id] ?? null                               // manual recente (janela ±10d) R$/g
     const mLast = ing.preco_manual != null ? Number(ing.preco_manual) / 1000 : null // último manual conhecido (fallback)
     const o     = precoMap[r.ingrediente_id] ?? null                                // R$/g online
     const linkM = ing.preco_manual_link ?? null
@@ -148,7 +151,7 @@ export async function getAllDetalhes(snapshotId: number, snapData: string): Prom
   ])
   const precoMap: Record<number, number> = {}
   ;(precos || []).forEach((p: any) => { if (p.mediana_normalizada != null) precoMap[p.ingrediente_id] = Number(p.mediana_normalizada) })
-  // manual recente (5 dias): mediana das leituras por ingrediente → R$/g. Só ele conta como manual atual.
+  // manual recente (janela ±10d): mediana das leituras por ingrediente → R$/g. Só ele conta como manual atual.
   const manAgg: Record<number, number[]> = {}
   ;((manuais || []) as any[]).forEach(m => { (manAgg[m.ingrediente_id] ||= []).push(Number(m.preco_manual)) })
   const manRecMap: Record<number, number> = {}
@@ -181,12 +184,12 @@ export type FonteManual = { preco_manual: number | null; loja: string | null; li
 export async function getAllFontesManuais(snapData: string): Promise<Record<number, FonteManual[]>> {
   const base = new Date(snapData + 'T00:00:00Z').getTime()
   const ini = base - 10 * 86400000, fim = base + 11 * 86400000 - 1000
-  const { data } = await supabase.from('precos_manuais_hist')
+  const data = await fetchAll(() => supabase.from('precos_manuais_hist')
     .select('ingrediente_id,preco_manual,loja,link,criado_em,origem')
     .not('preco_manual', 'is', null)
-    .order('criado_em', { ascending: false })
+    .order('criado_em', { ascending: false }))
   const todas: Record<number, FonteManual[]> = {}
-  ;((data || []) as any[]).forEach(f => { (todas[f.ingrediente_id] ||= []).push(f) })
+  ;(data as any[]).forEach(f => { (todas[f.ingrediente_id] ||= []).push(f) })
   const out: Record<number, FonteManual[]> = {}
   for (const k of Object.keys(todas)) {
     const arr = todas[+k]
@@ -577,10 +580,10 @@ export type PontoContrib = {
   preco: number | null; cidade: string | null
 }
 export async function getContribuicoesMapa(): Promise<PontoContrib[]> {
-  const { data } = await supabase.from('contribuicoes')
+  const data = await fetchAll(() => supabase.from('contribuicoes')
     .select('lat,lng,cidade,preco,criado_em,tipo_loja,uf,regiao,ingrediente_id,ingredientes(nome)')
     .eq('status', 'aprovada').not('lat', 'is', null).not('lng', 'is', null)
-    .order('criado_em', { ascending: false })
+    .order('criado_em', { ascending: false }))
   return ((data || []) as any[]).map(c => ({
     lat: Number(c.lat), lng: Number(c.lng), nome: c.ingredientes?.nome || 'contribuição',
     ingrediente_id: c.ingrediente_id, tipo_loja: c.tipo_loja, regiao: c.regiao, uf: c.uf,
@@ -628,9 +631,9 @@ export async function isSuper(uid: string): Promise<boolean> {
 }
 
 export async function getContribuicoes(status: string): Promise<ContribuicaoFull[]> {
-  const { data } = await supabase.from('contribuicoes')
+  const data = await fetchAll(() => supabase.from('contribuicoes')
     .select('id,user_id,ingrediente_id,produto,marca,preco,peso_g,tipo_loja,mercado,cidade,lat,lng,foto_url,foto_etiqueta_url,status,criado_em,ingredientes(nome)')
-    .eq('status', status).order('criado_em', { ascending: true })
+    .eq('status', status).order('criado_em', { ascending: true }))
   return (data as unknown as ContribuicaoFull[]) || []
 }
 
@@ -730,9 +733,9 @@ export async function solicitarSaque(uid: string, valor: number, cpf: string, ch
 }
 
 export async function getSaques(status: string) {
-  const { data } = await supabase.from('pagamentos')
+  const data = await fetchAll(() => supabase.from('pagamentos')
     .select('id,user_id,valor,cpf,chave_pix,status,criado_em')
-    .eq('status', status).order('criado_em', { ascending: true })
+    .eq('status', status).order('criado_em', { ascending: true }))
   const saques = (data as any[]) || []
   const ids = [...new Set(saques.map(s => s.user_id).filter(Boolean))]
   const nomes: Record<string, { nome: string | null; telefone: string | null }> = {}
@@ -754,9 +757,9 @@ export async function getMeusSaques(uid: string) {
 
 // admin: histórico de TODOS os saques (com nome, quem pagou e contexto)
 export async function getTodosSaques() {
-  const { data } = await supabase.from('pagamentos')
+  const data = await fetchAll(() => supabase.from('pagamentos')
     .select('id,user_id,valor,cpf,chave_pix,status,criado_em,pago_em,pago_por,pago_dispositivo,pago_lat,pago_lng')
-    .order('criado_em', { ascending: false })
+    .order('criado_em', { ascending: false }))
   const saques = (data as any[]) || []
   const ids = [...new Set(saques.flatMap(s => [s.user_id, s.pago_por]).filter(Boolean))]
   const nomes: Record<string, { nome: string | null; telefone: string | null }> = {}
@@ -1213,7 +1216,7 @@ export async function getAnuncioParaSlot(slot: string): Promise<Anuncio | null> 
 
 export function registrarEventoAd(anuncioId: number, tipo: 'imp' | 'click', pagina: string) {
   // fire-and-forget: falha de RLS/migração não pode afetar a página
-  supabase.from('anuncio_eventos').insert({ anuncio_id: anuncioId, tipo, pagina }).then(() => {})
+  supabase.from('anuncio_eventos').insert({ anuncio_id: anuncioId, tipo, pagina }).then(() => {}, () => {})
 }
 
 // admin: lista completa + métricas agregadas
