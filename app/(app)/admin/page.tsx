@@ -299,7 +299,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-border sticky top-0 bg-surface/80 backdrop-blur z-10">
+      <header className="border-b border-border bg-surface">
         <div className="max-w-6xl mx-auto px-6 pt-4 flex items-center gap-3">
           <BotaoInicio />
           <h1 className="font-bold tracking-tight text-xl ml-1">Administração</h1>

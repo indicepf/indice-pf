@@ -56,7 +56,7 @@ export default function AssinarPage() {
   }
 
   return (
-    <main className="max-w-2xl mx-auto px-6 py-8">
+    <main className="max-w-3xl mx-auto px-6 py-8">
       <div className="grid sm:grid-cols-[1fr_240px] gap-5 items-start">
         <Card className="p-6">
           <h2 className="font-bold tracking-tight text-xl">Assinar o Premium</h2>

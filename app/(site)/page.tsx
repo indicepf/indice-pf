@@ -11,7 +11,7 @@ import {
   getStatsPublicas, getSeriePratos, getPrecosPorRegiao, getPratosPorIngrediente, getSerieIngrediente,
   type FonteManual, type StatsPublicas, type SeriePratos, type ProdutoRegiao, type PratoDeIngrediente, type PontoIngrediente,
 } from '@/lib/queries'
-import { NIVEIS_PRECO, MODOS, REGIOES, brl, fmtData, limparNome } from '@/lib/format'
+import { NIVEIS_PRECO, MODOS, REGIOES, brl, fmtData, limparNome, nomeOrdenacao } from '@/lib/format'
 import { INF_PATH } from '@/components/site/Logo'
 import { mediana } from '@/lib/stats'
 import { CORES_REGIAO, COR_ALTA, COR_QUEDA, DIM, NIVEL_HEX } from '@/lib/theme'
@@ -188,8 +188,18 @@ export default function Dashboard() {
     return serieIndice.map((row, i) => ({ ...row, anterior: i > 0 ? serieIndice[i - 1][modo] : null }))
   }, [serieIndice, comparar, modo])
 
+  // alterna uma linha do gráfico geral (segbar e legenda usam o mesmo estado,
+  // acumulativo como os botões de região); a última linha visível não desliga
   function toggleLegend(key: string) {
-    setLegendOff(prev => { const nx = new Set(prev); if (nx.has(key)) nx.delete(key); else nx.add(key); return nx })
+    setLegendOff(prev => {
+      const nx = new Set(prev)
+      if (nx.has(key)) nx.delete(key)
+      else {
+        if (MODOS.filter(n => !nx.has(n.key)).length <= 1) return prev   // não zera o gráfico
+        nx.add(key)
+      }
+      return nx
+    })
   }
 
   const movers = useMemo(() => {
@@ -236,7 +246,7 @@ export default function Dashboard() {
     return [...l].sort((a, b) => {
       let cmp = 0
       if (col === 'custo') cmp = a.custo_total - b.custo_total
-      else if (col === 'nome') cmp = limparNome(a.pratos.nome).localeCompare(limparNome(b.pratos.nome))
+      else if (col === 'nome') cmp = nomeOrdenacao(a.pratos.nome).localeCompare(nomeOrdenacao(b.pratos.nome))
       else if (col === 'regiao') cmp = a.pratos.regiao.localeCompare(b.pratos.regiao) || a.custo_total - b.custo_total
       else {
         const da = porPrato[a.pratos.id]?.delta, db = porPrato[b.pratos.id]?.delta
@@ -393,7 +403,7 @@ export default function Dashboard() {
               <select className="f-search" value={pratoSel ?? ''}
                 onChange={e => setPratoSel(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">Todos os pratos</option>
-                {[...custos].sort((a, b) => limparNome(a.pratos.nome).localeCompare(limparNome(b.pratos.nome))).map(c => (
+                {[...custos].sort((a, b) => nomeOrdenacao(a.pratos.nome).localeCompare(nomeOrdenacao(b.pratos.nome))).map(c => (
                   <option key={c.pratos.id} value={c.pratos.id}>{limparNome(c.pratos.nome)}</option>
                 ))}
               </select>
@@ -469,10 +479,13 @@ export default function Dashboard() {
                   <div className="sub">Mediana dos {custosRegiao.length} pratos · coleta a coleta{snapshot ? ` · última em ${fmtData(snapshot.data)}` : ''}</div>
                 </div>
                 <div className="panel-tools">
+                  {/* seletor do gráfico: acumula/remove linhas (como os botões de
+                      região) — não muda o nível global, que vem da lateral/KPIs */}
                   <div className="segbar">
                     {NIVEIS_PRECO.map(n => (
-                      <button key={n.key} disabled={!n.disponivel} className={modo === n.key ? 'on' : ''}
-                        onClick={() => n.disponivel && setModo(n.key as ModoKey)}>
+                      <button key={n.key} disabled={!n.disponivel}
+                        className={n.disponivel && !legendOff.has(n.key) ? 'on' : ''}
+                        onClick={() => n.disponivel && toggleLegend(n.key)}>
                         {n.grupo === 'consumidor' ? (n.key === 'online' ? 'Online' : 'Mercado') : n.label}
                       </button>
                     ))}

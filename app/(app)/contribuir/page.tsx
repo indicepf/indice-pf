@@ -253,7 +253,7 @@ export default function ContribuirPage() {
                 <p className="text-sm text-dim mb-4">Fotografe o produto com a etiqueta de preço visível. Só a foto e a localização são obrigatórias — os demais campos ajudam, mas são opcionais.</p>
 
                 <label className="block">
-                  <div className="aspect-[4/3] rounded-[var(--r)] border-2 border-dashed border-border-2 bg-surface grid place-items-center overflow-hidden cursor-pointer hover:border-accent transition-colors">
+                  <div className="h-52 sm:h-60 rounded-[var(--r)] border-2 border-dashed border-border-2 bg-surface grid place-items-center overflow-hidden cursor-pointer hover:border-accent transition-colors">
                     {preview
                       ? <img src={preview} alt="prévia" className="w-full h-full object-cover" />
                       : <div className="text-center text-dim text-sm px-4">
