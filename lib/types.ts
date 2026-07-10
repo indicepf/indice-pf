@@ -16,6 +16,7 @@ export type ItemDetalhe = {
   nome: string
   categoria: string | null
   qtd_g: number
+  qtd_cozida_g: number | null   // peso após preparo (PC) — exibição, não entra no custo
   preco_g: number | null
   origem: 'online' | 'manual' | 'misto' | 'fixo' | 'sem'
   custo: number

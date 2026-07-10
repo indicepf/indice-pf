@@ -129,7 +129,7 @@ function montarItens(rec: any[], precoMap: Record<number, number>, manRecMap: Re
     else if (mRec != null)              { origem = 'manual'; preco_g = mRec;           custo = preco_g * qtd; link = linkM }
     else if (o != null)                 { origem = 'online'; preco_g = o;              custo = preco_g * qtd }        // manual antigo não conta
     else if (mLast != null)             { origem = 'manual'; preco_g = mLast;          custo = preco_g * qtd; link = linkM } // nicho sem online
-    return { ingrediente_id: r.ingrediente_id, nome: ing.nome, categoria: ing.categoria, qtd_g: qtd, preco_g, origem, custo, link }
+    return { ingrediente_id: r.ingrediente_id, nome: ing.nome, categoria: ing.categoria, qtd_g: qtd, qtd_cozida_g: r.qtd_cozida_g != null ? Number(r.qtd_cozida_g) : null, preco_g, origem, custo, link }
   }).sort((a, b) => b.custo - a.custo)
 }
 
@@ -145,7 +145,7 @@ export async function getAllDetalhes(snapshotId: number, snapData: string): Prom
   const ini = new Date(base - 10 * 86400000).toISOString()          // janela do manual: [data-10d, data+10d]
   const fim = new Date(base + 11 * 86400000 - 1000).toISOString()
   const [rec, { data: precos }, { data: manuais }] = await Promise.all([
-    fetchAll(() => supabase.from('receitas').select('prato_id,qtd_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual,preco_manual_link)').order('id')),
+    fetchAll(() => supabase.from('receitas').select('prato_id,qtd_g,qtd_cozida_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual,preco_manual_link)').order('id')),
     supabase.from('precos').select('ingrediente_id,mediana_normalizada').eq('snapshot_id', snapshotId),
     supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual').gte('criado_em', ini).lte('criado_em', fim).not('preco_manual', 'is', null),
   ])
