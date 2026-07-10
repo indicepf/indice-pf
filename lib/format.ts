@@ -139,6 +139,11 @@ export const SAQUE_MINIMO = 10; // R$ mínimo para solicitar saque
 // ficam fora de gráficos, tabelas e histórico em todo o app (decisão de 10/07)
 export const CORTE_COLETA = "2026-06-21";
 
+// Fase de lançamento: gateway de pagamento inativo, Premium liberado gratuitamente
+// com aviso de que vai virar assinatura paga. Trocar para false quando a cobrança
+// entrar no ar (junto com as envs ASAAS_* — o backend segue o mesmo critério).
+export const FASE_LANCAMENTO = true;
+
 export function mascararCpf(v: string) {
 	return v
 		.replace(/\D/g, "")

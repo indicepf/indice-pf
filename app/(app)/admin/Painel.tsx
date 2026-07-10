@@ -86,6 +86,9 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
   const [indice, setIndice] = useState<number | null>(null)
   const [sub, setSub] = useState<'usuarios' | 'mapa' | 'ingredientes'>('usuarios')
   const [userSel, setUserSel] = useState<string | null>(null)
+  const POR_PAGINA = 20   // "Carregar mais" (mesmo padrão da Moderação)
+  const [mostrarUsuarios, setMostrarUsuarios] = useState(POR_PAGINA)
+  const [mostrarContribs, setMostrarContribs] = useState(POR_PAGINA)
   const [ingAberto, setIngAberto] = useState<number | null>(null)
   const [ingBusca, setIngBusca] = useState(''); const [ingDesde, setIngDesde] = useState(''); const [ingPrecoMin, setIngPrecoMin] = useState('')
   const [edit, setEdit] = useState<PainelContrib | null>(null)  // contribuição em edição inline (cópia)
@@ -276,7 +279,7 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
           </div>
         )}
         <div className="space-y-2">
-          {cs.map(c => edit?.id === c.id ? (
+          {cs.slice(0, mostrarContribs).map(c => edit?.id === c.id ? (
             <FormEdicao key={c.id} edit={edit} setEdit={setEdit} ings={ings} salvando={salvandoEdit} onSalvar={salvarEdit} />
           ) : (
             <div key={c.id} className="flex items-center gap-3 border border-border rounded-md p-2 bg-surface text-sm">
@@ -287,6 +290,12 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
               <button onClick={() => { setEdit({ ...c }); setEditMsg('') }} className="text-xs text-accent hover:underline shrink-0">editar</button>
             </div>
           ))}
+          {cs.length > mostrarContribs && (
+            <button onClick={() => setMostrarContribs(m => m + POR_PAGINA)}
+              className="w-full text-sm text-accent border border-border rounded-md py-2 hover:bg-surface-2 transition">
+              Carregar mais ({cs.length - mostrarContribs} restantes)
+            </button>
+          )}
         </div>
       </div>
     )
@@ -328,8 +337,8 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
       {sub === 'usuarios' && (
         <div className="space-y-2">
           {!usuarios.length && <p className="text-sm text-dim">Nenhuma contribuição ainda.</p>}
-          {usuarios.map(u => (
-            <button key={u.id} onClick={() => setUserSel(u.id)}
+          {usuarios.slice(0, mostrarUsuarios).map(u => (
+            <button key={u.id} onClick={() => { setUserSel(u.id); setMostrarContribs(POR_PAGINA) }}
               className="w-full text-left border border-border rounded-lg bg-surface p-3 hover:bg-surface-2 transition flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{perfis[u.id]?.nome || 'Usuário sem nome'}
@@ -344,6 +353,12 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
               <span className="text-dim">›</span>
             </button>
           ))}
+          {usuarios.length > mostrarUsuarios && (
+            <button onClick={() => setMostrarUsuarios(m => m + POR_PAGINA)}
+              className="w-full text-sm text-accent border border-border rounded-lg py-2.5 hover:bg-surface-2 transition">
+              Carregar mais ({usuarios.length - mostrarUsuarios} restantes)
+            </button>
+          )}
         </div>
       )}
 
