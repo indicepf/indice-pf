@@ -58,18 +58,28 @@
   </div>
 
   <h2 id="resumo">1. Resumo executivo e plano de ação</h2>
+  <p><strong>Feito em 09–10/07/2026:</strong> 2.1 e 2.2 (migração 33, verificada no banco); 5.1 (Next 16.2.10, CVEs
+  de runtime resolvidos); 4.1 (security headers, CSP em Report-Only); 4.2 (URLs de anúncio só https); 6.2 (removida
+  a anon key antiga do api/card); 7.1 (CPF parcial na UI admin — só 4 últimos dígitos); 2.3 (verificado — tabelas de
+  operação bloqueiam anon; precos_manuais_hist é pública por design, sem PII). 6.1 marcado como risco aceito pelo
+  responsável (sem rotação).</p>
   <table>
-    <tr><th>#</th><th>Severidade</th><th>Item</th><th>Ação</th></tr>
-    <tr class="feito"><td>2.1</td><td class="critico">CRÍTICO</td><td>Auto-promoção a admin via UPDATE em profiles</td><td><strong>Rodar a migração 33</strong> (pronta neste PR)</td></tr>
-    <tr class="feito"><td>2.2</td><td class="alto">ALTO</td><td>INSERT direto em pagamentos sem validar saldo</td><td><strong>Rodar a migração 33</strong> (pronta neste PR)</td></tr>
-    <tr><td>5.1</td><td class="alto">ALTO</td><td>Next.js com 4 CVEs conhecidos</td><td><code>npm install next@latest</code> (patch da linha 15)</td></tr>
-    <tr><td>6.1</td><td class="alto">ALTO</td><td>Chave SerpAPI exposta em conversa</td><td>Rotacionar no painel SerpAPI + atualizar secret</td></tr>
-    <tr><td>4.1</td><td class="alto">ALTO</td><td>Sem security headers (CSP, HSTS, X-Frame-Options)</td><td>Bloco <code>headers()</code> no next.config.ts</td></tr>
-    <tr><td>3.2</td><td class="medio">MÉDIO</td><td>Webhook Asaas: garantir token forte quando ativar</td><td>Token aleatório ≥32 bytes ao configurar o gateway</td></tr>
-    <tr><td>2.4</td><td class="medio">MÉDIO</td><td>Buckets sem limite de tamanho/tipo de arquivo</td><td>Config de bucket no painel Supabase</td></tr>
-    <tr><td>7.1</td><td class="medio">MÉDIO</td><td>CPF e chave PIX em claro no banco</td><td>Minimizar exposição; avaliar pgcrypto</td></tr>
-    <tr><td>8.1</td><td class="medio">MÉDIO</td><td>Sem 2FA nas contas admin/super</td><td>Ativar TOTP (Supabase MFA) para admins</td></tr>
-    <tr><td>—</td><td class="baixo">BAIXO</td><td>Demais itens das seções 2–8</td><td>Backlog</td></tr>
+    <tr><th>#</th><th>Severidade</th><th>Item</th><th>Status</th></tr>
+    <tr class="feito"><td>2.1</td><td class="critico">CRÍTICO</td><td>Auto-promoção a admin via UPDATE em profiles</td><td>✓ Feito (migração 33, verificado)</td></tr>
+    <tr class="feito"><td>2.2</td><td class="alto">ALTO</td><td>INSERT direto em pagamentos sem validar saldo</td><td>✓ Feito (migração 33 + RPC)</td></tr>
+    <tr class="feito"><td>5.1</td><td class="alto">ALTO</td><td>Next.js com 4 CVEs de runtime</td><td>✓ Feito (16.2.10)</td></tr>
+    <tr class="feito"><td>4.1</td><td class="alto">ALTO</td><td>Sem security headers</td><td>✓ Feito (CSP Report-Only + HSTS/XFO/etc.)</td></tr>
+    <tr class="feito"><td>4.2</td><td class="medio">MÉDIO</td><td>URL de anúncio sem validação (javascript:)</td><td>✓ Feito (só https no href/src)</td></tr>
+    <tr class="feito"><td>6.2</td><td class="baixo">BAIXO</td><td>Anon key antiga hardcoded no api/card</td><td>✓ Feito (removida)</td></tr>
+    <tr class="feito"><td>7.1</td><td class="medio">MÉDIO</td><td>CPF inteiro visível na UI admin</td><td>✓ Feito (parcial, 4 últimos dígitos)</td></tr>
+    <tr class="feito"><td>2.3</td><td class="medio">MÉDIO</td><td>Tabelas de operação legíveis por anon</td><td>✓ Verificado (RLS OK; PMH público por design)</td></tr>
+    <tr><td>4.1b</td><td class="alto">ALTO</td><td>Trocar CSP de Report-Only para bloqueante</td><td>Pendente — validar no console primeiro</td></tr>
+    <tr><td>2.4</td><td class="medio">MÉDIO</td><td>Buckets sem limite de tamanho/tipo</td><td>Pendente — painel Supabase (não é código)</td></tr>
+    <tr><td>8.1</td><td class="medio">MÉDIO</td><td>Sem 2FA nas contas admin/super</td><td>Pendente — painel Supabase (Auth/MFA)</td></tr>
+    <tr><td>8.2</td><td class="medio">MÉDIO</td><td>Backup externo do histórico</td><td>Pendente — job pg_dump semanal</td></tr>
+    <tr><td>3.1</td><td class="medio">MÉDIO</td><td>Sem rate limiting nas rotas</td><td>Pendente — Vercel WAF</td></tr>
+    <tr><td>3.2</td><td class="medio">MÉDIO</td><td>Token forte no webhook Asaas</td><td>Pendente — ao ativar o gateway (D9)</td></tr>
+    <tr><td>6.1</td><td class="baixo">—</td><td>Chave SerpAPI exposta em chat</td><td>Risco aceito pelo responsável</td></tr>
   </table>
 
   <h2 id="banco">2. Banco de dados e RLS</h2>
