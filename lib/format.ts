@@ -135,6 +135,10 @@ export const telValido = (v: string) => v.replace(/\D/g, "").length >= 10;
 export const VALOR_POR_FOTO = 0.01; // R$ por contribuição aprovada
 export const SAQUE_MINIMO = 10; // R$ mínimo para solicitar saque
 
+// coletas anteriores a esta data são de uma abordagem antiga, descartadas —
+// ficam fora de gráficos, tabelas e histórico em todo o app (decisão de 10/07)
+export const CORTE_COLETA = "2026-06-21";
+
 export function mascararCpf(v: string) {
 	return v
 		.replace(/\D/g, "")

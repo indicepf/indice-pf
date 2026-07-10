@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { VALOR_POR_FOTO } from './format'
+import { VALOR_POR_FOTO, CORTE_COLETA } from './format'
 import type { Snapshot, DishCost, ItemDetalhe, Fonte, Ing, Profile, Contribuicao, ContribuicaoFull } from './types'
 
 // O Supabase corta cada resposta em 1000 linhas. Para tabelas maiores (receitas,
@@ -60,7 +60,7 @@ export async function getColetas(opts: { ini?: string; fim?: string; page?: numb
   Promise<{ coletas: ColetaResumo[]; total: number }> {
   const { ini, fim, page = 0, porPagina = 10 } = opts
   let q = supabase.from('snapshots').select('id,data,custo_total_pf', { count: 'exact' })
-  if (ini) q = q.gte('data', ini)
+    .gte('data', ini && ini > CORTE_COLETA ? ini : CORTE_COLETA)   // nunca antes do corte
   if (fim) q = q.lte('data', fim)
   const { data: snaps, count } = await q.order('id', { ascending: false })
     .range(page * porPagina, page * porPagina + porPagina - 1)
@@ -231,7 +231,7 @@ const grupoDe = (cat: string | null | undefined) => (cat && CAT_GRUPO[cat]) || '
 export async function getEvolucao(): Promise<Evolucao> {
   const [cp, snaps, receitas, ingRows, precosRows, manRows, pratosRows] = await Promise.all([
     supabase.from('custos_pratos').select('snapshot_id'),
-    supabase.from('snapshots').select('id,data').order('data', { ascending: true }),
+    supabase.from('snapshots').select('id,data').gte('data', CORTE_COLETA).order('data', { ascending: true }),
     fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
     supabase.from('ingredientes').select('id,custo_fixo,preco_manual,categoria'),
     fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada,media_exibicao,desvio_padrao').order('id')),
@@ -367,7 +367,7 @@ const calibRegiao = (regiao: string | null, uf: string | null): string | null =>
 
 export async function getCalibracao(ini?: string, fim?: string): Promise<Calibracao> {
   const [snaps, receitas, ingRows, precosRows, pratosRows, contribs] = await Promise.all([
-    supabase.from('snapshots').select('id,data').order('data', { ascending: true }),
+    supabase.from('snapshots').select('id,data').gte('data', CORTE_COLETA).order('data', { ascending: true }),
     fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
     supabase.from('ingredientes').select('id,nome,unidade,peso_ref_g,custo_fixo,preco_manual'),
     fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada').order('id')),
@@ -486,7 +486,7 @@ export async function getCalibracao(ini?: string, fim?: string): Promise<Calibra
 export async function getSnapshotsNovos(): Promise<{ id: number; data: string }[]> {
   const [cp, snaps] = await Promise.all([
     supabase.from('custos_pratos').select('snapshot_id'),
-    supabase.from('snapshots').select('id,data').order('data', { ascending: false }),
+    supabase.from('snapshots').select('id,data').gte('data', CORTE_COLETA).order('data', { ascending: false }),
   ])
   const novos = new Set(((cp.data || []) as any[]).map(r => r.snapshot_id))
   return ((snaps.data || []) as any[]).filter(s => novos.has(s.id)).map(s => ({ id: s.id, data: s.data }))
