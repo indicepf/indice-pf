@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import { inputBase } from '@/components/ui'
+import { inputBase, ChevronVoltar } from '@/components/ui'
 import dynamic from 'next/dynamic'
 import {
   getPainelContribuicoes, getPerfis, getUsoPorIngrediente, getLatestSnapshot,
@@ -220,7 +220,7 @@ export default function Painel({ ings, souSuper }: { ings: Ing[]; souSuper: bool
     }))
     return (
       <div className="space-y-5">
-        <button onClick={() => setUserSel(null)} className="text-sm text-accent hover:underline">← todos os usuários</button>
+        <button onClick={() => setUserSel(null)} className="group text-sm text-accent hover:underline"><ChevronVoltar />todos os usuários</button>
         <div className="border border-border rounded-lg bg-surface p-4">
           <p className="font-medium text-lg">{p?.nome || 'Usuário sem nome'}</p>
           <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-2 text-sm mt-3">

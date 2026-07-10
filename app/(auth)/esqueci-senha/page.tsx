@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { enviarResetSenha } from '@/lib/auth-actions'
+import { ChevronVoltar } from '@/components/ui'
 
 export default function EsqueciSenhaPage() {
   const [email, setEmail] = useState('')
@@ -33,7 +34,7 @@ export default function EsqueciSenhaPage() {
       {info && <p className="text-xs text-ok mt-2">{info}</p>}
       <button className="btn-primary" disabled={busy} onClick={onEnviar}>{busy ? '…' : 'Enviar link'}</button>
 
-      <div className="auth-alt"><Link href="/entrar">← Voltar para o login</Link></div>
+      <div className="auth-alt"><Link href="/entrar" className="group"><ChevronVoltar />Voltar para o login</Link></div>
     </>
   )
 }

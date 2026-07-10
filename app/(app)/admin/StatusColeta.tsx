@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useState } from 'react'
-import { inputBase } from '@/components/ui'
+import { inputBase, ChevronVoltar } from '@/components/ui'
 import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, aprovarUltimaColeta, getHistoricoManual, editarLeituraManual, getLatestSnapshot, getSnapshotsNovos, getDetalheEncontrados, getEntradasIngrediente, excluirEntradaERecalcular, getColetas, type StatusColeta, type ItemColeta, type PrecoManualHist, type ItemEncontrado, type EntradaBruta, type ColetaResumo } from '@/lib/queries'
 import { capturarContexto } from '@/lib/contexto'
 import { brl } from '@/lib/format'
@@ -383,10 +383,10 @@ export default function StatusColeta() {
         {coletasTotal > POR_PAGINA && (
           <div className="flex items-center gap-3 mt-3 text-xs">
             <button disabled={coletasPage === 0} onClick={() => setColetasPage(p => p - 1)}
-              className="text-accent hover:underline disabled:opacity-40 disabled:no-underline cursor-pointer">← anteriores</button>
+              className="group text-accent hover:underline disabled:opacity-40 disabled:no-underline cursor-pointer"><ChevronVoltar />anteriores</button>
             <span className="text-dim">página {coletasPage + 1} de {Math.ceil(coletasTotal / POR_PAGINA)}</span>
             <button disabled={(coletasPage + 1) * POR_PAGINA >= coletasTotal} onClick={() => setColetasPage(p => p + 1)}
-              className="text-accent hover:underline disabled:opacity-40 disabled:no-underline cursor-pointer">próximas →</button>
+              className="group text-accent hover:underline disabled:opacity-40 disabled:no-underline cursor-pointer">próximas<ChevronVoltar dir="dir" /></button>
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { entrar } from '@/lib/auth-actions'
+import { ChevronVoltar } from '@/components/ui'
 import { getProfile, comRetry } from '@/lib/queries'
 import { perfilCompleto } from '@/app/useAuth'
 
@@ -53,7 +54,7 @@ function EntrarInner() {
 
       <div className="auth-alt">Não tem conta? <Link href={`/cadastro${next !== '/' ? `?next=${encodeURIComponent(next)}` : ''}`}>Criar conta grátis</Link></div>
       <div className="auth-alt" style={{ marginTop: 8 }}>
-        <Link href="/">← Voltar ao site</Link>
+        <Link href="/" className="group"><ChevronVoltar />Voltar ao site</Link>
       </div>
     </>
   )
