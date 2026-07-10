@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '../../useAuth'
 import { Badge, Button, Card } from '@/components/ui'
+import { FASE_LANCAMENTO } from '@/lib/format'
 
 const BENEFICIOS = [
   'Preços por produto e por região',
@@ -16,12 +17,13 @@ const BENEFICIOS = [
 type Metodo = 'pix' | 'cartao'
 
 export default function AssinarPage() {
-  const { isPremium } = useAuth()
+  const { isPremium, user, refresh } = useAuth()
   const [metodo, setMetodo] = useState<Metodo>('pix')
   const [busy, setBusy] = useState(false)
   const [erro, setErro] = useState('')
   const [pagamentoUrl, setPagamentoUrl] = useState('')
   const [indisponivel, setIndisponivel] = useState(false)
+  const [ativado, setAtivado] = useState(false)
 
   async function assinar() {
     setErro(''); setBusy(true)
@@ -37,10 +39,27 @@ export default function AssinarPage() {
       const j = await r.json().catch(() => ({}))
       if (r.status === 503) { setIndisponivel(true); return }
       if (!r.ok) { setErro(j.erro ?? 'Falha ao criar a assinatura.'); return }
+      if (j.gratuito) { setAtivado(true); if (user) refresh(user.id); return }   // ativou na hora
       if (j.pagamentoUrl) setPagamentoUrl(j.pagamentoUrl)
     } finally {
       setBusy(false)
     }
+  }
+
+  if (ativado) {
+    return (
+      <main className="max-w-3xl mx-auto px-6 py-8">
+        <Card className="p-6 text-center">
+          <p className="text-2xl mb-2">✓</p>
+          <h2 className="font-bold tracking-tight text-lg">Premium ativado</h2>
+          <p className="text-sm text-dim mt-2 leading-relaxed max-w-md mx-auto">
+            Você tem acesso a todos os recursos Premium, sem cobrança, durante a fase de lançamento.
+            Avisaremos com antecedência quando a assinatura paga entrar no ar.
+          </p>
+          <p className="text-sm text-dim mt-3">Gerencie em <Link href="/plano" className="text-accent hover:underline">Plano &amp; assinatura</Link>.</p>
+        </Card>
+      </main>
+    )
   }
 
   if (isPremium) {
@@ -83,6 +102,25 @@ export default function AssinarPage() {
                 Após pagar, a pill do topo muda para <strong>Premium</strong> em alguns instantes (recarregue a página).
               </p>
             </div>
+          ) : FASE_LANCAMENTO ? (
+            <>
+              <div className="mt-4 border border-accent/30 bg-accent/5 rounded-[var(--r-sm)] p-4">
+                <p className="text-sm font-medium">Fase de lançamento — Premium sem cobrança</p>
+                <p className="text-sm text-dim mt-1 leading-relaxed">
+                  O pagamento ainda não está ativo. Por enquanto, você ativa o Premium
+                  <strong> gratuitamente</strong> e usa todos os recursos. Quando a assinatura paga
+                  entrar no ar (R$ 99,99/mês), avisaremos com antecedência — você decide se continua,
+                  e <strong>nada será cobrado sem a sua confirmação</strong>.
+                </p>
+              </div>
+              {erro && <p className="text-xs text-danger mt-3">{erro}</p>}
+              <Button full disabled={busy} onClick={assinar} className="mt-4">
+                {busy ? 'Ativando…' : 'Ativar Premium gratuito'}
+              </Button>
+              <p className="text-xs text-faint mt-3 leading-relaxed">
+                Sem cartão, sem Pix, sem compromisso — a ativação é imediata e vale por toda a fase de lançamento.
+              </p>
+            </>
           ) : (
             <>
               <p className="text-xs uppercase tracking-wide text-faint mt-4 mb-2">Forma de pagamento</p>
@@ -112,7 +150,7 @@ export default function AssinarPage() {
         <Card className="p-5">
           <div className="flex items-center justify-between">
             <p className="font-bold tracking-tight">Premium</p>
-            <Badge tone="ok">R$ 99,99/mês</Badge>
+            <Badge tone="ok">{FASE_LANCAMENTO ? 'grátis no lançamento' : 'R$ 99,99/mês'}</Badge>
           </div>
           <ul className="text-sm text-dim mt-3 space-y-2 leading-relaxed">
             {BENEFICIOS.map(b => <li key={b}>✓ {b}</li>)}
