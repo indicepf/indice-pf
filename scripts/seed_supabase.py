@@ -59,9 +59,10 @@ def main():
     var2 = G.carregar_var2canon()
     linhas = G.carregar_linhas(var2)
 
-    # receitas consolidadas: (regiao, prato, base) -> qtd_g
+    # receitas consolidadas: (regiao, prato, base) -> qtd_g (cru) e qtd cozida
     from collections import defaultdict
     consol = defaultdict(float)
+    consol_coz = defaultdict(float)
     for l in linhas:
         if not l["canon"]:
             continue
@@ -69,6 +70,7 @@ def main():
             if b in SENTINELAS:
                 continue
             consol[(l["regiao"], l["prato"], b)] += (l["qtd_g"] or 0) * prop
+            consol_coz[(l["regiao"], l["prato"], b)] += (l["qtd_cozida_g"] or 0) * prop
 
     bases = sorted({b for (_, _, b) in consol})
     pratos = sorted({(r, p) for (r, p, _) in consol})
@@ -101,6 +103,7 @@ def main():
         "prato_id": prato_id[(r, p)],
         "ingrediente_id": ing_id[b],
         "qtd_g": round(q, 1),
+        "qtd_cozida_g": round(consol_coz[(r, p, b)], 1) or None,
     } for (r, p, b), q in consol.items()]
     # receitas é totalmente derivada: apaga tudo e reinsere (evita linhas órfãs
     # quando o mapeamento de um ingrediente muda — ex: des-consolidação).

@@ -32,6 +32,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
   const f = 1 - (NIVEIS_PRECO.find(n => n.key === nivel)?.desc ?? 0)
 
   const total = (itens || []).reduce((s, i) => s + i.custo, 0) * f
+  const pesoPronto = (itens || []).reduce((s, i) => s + (i.qtd_cozida_g || 0), 0)
   const pontos = (serie?.valores ?? [])
     .map((v, i) => v != null ? { ts: tsDe(serie!.datas[i]), valor: +(v * f).toFixed(2) } : null)
     .filter((p): p is { ts: number; valor: number } => p != null)
@@ -100,7 +101,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
           ) : (
             <table className="tbl-mk">
               <thead>
-                <tr><th>Ingrediente</th><th style={{ textAlign: 'right' }}>Qtd</th><th style={{ textAlign: 'right' }}>Custo</th><th></th></tr>
+                <tr><th>Ingrediente</th><th style={{ textAlign: 'right' }}>Qtd (cru)</th><th style={{ textAlign: 'right' }}>No prato</th><th style={{ textAlign: 'right' }}>Custo</th><th></th></tr>
               </thead>
               <tbody>
                 {itens.map(i => (
@@ -112,6 +113,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
                       {i.origem === 'sem' && <Etq t="sem preço" />}
                     </td>
                     <td className="text-right text-dim tnum">{i.qtd_g} g</td>
+                    <td className="text-right text-dim tnum">{i.qtd_cozida_g ? `${i.qtd_cozida_g} g` : '—'}</td>
                     <td className="text-right tnum">{brl(i.custo * f)}</td>
                     <td className="text-right whitespace-nowrap">
                       {(i.origem === 'online' || i.origem === 'manual' || i.origem === 'misto') && (
@@ -125,9 +127,15 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
             </table>
           )}
 
+          {itens && pesoPronto > 0 && (
+            <p className="text-xs text-dim tnum mt-2">
+              Peso do prato pronto: ~{Math.round(pesoPronto)} g · custo por 100 g servidos: {brl(total / pesoPronto * 100)}
+            </p>
+          )}
+
           <p className="text-xs text-dim leading-relaxed mt-4 border border-border rounded-[var(--r-sm)] bg-surface-2 p-3">
-            Preço final calculado sobre aproveitamento (peso do produto já cozido). Ex.: alho cru 5g → 4g
-            aproveitados. A redução por ingrediente está na base de estruturação do prato.
+            O custo usa o peso cru (quantidade comprada) × preço de varejo. A coluna &ldquo;No prato&rdquo;
+            mostra o peso após o preparo (aproveitamento): carnes encolhem, arroz e feijão expandem.
           </p>
         </div>
       </div>

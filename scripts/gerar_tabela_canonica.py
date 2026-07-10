@@ -54,7 +54,7 @@ def carregar_linhas(var2canon):
     for regiao in wb.sheetnames:
         ws = wb[regiao]
         for r in ws.iter_rows(min_row=2, values_only=True):
-            prato, ing, qbruta, _aprov = r
+            prato, ing, qbruta, aprov = r
             if not ing:
                 continue
             ing = ing.strip()
@@ -67,6 +67,8 @@ def carregar_linhas(var2canon):
                 "canon": var2canon.get(ing),
                 "qtd_txt": qbruta.strip() if qbruta else "",
                 "qtd_g": parse_qtd_g(qbruta),
+                # peso cozido/aproveitamento (coluna PC) — só exibição, não entra no custo
+                "qtd_cozida_g": parse_qtd_g(aprov),
             })
     return linhas
 
@@ -204,6 +206,7 @@ def main():
     # mais de uma linha do prato. Remove água/subproduto (não é item de compra).
     from collections import defaultdict
     consol = defaultdict(float)
+    consol_coz = defaultdict(float)
     for l in linhas:
         if not l["canon"]:
             continue
@@ -211,9 +214,10 @@ def main():
             if b == "Água/Subproduto (sem custo)":
                 continue
             consol[(l["regiao"], l["prato"], b)] += (l["qtd_g"] or 0) * prop
+            consol_coz[(l["regiao"], l["prato"], b)] += (l["qtd_cozida_g"] or 0) * prop
 
     ws_f = wb.create_sheet("Receitas Finais", 0)
-    ws_f.append(["Região", "Prato", "Ingrediente canônico", "Categoria", "Qtd/porção (g ou ml)", "Obs"])
+    ws_f.append(["Região", "Prato", "Ingrediente canônico", "Categoria", "Qtd/porção (g ou ml)", "Qtd cozida/porção (g)", "Obs"])
     for (regiao, prato, base), qtd in sorted(consol.items()):
         tb = TRIPE.get(base, {})
         if tb.get("unidade") == "fixo":
@@ -222,18 +226,20 @@ def main():
             obs = "SEM COTAÇÃO — revisar"
         else:
             obs = ""
-        ws_f.append([regiao, prato, base, BASE.get(base, "?"), round(qtd, 1), obs])
+        ws_f.append([regiao, prato, base, BASE.get(base, "?"), round(qtd, 1),
+                     round(consol_coz[(regiao, prato, base)], 1), obs])
     estilizar_header(ws_f)
 
     # ── Aba 0b: Pratos (resumo) ──────────────────────────────────────────────
-    por_prato = defaultdict(lambda: {"ing": 0, "peso": 0.0})
+    por_prato = defaultdict(lambda: {"ing": 0, "peso": 0.0, "peso_coz": 0.0})
     for (regiao, prato, base), qtd in consol.items():
         por_prato[(regiao, prato)]["ing"] += 1
         por_prato[(regiao, prato)]["peso"] += qtd
+        por_prato[(regiao, prato)]["peso_coz"] += consol_coz[(regiao, prato, base)]
     ws_p = wb.create_sheet("Pratos (resumo)", 1)
-    ws_p.append(["Região", "Prato", "Nº ingredientes canônicos", "Peso bruto/porção (g)"])
+    ws_p.append(["Região", "Prato", "Nº ingredientes canônicos", "Peso bruto/porção (g)", "Peso pronto/porção (g)"])
     for (regiao, prato), d in sorted(por_prato.items()):
-        ws_p.append([regiao, prato, d["ing"], round(d["peso"], 1)])
+        ws_p.append([regiao, prato, d["ing"], round(d["peso"], 1), round(d["peso_coz"], 1)])
     estilizar_header(ws_p)
 
     # ── Aba: Scraping (proposta de tripé) ────────────────────────────────────
