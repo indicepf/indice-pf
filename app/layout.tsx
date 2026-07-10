@@ -1,8 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { GoogleTagManager } from "@next/third-parties/google";
 import "./globals.css";
 import RegistrarSW from "./RegistrarSW";
 import { AuthProvider } from "./useAuth";
+
+const gtmId = process.env.NEXT_PUBLIC_GTM_ID;
 
 const inter = Inter({
   subsets: ["latin"],
@@ -48,6 +51,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
+      {gtmId && <GoogleTagManager gtmId={gtmId} />}
       <body className={`${inter.variable} antialiased`}>
         <RegistrarSW />
         <AuthProvider>{children}</AuthProvider>

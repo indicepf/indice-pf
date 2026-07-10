@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Índice PF — GTM, GA4 e Search Console: passo a passo</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #1a1a1a;
+    margin: 0;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.6rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 36px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 {
+    font-size: 1.15rem; font-weight: bold; margin-top: 48px;
+    padding-bottom: 4px; border-bottom: 1px solid #ccc;
+  }
+  h3 { font-size: 1rem; font-weight: bold; margin-top: 28px; }
+  p { margin: 12px 0; }
+  code {
+    font-family: "Courier New", monospace;
+    background: #f2f2f2; border: 1px solid #ddd;
+    padding: 1px 5px; font-size: 0.9em;
+  }
+  pre {
+    background: #f7f7f7; border: 1px solid #ddd;
+    padding: 14px; overflow-x: auto; font-size: 0.85rem;
+    font-family: "Courier New", monospace;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  ol.steps { padding-left: 22px; }
+  ol.steps li { margin: 10px 0; }
+  .note {
+    border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0;
+  }
+  .note p:first-child { margin-top: 0; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .toc li { margin: 3px 0; }
+  .fill { border: 1px dashed #999; background: #fafafa; padding: 1px 6px; font-family: "Courier New", monospace; font-size: 0.85em; }
+  footer { margin-top: 56px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Índice PF — GTM, GA4 e Search Console</h1>
+  <p class="subtitle">Passo a passo para instrumentar o site em produção (indicepratofeito.com.br, Next.js 16 na Vercel). O código já está aplicado no repositório; este guia cobre a parte que roda nos painéis do Google e o que você precisa preencher.</p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#visao">Visão geral — o que é cada ferramenta</a></li>
+      <li><a href="#ordem">Ordem de configuração</a></li>
+      <li><a href="#ga4">Parte 1 — Criar a propriedade GA4</a></li>
+      <li><a href="#gtm">Parte 2 — Criar o container do GTM</a></li>
+      <li><a href="#site">Parte 3 — Ligar o GTM no site (código já pronto + env)</a></li>
+      <li><a href="#tag-ga4">Parte 4 — Configurar a tag do GA4 dentro do GTM</a></li>
+      <li><a href="#publicar">Parte 5 — Publicar o container</a></li>
+      <li><a href="#gsc">Parte 6 — Google Search Console</a></li>
+      <li><a href="#sitemap">Parte 7 — Sitemap e robots (já prontos) + submeter no GSC</a></li>
+      <li><a href="#validar">Parte 8 — Validação de ponta a ponta</a></li>
+      <li><a href="#lgpd">Nota sobre LGPD / consentimento</a></li>
+      <li><a href="#checklist">Checklist final e IDs a preencher</a></li>
+    </ol>
+  </div>
+
+  <h2 id="visao">1. Visão geral — o que é cada ferramenta</h2>
+  <table>
+    <tr><th>Ferramenta</th><th>Para que serve</th><th>Onde vive</th></tr>
+    <tr>
+      <td><strong>GTM</strong> — Google Tag Manager</td>
+      <td>Um "container" de tags. Você instala <u>um</u> snippet no site e, dentro do painel do GTM, adiciona/edita tags (analytics, pixels, etc.) sem mexer no código nem fazer deploy.</td>
+      <td><code>tagmanager.google.com</code></td>
+    </tr>
+    <tr>
+      <td><strong>GA4</strong> — Google Analytics 4</td>
+      <td>A ferramenta de analytics em si (visitantes, páginas, eventos, tempo real). Aqui o GA4 <strong>não</strong> vai no código do site — ele é disparado <u>pelo GTM</u>.</td>
+      <td><code>analytics.google.com</code></td>
+    </tr>
+    <tr>
+      <td><strong>GSC</strong> — Google Search Console</td>
+      <td>Mostra como o site aparece na Busca do Google: quais páginas estão indexadas, por quais termos aparece, erros de rastreamento. Independente do GTM/GA4.</td>
+      <td><code>search.google.com/search-console</code></td>
+    </tr>
+  </table>
+  <p>Como se conectam nesta montagem:</p>
+  <pre><code>Site (Next.js)  ──carrega──▶  GTM (container)  ──dispara──▶  GA4 (analytics)
+
+Google Search Console  ──lê──▶  Site + sitemap.xml   (caminho separado)</code></pre>
+  <p>
+    A escolha aqui é <strong>medir o GA4 através do GTM</strong>: só o snippet do GTM entra no site. Assim,
+    para adicionar qualquer tag futura (um pixel, um evento de clique) você mexe só no painel do GTM, sem
+    tocar no código. É o modelo pedido para este projeto.
+  </p>
+
+  <h2 id="ordem">2. Ordem de configuração</h2>
+  <ol class="steps">
+    <li>Criar a propriedade <strong>GA4</strong> → anotar o <em>Measurement ID</em> <code>G-XXXXXXX</code>.</li>
+    <li>Criar o container <strong>GTM</strong> → anotar o <em>Container ID</em> <code>GTM-XXXXXXX</code>.</li>
+    <li>Colocar o <strong>GTM ID</strong> na variável de ambiente do site (o código já está pronto) e fazer deploy.</li>
+    <li>Dentro do GTM, criar a <strong>tag do GA4</strong> usando o <code>G-XXXXXXX</code> e testar no modo Preview.</li>
+    <li><strong>Publicar</strong> o container do GTM.</li>
+    <li>Criar a propriedade no <strong>Search Console</strong> e verificar a posse do domínio.</li>
+    <li>Submeter o <strong>sitemap</strong> no Search Console.</li>
+    <li><strong>Validar</strong> tudo (tempo real do GA4, Tag Assistant, indexação no GSC).</li>
+  </ol>
+  <div class="note">
+    <p>Faça na ordem. O GA4 vem antes do GTM porque você precisa do <code>G-XXXXXXX</code> para configurar
+    a tag dentro do GTM. E publique o container só depois de testar no Preview — enquanto não publicar,
+    nada é medido de verdade em produção.</p>
+  </div>
+
+  <h2 id="ga4">3. Parte 1 — Criar a propriedade GA4</h2>
+  <ol class="steps">
+    <li>Entre em <code>analytics.google.com</code> com sua conta Google.</li>
+    <li><strong>Administrar</strong> (engrenagem, canto inferior esquerdo) → coluna Conta → <strong>Criar</strong> → <strong>Conta</strong>. Nome da conta: <code>Índice PF</code>. Aceite os termos de compartilhamento de dados padrão.</li>
+    <li>Em seguida, <strong>Criar propriedade</strong>. Nome: <code>Índice PF</code>. Fuso: <strong>(GMT-03:00) Brasília</strong>. Moeda: <strong>Real brasileiro (R$)</strong>.</li>
+    <li>Preencha "Detalhes da empresa" e objetivos (pode marcar "Gerar leads"/"Examinar o comportamento" — não muda a coleta).</li>
+    <li>Na etapa <strong>Coletar dados</strong>, escolha a plataforma <strong>Web</strong>.</li>
+    <li>Fluxo de dados Web:
+      <ul>
+        <li>URL do site: <code>https://indicepratofeito.com.br</code></li>
+        <li>Nome do fluxo: <code>Índice PF — Web</code></li>
+        <li>Deixe a <strong>Medição avançada</strong> (Enhanced Measurement) <u>ligada</u> — captura scroll, cliques em saída, buscas etc. automaticamente.</li>
+      </ul>
+    </li>
+    <li>Ao criar o fluxo, o Google mostra o <strong>ID de métricas</strong> (Measurement ID) no formato
+      <code>G-XXXXXXX</code>. <strong>Copie e guarde.</strong> É o único dado do GA4 que você vai usar depois.</li>
+  </ol>
+  <div class="note">
+    <p><strong>Não</strong> use o snippet de instalação ("Tag do Google") que o GA4 oferece nessa tela — nesta
+    montagem o GA4 é carregado pelo GTM, não direto no site. Você só precisa do <code>G-XXXXXXX</code>.</p>
+  </div>
+
+  <h2 id="gtm">4. Parte 2 — Criar o container do GTM</h2>
+  <ol class="steps">
+    <li>Entre em <code>tagmanager.google.com</code> com a mesma conta Google.</li>
+    <li><strong>Criar conta</strong>. Nome da conta: <code>Índice PF</code>. País: <strong>Brasil</strong>.</li>
+    <li>Container: nome <code>indicepratofeito.com.br</code>, plataforma <strong>Web</strong>. Criar e aceitar os termos.</li>
+    <li>O GTM mostra o <strong>Container ID</strong> no formato <code>GTM-XXXXXXX</code> e um pop-up com dois
+      trechos de código. <strong>Feche o pop-up sem copiar</strong> — a instalação no site já está feita por
+      código (Parte 3). Só anote o <code>GTM-XXXXXXX</code>.</li>
+  </ol>
+
+  <h2 id="site">5. Parte 3 — Ligar o GTM no site</h2>
+  <p>
+    O código já foi aplicado neste repositório. Foram três mudanças:
+  </p>
+  <ul>
+    <li>Dependência <code>@next/third-parties</code> instalada (componente oficial do Next para GTM).</li>
+    <li><code>app/layout.tsx</code> renderiza o GTM <strong>só se</strong> a variável <code>NEXT_PUBLIC_GTM_ID</code> existir.</li>
+    <li>O ID <u>não</u> fica hardcoded — vem da variável de ambiente.</li>
+  </ul>
+  <p>Trecho relevante já presente em <code>app/layout.tsx</code>:</p>
+  <pre><code>import { GoogleTagManager } from "@next/third-parties/google";
+
+const gtmId = process.env.NEXT_PUBLIC_GTM_ID;
+
+// ...dentro do RootLayout:
+&lt;html lang="pt-BR"&gt;
+  {gtmId &amp;&amp; &lt;GoogleTagManager gtmId={gtmId} /&gt;}
+  &lt;body ...&gt;</code></pre>
+  <p>
+    Falta só <strong>você definir a variável</strong> com o ID real. Passos:
+  </p>
+  <ol class="steps">
+    <li><strong>No Vercel</strong> (painel do projeto → Settings → Environment Variables):
+      <ul>
+        <li>Key: <code>NEXT_PUBLIC_GTM_ID</code></li>
+        <li>Value: <span class="fill">GTM-XXXXXXX</span> (o ID da Parte 2)</li>
+        <li>Environments: marque <strong>Production</strong> (e Preview/Development se quiser testar antes).</li>
+      </ul>
+    </li>
+    <li><strong>Redeploy</strong> na Vercel para a variável valer (ela é lida no build). Um novo push na branch
+      de produção ou "Redeploy" no último deployment resolve.</li>
+    <li><strong>Local</strong> (opcional, para testar na sua máquina): adicione ao <code>.env.local</code>:
+      <pre><code>NEXT_PUBLIC_GTM_ID=GTM-XXXXXXX</code></pre>
+      (O <code>.env.local</code> não é commitado — cada um define o seu.)</li>
+  </ol>
+  <div class="note">
+    <p><strong>Por que o prefixo <code>NEXT_PUBLIC_</code>?</strong> No Next.js, só variáveis com esse prefixo
+    ficam disponíveis no navegador. O GTM roda no navegador, então precisa ser público — e isto é normal:
+    o Container ID do GTM não é segredo (fica visível no HTML de qualquer site que usa GTM).</p>
+  </div>
+  <div class="note">
+    <p><strong>Alternativa manual (não usada aqui, para referência):</strong> daria para injetar o GTM com
+    <code>next/script</code> sem a dependência <code>@next/third-parties</code>. Como o componente oficial já
+    cuida do script no <code>&lt;head&gt;</code> e do <code>&lt;noscript&gt;</code> de fallback, não há motivo
+    para fazer manualmente.</p>
+  </div>
+
+  <h2 id="tag-ga4">6. Parte 4 — Configurar a tag do GA4 dentro do GTM</h2>
+  <p>Agora o site carrega o GTM, mas o container ainda está vazio. Vamos dizer a ele para disparar o GA4.</p>
+  <ol class="steps">
+    <li>No GTM (<code>tagmanager.google.com</code>), abra o container <code>indicepratofeito.com.br</code>.</li>
+    <li>Menu <strong>Tags</strong> → <strong>Novo</strong>.</li>
+    <li>Clique em <strong>Configuração da tag</strong> → escolha <strong>Google Tag</strong> (nas versões mais
+      novas do GTM esse é o tipo que substitui a antiga "GA4 Configuration").</li>
+    <li>No campo <strong>ID da tag</strong>, cole o Measurement ID do GA4: <span class="fill">G-XXXXXXX</span> (da Parte 1).</li>
+    <li>Clique em <strong>Acionamento</strong> (Triggering) → escolha <strong>All Pages</strong>
+      (Todas as páginas — <em>Page View</em>). Isso faz a tag disparar em cada carregamento de página.</li>
+    <li>Dê um nome à tag, ex.: <code>GA4 — Google Tag</code>, e clique em <strong>Salvar</strong>.</li>
+  </ol>
+
+  <h3>6.1 Testar no modo Preview (antes de publicar)</h3>
+  <ol class="steps">
+    <li>No GTM, clique em <strong>Visualizar</strong> (Preview, canto superior direito).</li>
+    <li>Na tela do <strong>Tag Assistant</strong> que abrir, digite <code>https://indicepratofeito.com.br</code>
+      (ou a URL de Preview da Vercel, se testou lá primeiro) e conecte.</li>
+    <li>O site abre numa aba com um selo "Tag Assistant Connected". Navegue por algumas páginas.</li>
+    <li>De volta ao Tag Assistant, confirme que a tag <strong>GA4 — Google Tag</strong> aparece como
+      <strong>Fired</strong> (disparada) nos eventos de página.</li>
+    <li>Em paralelo, no GA4 → <strong>Relatórios → Tempo real</strong>, você deve se ver como 1 usuário ativo.</li>
+  </ol>
+  <div class="note">
+    <p>Se a tag não disparar: confirme que o deploy com a env <code>NEXT_PUBLIC_GTM_ID</code> já subiu (veja
+    o código-fonte da página em produção — deve conter <code>googletagmanager.com/gtm.js?id=GTM-XXXXXXX</code>),
+    e que o ID no site é o <u>mesmo</u> container que você está editando no GTM.</p>
+  </div>
+
+  <h2 id="publicar">7. Parte 5 — Publicar o container</h2>
+  <p>Enquanto o container não é publicado, a tag só existe no modo Preview — a medição real não acontece.</p>
+  <ol class="steps">
+    <li>No GTM, clique em <strong>Enviar</strong> (Submit, canto superior direito).</li>
+    <li>Dê um nome à versão, ex.: <code>v1 — GA4 via GTM</code>, e uma descrição curta.</li>
+    <li>Clique em <strong>Publicar</strong>.</li>
+  </ol>
+  <p>A partir daqui, o GA4 passa a coletar dados de todos os visitantes em produção.</p>
+
+  <h2 id="gsc">8. Parte 6 — Google Search Console</h2>
+  <p>
+    O GSC é independente do GTM/GA4. Ele precisa provar que você é dono do site. Há dois tipos de propriedade;
+    recomendo a de <strong>domínio</strong>.
+  </p>
+
+  <h3>8.1 Recomendado — propriedade de <em>Domínio</em> (via DNS)</h3>
+  <p>
+    Cobre tudo de uma vez: <code>http</code> e <code>https</code>, <code>www</code> e sem <code>www</code>,
+    e qualquer subdomínio. Requer acesso ao DNS do domínio.
+  </p>
+  <ol class="steps">
+    <li>Em <code>search.google.com/search-console</code> → <strong>Adicionar propriedade</strong> → coluna
+      <strong>Domínio</strong> → digite <code>indicepratofeito.com.br</code>.</li>
+    <li>O Google mostra um registro <strong>TXT</strong> para adicionar no DNS, algo como
+      <code>google-site-verification=xxxxxxxxxxxx</code>.</li>
+    <li>Vá ao painel onde o DNS do domínio é gerenciado (onde você aponta o domínio para a Vercel — pode ser a
+      própria Vercel, em Domains, ou o registrador onde comprou o <code>.com.br</code>, ex.: Registro.br).
+      Adicione um registro:
+      <ul>
+        <li>Tipo: <strong>TXT</strong></li>
+        <li>Nome/Host: <strong>@</strong> (a raiz do domínio)</li>
+        <li>Valor: o <code>google-site-verification=...</code> que o GSC forneceu</li>
+      </ul>
+    </li>
+    <li>Salve e volte ao GSC → <strong>Verificar</strong>. A propagação do DNS pode levar de minutos a algumas
+      horas; se falhar de primeira, espere e tente de novo.</li>
+  </ol>
+
+  <h3>8.2 Alternativa — propriedade de <em>Prefixo de URL</em> (via meta tag)</h3>
+  <p>
+    Se não tiver acesso ao DNS agora, dá para verificar por uma meta tag no HTML. O Next facilita isso pelo
+    <code>metadata</code> — <strong>não</strong> apliquei esta opção no código para não commitar um token que
+    ainda não existe. Se optar por ela:
+  </p>
+  <ol class="steps">
+    <li>No GSC, escolha <strong>Prefixo do URL</strong> → <code>https://indicepratofeito.com.br</code>.</li>
+    <li>Método de verificação <strong>Tag HTML</strong>. O Google dá um valor como
+      <code>&lt;meta name="google-site-verification" content="ABC123..." /&gt;</code>. Copie só o
+      <code>content</code>.</li>
+    <li>Em <code>app/layout.tsx</code>, dentro do objeto <code>metadata</code> já existente, acrescente:
+      <pre><code>export const metadata: Metadata = {
+  metadataBase: new URL("https://indicepratofeito.com.br"),
+  // ...campos já existentes...
+  verification: { google: "ABC123..." },
+};</code></pre>
+    </li>
+    <li>Faça deploy e clique em <strong>Verificar</strong> no GSC.</li>
+  </ol>
+  <div class="note">
+    <p>A verificação de domínio (8.1) é melhor a longo prazo. Prefira-a se conseguir editar o DNS; a meta tag
+    (8.2) é o plano B.</p>
+  </div>
+
+  <h2 id="sitemap">9. Parte 7 — Sitemap e robots</h2>
+  <p>Já foram criados no repositório, no padrão do App Router do Next 16:</p>
+  <ul>
+    <li><code>app/sitemap.ts</code> → gera <code>https://indicepratofeito.com.br/sitemap.xml</code> com as 4
+      páginas públicas indexáveis: <code>/</code>, <code>/metodologia</code>, <code>/planos</code>,
+      <code>/sobre</code>. As áreas logadas (<code>/admin</code>, <code>/perfil</code>, <code>/painel</code>
+      etc.) ficam de fora de propósito.</li>
+    <li><code>app/robots.ts</code> → gera <code>/robots.txt</code> permitindo o rastreamento do site, bloqueando
+      as áreas logadas e apontando para o sitemap.</li>
+  </ul>
+  <p>Depois do deploy, confirme que abrem:</p>
+  <pre><code>https://indicepratofeito.com.br/sitemap.xml
+https://indicepratofeito.com.br/robots.txt</code></pre>
+  <p>Submeter no GSC (após a propriedade estar verificada):</p>
+  <ol class="steps">
+    <li>GSC → menu lateral <strong>Sitemaps</strong>.</li>
+    <li>Em "Adicionar novo sitemap", digite <code>sitemap.xml</code> e clique em <strong>Enviar</strong>.</li>
+    <li>O status deve ficar <strong>Sucesso</strong> em pouco tempo (as páginas entram na fila de indexação —
+      levar dias para aparecer na Busca é normal).</li>
+  </ol>
+  <div class="note">
+    <p>Quando novas páginas públicas forem criadas (ex.: um blog por prato, mencionado no roadmap), adicione as
+    rotas na lista dentro de <code>app/sitemap.ts</code>. O sitemap não se atualiza sozinho com rotas novas.</p>
+  </div>
+
+  <h2 id="validar">10. Parte 8 — Validação de ponta a ponta</h2>
+  <table>
+    <tr><th>O quê</th><th>Onde conferir</th><th>Resultado esperado</th></tr>
+    <tr>
+      <td>GTM está no site</td>
+      <td>Ver código-fonte da home em produção (Ctrl+U)</td>
+      <td>Contém <code>googletagmanager.com/gtm.js?id=GTM-XXXXXXX</code></td>
+    </tr>
+    <tr>
+      <td>Tag do GA4 dispara</td>
+      <td>GTM → Preview (Tag Assistant)</td>
+      <td>Tag "GA4 — Google Tag" aparece como <strong>Fired</strong></td>
+    </tr>
+    <tr>
+      <td>GA4 recebe dados</td>
+      <td>GA4 → Relatórios → Tempo real</td>
+      <td>Você aparece como usuário ativo ao navegar</td>
+    </tr>
+    <tr>
+      <td>Posse do site no GSC</td>
+      <td>Search Console</td>
+      <td>Propriedade verificada (sem aviso de verificação)</td>
+    </tr>
+    <tr>
+      <td>Sitemap aceito</td>
+      <td>GSC → Sitemaps</td>
+      <td>Status <strong>Sucesso</strong>, 4 URLs descobertas</td>
+    </tr>
+  </table>
+
+  <h2 id="lgpd">11. Nota sobre LGPD / consentimento</h2>
+  <p>
+    O GA4 usa cookies para identificar visitantes. Sob a LGPD, o padrão de mercado é pedir consentimento antes
+    de ativar analytics não essencial. Este guia <strong>não</strong> implementa banner de cookies nem o
+    <em>Consent Mode</em> do Google — fica como decisão/etapa futura. Se for adotar depois, o caminho natural,
+    já que tudo passa pelo GTM, é: subir um banner de consentimento e usar o <strong>Consent Mode v2</strong>
+    do Google Tag para só liberar a medição após o "aceitar". Como está montado (GA4 via GTM), dá para ligar
+    isso sem tocar no código do site. Avalie com quem cuida do jurídico do projeto.
+  </p>
+
+  <h2 id="checklist">12. Checklist final e IDs a preencher</h2>
+  <ol class="steps">
+    <li>[ ] Propriedade GA4 criada — Measurement ID anotado.</li>
+    <li>[ ] Container GTM criado — Container ID anotado.</li>
+    <li>[ ] <code>NEXT_PUBLIC_GTM_ID</code> definida no Vercel (Production) + redeploy feito.</li>
+    <li>[ ] Tag GA4 (Google Tag) criada no GTM com trigger All Pages.</li>
+    <li>[ ] Testado no Preview + Tempo real do GA4.</li>
+    <li>[ ] Container GTM <strong>publicado</strong>.</li>
+    <li>[ ] Propriedade de domínio verificada no GSC (TXT no DNS).</li>
+    <li>[ ] <code>sitemap.xml</code> e <code>robots.txt</code> abrindo em produção.</li>
+    <li>[ ] Sitemap submetido no GSC com status Sucesso.</li>
+  </ol>
+  <p>Guarde os IDs (não são segredos, mas você vai precisar deles):</p>
+  <table>
+    <tr><th>Dado</th><th>Formato</th><th>Valor</th></tr>
+    <tr><td>GA4 Measurement ID</td><td><code>G-XXXXXXX</code></td><td><span class="fill">preencher</span></td></tr>
+    <tr><td>GTM Container ID</td><td><code>GTM-XXXXXXX</code></td><td><span class="fill">preencher</span></td></tr>
+    <tr><td>Método de verificação do GSC</td><td>Domínio (DNS) / Prefixo (meta tag)</td><td><span class="fill">preencher</span></td></tr>
+  </table>
+
+  <footer>Documento técnico do projeto <code>indice-pf</code> — GTM, GA4 e Search Console. Código de suporte (GTM no layout, sitemap, robots) já aplicado no repositório.</footer>
+</div>
+</body>
+</html>
