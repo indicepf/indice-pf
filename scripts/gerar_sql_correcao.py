@@ -10,7 +10,7 @@ Uso:  SERPAPI_KEY=... python scripts/gerar_sql_correcao.py
 Saída: correcao_pratos.sql
 """
 import os, sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pipeline"))
 
 from scraper_pf import buscar_ingrediente, mediana
 from salvar_supabase import calcular_stats, normalizado_para_exibicao

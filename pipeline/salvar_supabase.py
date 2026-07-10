@@ -14,7 +14,7 @@ except ImportError:
 # ─── Credenciais Supabase ─────────────────────────────────────────────────────
 SUPABASE_URL  = os.getenv("SUPABASE_URL", "https://yhgdlmmtiyvdgeoxavzn.supabase.co")
 SUPABASE_KEY  = os.getenv("SUPABASE_KEY", "")
-SNAPSHOT_FILE = "snapshot_pf.json"
+SNAPSHOT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot_pf.json")
 
 HEADERS = {
     "apikey":        SUPABASE_KEY,

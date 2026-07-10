@@ -53,8 +53,8 @@ jobs:
           SCRAPE_MERGE:   ${{ github.event.inputs.modo == 'faltantes' && '1' || '' }}
         run: |
           echo "Modo: ${{ github.event.inputs.modo || 'completo (agendado)' }} | FORCE_RESCRAPE='${FORCE_RESCRAPE}' SCRAPE_MERGE='${SCRAPE_MERGE}'"
-          python scraper_pf.py
-          python salvar_supabase.py
+          python pipeline/scraper_pf.py
+          python pipeline/salvar_supabase.py
           # AUDITORIA ANTES DE INTEGRAR: calcular_custos_pratos NÃO roda mais aqui.
           # A coleta fica em precos/resultados_brutos, fora do índice, até o admin
           # revisar (Admin → Dados: variações fortes/entradas) e aprovar em

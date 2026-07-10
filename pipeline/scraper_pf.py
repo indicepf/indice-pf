@@ -21,8 +21,10 @@ SERP_API_KEYS = [k for k in (os.getenv("SERPAPI_KEY", ""),
 _serp_idx     = 0
 SUPABASE_URL  = os.getenv("SUPABASE_URL", "https://yhgdlmmtiyvdgeoxavzn.supabase.co")
 SUPABASE_KEY  = os.getenv("SUPABASE_KEY", "")
-CACHE_FILE    = "cache_serpapi.json"
-SNAPSHOT_FILE = "snapshot_pf.json"
+# Artefatos de runtime ficam junto do script (pipeline/), independente do CWD.
+_DIR          = os.path.dirname(os.path.abspath(__file__))
+CACHE_FILE    = os.path.join(_DIR, "cache_serpapi.json")
+SNAPSHOT_FILE = os.path.join(_DIR, "snapshot_pf.json")
 
 SUPA_HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
 

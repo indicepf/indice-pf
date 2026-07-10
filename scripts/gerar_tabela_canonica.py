@@ -17,9 +17,9 @@ from mapa_canonico import BASE, ATOMICO, COMPOSTO, REVISAR, consolidar, PRATO_AL
 from tripe_scraping import TRIPE
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TAB  = os.path.join(RAIZ, "Tabela_Indice_PF_Ataulizada.xlsx")
-SCR  = os.path.join(RAIZ, "Ingredientes_Scrapping.xlsx")
-OUT  = os.path.join(RAIZ, "tabela_canonica_ingredientes.xlsx")
+TAB  = os.path.join(RAIZ, "data", "Tabela_Indice_PF_Ataulizada.xlsx")
+SCR  = os.path.join(RAIZ, "data", "Ingredientes_Scrapping.xlsx")
+OUT  = os.path.join(RAIZ, "data", "tabela_canonica_ingredientes.xlsx")
 
 
 def parse_qtd_g(txt):
