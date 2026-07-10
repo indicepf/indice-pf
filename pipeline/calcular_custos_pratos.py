@@ -47,7 +47,7 @@ def get_all(tabela, select, extra=""):
     while True:
         url = f"{SUPABASE_URL}/rest/v1/{tabela}?select={select}{extra}"
         r = requests.get(url, headers={**H, "Range-Unit": "items",
-                                       "Range": f"{ini}-{ini+passo-1}"})
+                                       "Range": f"{ini}-{ini+passo-1}"}, timeout=60)
         r.raise_for_status()
         lote = r.json()
         linhas.extend(lote)
@@ -161,18 +161,23 @@ def main():
         custos.append(custo)
 
     # ── grava (DELETE + INSERT idempotente) ───────────────────────────────────
-    requests.delete(f"{SUPABASE_URL}/rest/v1/custos_pratos?snapshot_id=eq.{snap_id}", headers=H)
+    r = requests.delete(f"{SUPABASE_URL}/rest/v1/custos_pratos?snapshot_id=eq.{snap_id}",
+                        headers=H, timeout=60)
+    if r.status_code not in (200, 204):
+        print(f"  ❌ limpeza de custos_pratos falhou ({r.status_code}) — abortado para não duplicar"); return
     for i in range(0, len(linhas), 100):
         r = requests.post(f"{SUPABASE_URL}/rest/v1/custos_pratos",
-                          headers={**H, "Prefer": "return=minimal"}, json=linhas[i:i+100])
+                          headers={**H, "Prefer": "return=minimal"}, json=linhas[i:i+100], timeout=60)
         if r.status_code not in (200, 201, 204):
             print(f"  ❌ erro ao gravar custos_pratos: {r.status_code} {r.text[:200]}"); return
 
     # ── índice nacional: mediana dos custos dos pratos ────────────────────────
     indice = round(statistics.median(custos), 2) if custos else None
-    requests.patch(f"{SUPABASE_URL}/rest/v1/snapshots?id=eq.{snap_id}",
-                   headers={**H, "Prefer": "return=minimal"},
-                   json={"custo_total_pf": indice})
+    r = requests.patch(f"{SUPABASE_URL}/rest/v1/snapshots?id=eq.{snap_id}",
+                       headers={**H, "Prefer": "return=minimal"},
+                       json={"custo_total_pf": indice}, timeout=60)
+    if r.status_code not in (200, 204):
+        print(f"  ❌ falha ao gravar o índice no snapshot ({r.status_code})"); return
 
     completos = sum(1 for l in linhas if l["ingredientes_cobertos"] + l["ingredientes_estimados"] == l["ingredientes_total"])
     print(f"  ✅ {len(linhas)} pratos calculados | {completos} completos")

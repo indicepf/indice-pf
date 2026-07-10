@@ -49,7 +49,15 @@ export async function POST(req: Request) {
     if (viva?.length) return NextResponse.json({ erro: 'Você já tem uma assinatura em andamento.' }, { status: 409 })
 
     try {
-      const cliente = await criarCliente(perfil.nome, user.email ?? '', perfil.cpf)
+      // reutiliza o customer do gateway de uma assinatura anterior (cancelada/
+      // inadimplente) — sem isso cada tentativa criava um cliente novo no Asaas
+      const { data: antiga } = await db.from('assinaturas')
+        .select('gateway_customer_id').eq('user_id', user.id).eq('gateway', 'asaas')
+        .not('gateway_customer_id', 'is', null)
+        .order('criado_em', { ascending: false }).limit(1)
+      const cliente = antiga?.[0]?.gateway_customer_id
+        ? { id: antiga[0].gateway_customer_id as string }
+        : await criarCliente(perfil.nome, user.email ?? '', perfil.cpf)
       const sub = await criarAssinatura(cliente.id, {
         valor: VALOR_PREMIUM, metodo, descricao: 'Índice PF Premium (mensal)',
       })

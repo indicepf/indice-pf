@@ -34,8 +34,12 @@ export async function POST(req: Request) {
   if (!subId) return NextResponse.json({ ok: true, ignorado: true })
 
   if (CONFIRMA.has(evt.event)) {
-    // pagamento confirmado → ativa e estende o período por 1 mês + folga de 3 dias
-    const fim = new Date(); fim.setMonth(fim.getMonth() + 1); fim.setDate(fim.getDate() + 3)
+    // pagamento confirmado → ativa e estende o período por 1 mês + folga de 3 dias.
+    // Base = vencimento da cobrança paga (dueDate), não a hora do processamento:
+    // reentregas atrasadas do gateway não podem deslocar o período do cliente.
+    const base = evt.payment?.dueDate ? new Date(`${evt.payment.dueDate}T00:00:00Z`) : new Date()
+    const fim = isNaN(base.getTime()) ? new Date() : base
+    fim.setMonth(fim.getMonth() + 1); fim.setDate(fim.getDate() + 3)
     await db.from('assinaturas')
       .update({ status: 'ativa', periodo_fim: fim.toISOString() })
       .eq('gateway', 'asaas').eq('gateway_subscription_id', subId)

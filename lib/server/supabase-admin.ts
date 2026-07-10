@@ -8,7 +8,9 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yhgdlmmtiyvdgeoxavz
 
 let cached: SupabaseClient | null = null
 export function supabaseAdmin(): SupabaseClient {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  // SUPABASE_KEY é o nome usado no .env.local/pipeline para a mesma service role —
+  // aceita como fallback para as rotas de API funcionarem em dev local
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
   if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY não configurada')
   return (cached ||= createClient(url, key, { auth: { persistSession: false } }))
 }
