@@ -718,8 +718,14 @@ export async function salvarDadosRecompensa(uid: string, cpf: string, chave_pix:
     .update({ cpf, chave_pix, consentimento_cpf_em: new Date().toISOString() }).eq('id', uid)
 }
 
+// saque via RPC validada no banco (migração 33: saldo/CPF/PIX conferidos lá).
+// Fallback para o insert direto enquanto a migração não roda.
 export async function solicitarSaque(uid: string, valor: number, cpf: string, chave_pix: string) {
-  return supabase.from('pagamentos').insert({ user_id: uid, valor, cpf, chave_pix, status: 'solicitado' })
+  const r = await supabase.rpc('solicitar_saque', { p_valor: valor })
+  if (r.error && /solicitar_saque/.test(r.error.message)) {
+    return supabase.from('pagamentos').insert({ user_id: uid, valor, cpf, chave_pix, status: 'solicitado' })
+  }
+  return r
 }
 
 export async function getSaques(status: string) {

@@ -210,7 +210,9 @@ body {
 .btn-mk.danger:hover{background:var(--danger-bg)}
 .btn-mk svg{width:16px;height:16px}
 
-.filters{position:sticky;top:74px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:auto;max-height:calc(100vh - 92px)}
+/* rola por wheel/touch mas sem scrollbar visível (mockup não tem) */
+.filters{position:sticky;top:74px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:auto;max-height:calc(100vh - 92px);scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
 /* mobile: painel deixa de ser sticky (senão cobre o conteúdo ao rolar) — este
    media query precisa vir DEPOIS da definição acima para vencer a cascata */
 @media (max-width:960px){.filters{position:static;max-height:none;overflow:visible}}
