@@ -5,7 +5,7 @@ import "./globals.css";
 import RegistrarSW from "./RegistrarSW";
 import { AuthProvider } from "./useAuth";
 
-const gtmId = process.env.NEXT_PUBLIC_GTM_ID;
+const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim();
 
 const inter = Inter({
   subsets: ["latin"],
