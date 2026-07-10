@@ -143,6 +143,14 @@ export function mascararCpf(v: string) {
 		.replace(/(\d{3})(\d)/, "$1.$2")
 		.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 }
+
+// exibição parcial na UI admin — mostra só os 4 últimos dígitos (o admin faz o
+// PIX pela chave, não precisa do CPF inteiro); minimização de dado pessoal
+export function cpfParcial(v: string | null | undefined) {
+	const d = (v ?? "").replace(/\D/g, "");
+	if (d.length < 4) return "—";
+	return `•••.•••.${d.slice(6, 9)}-${d.slice(9, 11)}`;
+}
 export function cpfValido(v: string) {
 	const c = v.replace(/\D/g, "");
 	if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;

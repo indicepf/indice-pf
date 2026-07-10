@@ -11,7 +11,7 @@ import {
   superExcluir, superEditarSaque,
   type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
-import { brl, mascararCpf, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
+import { brl, cpfParcial, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
 import { capturarContexto, resumoDispositivo } from '@/lib/contexto'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
 import BotaoInicio, { chip } from '../../BotaoInicio'
@@ -516,7 +516,7 @@ export default function AdminPage() {
                 )}
               </dd>
               <dt className="text-dim">CPF</dt>
-              <dd className="font-mono">{s.cpf ? mascararCpf(s.cpf) : '—'}</dd>
+              <dd className="font-mono">{cpfParcial(s.cpf)}</dd>
               <dt className="text-dim">Telefone</dt>
               <dd>{s.telefone || '—'}</dd>
               <dt className="text-dim">Solicitado</dt>

@@ -4,8 +4,10 @@ import { ImageResponse } from 'next/og'
 
 export const revalidate = 3600   // cache de 1h — o índice muda 1×/semana
 
-const URL_SB = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yhgdlmmtiyvdgeoxavzn.supabase.co'
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloZ2RsbW10aXl2ZGdlb3hhdnpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAyNzMzMzYsImV4cCI6MjA2NTg0OTMzNn0.kdjSuqEXfp1LmnDA6voNC1WCUDV18XG1QVQtj4L2SN8'
+// sem fallback hardcoded: as envs existem no Vercel; faltando, falha alto
+// (antes havia uma anon key ANTIGA aqui — de outro projeto — que mascarava erro)
+const URL_SB = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 const GRAD = 'linear-gradient(100deg, #8D4CB2, #6954BD 22%, #0069D4 46%, #00A7E2 70%, #20C58C 100%)'
 const brl = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`

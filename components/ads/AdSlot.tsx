@@ -14,14 +14,20 @@ const FORMATO: Record<string, string> = {
   nativo: '',
 }
 
+// só aceita URLs https no href/src do criativo — bloqueia javascript:/data: etc.
+// (defesa contra XSS armazenado caso uma conta admin seja comprometida)
+const urlSegura = (u: string | null | undefined) => (u && /^https:\/\//i.test(u) ? u : undefined)
+
 // criativo em si (compartilhado com AdGate/AdPopup)
 export function AdCreative({ ad, pagina, formato = '' }: { ad: Anuncio; pagina: string; formato?: string }) {
+  const imagem = urlSegura(ad.imagem_url)
+  const link = urlSegura(ad.link)
   const conteudo = (
     <div className={`ad-slot bg-surface ${formato}`}>
       <span className="ad-label">Publicidade</span>
-      {ad.imagem_url ? (
+      {imagem ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={ad.imagem_url} alt={ad.titulo} className="w-full h-auto object-contain" />
+        <img src={imagem} alt={ad.titulo} className="w-full h-auto object-contain" />
       ) : (
         <div className="p-4">
           <p className="text-sm font-medium">{ad.titulo}</p>
@@ -31,8 +37,8 @@ export function AdCreative({ ad, pagina, formato = '' }: { ad: Anuncio; pagina: 
       )}
     </div>
   )
-  return ad.link ? (
-    <a href={ad.link} target="_blank" rel="noopener noreferrer sponsored"
+  return link ? (
+    <a href={link} target="_blank" rel="noopener noreferrer sponsored"
       onClick={() => registrarEventoAd(ad.id, 'click', pagina)} className="block">
       {conteudo}
     </a>
