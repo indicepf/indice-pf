@@ -175,7 +175,7 @@ function EvolucaoInner() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-border bg-surface-2/80 backdrop-blur sticky top-0 z-20">
+      <header className="border-b border-border bg-surface-2">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
           <div>
             <a href="/" className="font-bold tracking-tight text-2xl leading-none hover:text-accent transition-colors">Índice PF</a>

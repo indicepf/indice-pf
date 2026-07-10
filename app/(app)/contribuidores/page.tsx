@@ -31,7 +31,7 @@ function ContribuidoresInner() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-border bg-surface/80 backdrop-blur sticky top-0 z-20">
+      <header className="border-b border-border bg-surface">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-end justify-between gap-4">
           <div>
             <a href="/" className="text-2xl font-bold tracking-tight leading-none hover:text-accent transition-colors">Índice PF</a>

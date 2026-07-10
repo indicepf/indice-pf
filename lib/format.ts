@@ -88,6 +88,12 @@ export function limparNome(nome: string) {
 	return nome.replace(/^\d+\.\s*/, "");
 }
 
+// chave de ordenação por nome: ignora aspas/pontuação iniciais para
+// '"TV de Cachorro" (Frango Assado)' ordenar pelo T, não pelas aspas
+export function nomeOrdenacao(nome: string) {
+	return limparNome(nome).replace(/^[^\p{L}\p{N}]+/u, "");
+}
+
 // unidade do ingrediente → rótulo do campo de quantidade na contribuição
 export function rotuloQtd(unidade?: string | null) {
 	switch (unidade) {
