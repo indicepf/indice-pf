@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Índice PF — Auditoria de Segurança</title>
+<style>
+  body { font-family: Georgia, "Times New Roman", serif; color: #1a1a1a; margin: 0; line-height: 1.55; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.6rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 36px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 { font-size: 1.15rem; font-weight: bold; margin-top: 48px; padding-bottom: 4px; border-bottom: 1px solid #ccc; }
+  h3 { font-size: 1rem; font-weight: bold; margin-top: 28px; }
+  p { margin: 12px 0; }
+  code { font-family: "Courier New", monospace; background: #f2f2f2; border: 1px solid #ddd; padding: 1px 5px; font-size: 0.88em; }
+  pre { font-family: "Courier New", monospace; background: #f2f2f2; border: 1px solid #ddd; padding: 10px 14px; font-size: 0.85em; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.88rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .critico { color: #a11212; font-weight: bold; }
+  .alto { color: #b35a00; font-weight: bold; }
+  .medio { color: #7a6a00; font-weight: bold; }
+  .baixo { color: #2f5d33; font-weight: bold; }
+  .feito { background: #eef7ee; }
+  .item { border: 1px solid #ddd; border-left: 4px solid #999; padding: 12px 16px; margin: 14px 0; font-family: Helvetica, Arial, sans-serif; font-size: 0.9rem; }
+  .item.c { border-left-color: #a11212; }
+  .item.a { border-left-color: #b35a00; }
+  .item.m { border-left-color: #b3a100; }
+  .item.b { border-left-color: #2f5d33; }
+  .item p { margin: 6px 0; }
+  footer { margin-top: 56px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Auditoria de Segurança — Índice PF</h1>
+  <p class="subtitle">Mapeamento completo dos pontos de segurança a melhorar. Cada item traz o problema, por que é
+  um problema e a solução provável. Auditoria feita em 09/07/2026 sobre o código (RLS das migrações 1–32, rotas de
+  API, storage, dependências, segredos e plataforma). Severidade: <span class="critico">CRÍTICO</span> ·
+  <span class="alto">ALTO</span> · <span class="medio">MÉDIO</span> · <span class="baixo">BAIXO</span>.</p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#resumo">Resumo executivo e plano de ação</a></li>
+      <li><a href="#banco">Banco de dados e RLS</a></li>
+      <li><a href="#api">Rotas de API e webhooks</a></li>
+      <li><a href="#plataforma">Plataforma, headers e frontend</a></li>
+      <li><a href="#deps">Dependências</a></li>
+      <li><a href="#segredos">Segredos e chaves</a></li>
+      <li><a href="#lgpd">Dados pessoais (LGPD)</a></li>
+      <li><a href="#operacional">Operacional (backup, monitoramento, contas)</a></li>
+    </ol>
+  </div>
+
+  <h2 id="resumo">1. Resumo executivo e plano de ação</h2>
+  <table>
+    <tr><th>#</th><th>Severidade</th><th>Item</th><th>Ação</th></tr>
+    <tr class="feito"><td>2.1</td><td class="critico">CRÍTICO</td><td>Auto-promoção a admin via UPDATE em profiles</td><td><strong>Rodar a migração 33</strong> (pronta neste PR)</td></tr>
+    <tr class="feito"><td>2.2</td><td class="alto">ALTO</td><td>INSERT direto em pagamentos sem validar saldo</td><td><strong>Rodar a migração 33</strong> (pronta neste PR)</td></tr>
+    <tr><td>5.1</td><td class="alto">ALTO</td><td>Next.js com 4 CVEs conhecidos</td><td><code>npm install next@latest</code> (patch da linha 15)</td></tr>
+    <tr><td>6.1</td><td class="alto">ALTO</td><td>Chave SerpAPI exposta em conversa</td><td>Rotacionar no painel SerpAPI + atualizar secret</td></tr>
+    <tr><td>4.1</td><td class="alto">ALTO</td><td>Sem security headers (CSP, HSTS, X-Frame-Options)</td><td>Bloco <code>headers()</code> no next.config.ts</td></tr>
+    <tr><td>3.2</td><td class="medio">MÉDIO</td><td>Webhook Asaas: garantir token forte quando ativar</td><td>Token aleatório ≥32 bytes ao configurar o gateway</td></tr>
+    <tr><td>2.4</td><td class="medio">MÉDIO</td><td>Buckets sem limite de tamanho/tipo de arquivo</td><td>Config de bucket no painel Supabase</td></tr>
+    <tr><td>7.1</td><td class="medio">MÉDIO</td><td>CPF e chave PIX em claro no banco</td><td>Minimizar exposição; avaliar pgcrypto</td></tr>
+    <tr><td>8.1</td><td class="medio">MÉDIO</td><td>Sem 2FA nas contas admin/super</td><td>Ativar TOTP (Supabase MFA) para admins</td></tr>
+    <tr><td>—</td><td class="baixo">BAIXO</td><td>Demais itens das seções 2–8</td><td>Backlog</td></tr>
+  </table>
+
+  <h2 id="banco">2. Banco de dados e RLS</h2>
+
+  <div class="item c">
+    <p><span class="critico">2.1 CRÍTICO — Escalação de privilégio: usuário pode se tornar admin.</span></p>
+    <p><strong>Problema:</strong> a policy <code>perfil_update</code> (migração 7) permite <code>UPDATE</code> na
+    própria linha de <code>profiles</code> sem restringir colunas. RLS controla LINHAS, não COLUNAS — então qualquer
+    conta autenticada pode executar, via REST com a anon key pública,
+    <code>PATCH /rest/v1/profiles?id=eq.&lt;uid&gt; {"is_admin": true, "is_super": true}</code>.</p>
+    <p><strong>Por quê é grave:</strong> is_admin dá acesso a TODAS as contribuições (com localização dos usuários),
+    CPFs/chaves PIX dos saques, aprovação de pagamentos, edição do índice publicado e gestão de anúncios. is_super
+    dá exclusão de registros. É comprometimento total da aplicação a partir de qualquer cadastro grátis.</p>
+    <p><strong>Solução (pronta — migração 33):</strong> privilégio de UPDATE por coluna: revogar o UPDATE genérico
+    de <code>authenticated</code> e conceder só nas colunas de perfil (nome, telefone, região, sexo, nascimento,
+    avatar, cpf, chave_pix, consentimento). As flags administrativas só mudam pelo SQL Editor/service role.</p>
+  </div>
+
+  <div class="item a">
+    <p><span class="alto">2.2 ALTO — Saque inserido direto na tabela, sem validação de saldo.</span></p>
+    <p><strong>Problema:</strong> a policy <code>pag_insert</code> (migração 11) permite INSERT em
+    <code>pagamentos</code> a qualquer autenticado (na própria linha). A validação de saldo/CPF/PIX era feita só no
+    JavaScript do app — via REST dá para inserir um saque de qualquer valor.</p>
+    <p><strong>Por quê:</strong> o pagamento é processado manualmente pelo admin, que pode não notar um valor acima
+    do saldo real — risco financeiro direto e de poluição da fila de saques.</p>
+    <p><strong>Solução (pronta — migração 33):</strong> remover o INSERT direto e mover a validação para o banco:
+    RPC <code>solicitar_saque(valor)</code> security definer que confere saldo (contribuições aprovadas × valor por
+    foto − reservado), CPF e PIX antes de inserir. O front já chama a RPC (com fallback até a migração rodar).</p>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">2.3 MÉDIO — Tabelas de operação legíveis por qualquer autenticado (conferir).</span></p>
+    <p><strong>Problema:</strong> a aba admin lê <code>precos_manuais_hist</code>, <code>login_log</code>,
+    <code>audit_log</code> e <code>webhook_eventos</code> com o client anon (RLS). Conferir no painel que cada uma
+    dessas tabelas tem policy de SELECT restrita a <code>eh_admin()</code>/<code>eh_super()</code> — qualquer tabela
+    criada sem policy explícita de select e com RLS desabilitado fica exposta via REST.</p>
+    <p><strong>Por quê:</strong> vazariam trilhas de auditoria, IPs/dispositivos de login e histórico de preços
+    manuais para qualquer conta.</p>
+    <p><strong>Solução:</strong> auditoria única no SQL Editor:
+    <code>select tablename, rowsecurity from pg_tables where schemaname='public';</code> e revisar
+    <code>pg_policies</code>. Ativar RLS em tudo; policies de admin onde faltar.</p>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">2.4 MÉDIO — Buckets de storage sem limite de tamanho/MIME.</span></p>
+    <p><strong>Problema:</strong> os buckets <code>contribuicoes</code> e <code>avatars</code> aceitam upload de
+    qualquer arquivo/tamanho (a policy só restringe a pasta ao uid). Um usuário pode subir arquivos enormes ou de
+    tipos arbitrários.</p>
+    <p><strong>Por quê:</strong> estouro de cota de storage (custo/negação de serviço) e distribuição de conteúdo
+    arbitrário sob o domínio público do projeto (o bucket é público para leitura).</p>
+    <p><strong>Solução:</strong> no painel Supabase → Storage, definir por bucket <em>file size limit</em>
+    (ex.: 8 MB) e <em>allowed MIME types</em> (<code>image/*</code>).</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">2.5 BAIXO — Métricas de anúncio abertas a INSERT público.</span></p>
+    <p><strong>Problema:</strong> <code>anuncio_eventos</code> aceita INSERT anônimo (por design — impressões/cliques
+    de visitantes).</p>
+    <p><strong>Por quê:</strong> um script pode inflar impressões/cliques, poluindo as métricas cobradas de
+    anunciantes.</p>
+    <p><strong>Solução:</strong> aceitável agora. Quando as métricas virarem cobrança: mover o registro para uma
+    rota de API com rate limit por IP, ou deduplicar por sessão/dia no relatório.</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">2.6 BAIXO — Funções administrativas: postura correta (registro).</span></p>
+    <p>As RPCs sensíveis já seguem boa prática — <code>security definer</code> com <code>set search_path</code>,
+    checagem <code>eh_admin()</code>/<code>eh_super()</code>, whitelist de tabelas no <code>super_excluir</code>
+    (que preserva trilhas), e <code>integrar_snapshot</code>/<code>aprovar_coletas_pendentes</code> revogadas de
+    anon/authenticated. Manter esse padrão em funções novas.</p>
+  </div>
+
+  <h2 id="api">3. Rotas de API e webhooks</h2>
+
+  <div class="item m">
+    <p><span class="medio">3.1 MÉDIO — Sem rate limiting em nenhuma rota.</span></p>
+    <p><strong>Problema:</strong> <code>/api/assinatura</code>, <code>/api/geo</code>, <code>/api/card</code> e as
+    mutações via Supabase (contribuições, eventos de anúncio) não têm limite de requisições.</p>
+    <p><strong>Por quê:</strong> abuso barato — flood de criação de assinaturas no gateway, spam de contribuições
+    (fotos), custo de banda/função.</p>
+    <p><strong>Solução:</strong> Vercel WAF rate limiting nas rotas <code>/api/*</code> (painel da Vercel, sem
+    código) e/ou checagem por usuário no banco (ex.: máx. N contribuições/dia — trigger simples).</p>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">3.2 MÉDIO — Webhook do Asaas: força do token é tudo.</span></p>
+    <p><strong>Problema:</strong> a rota valida apenas o header <code>asaas-access-token</code> contra
+    <code>ASAAS_WEBHOOK_TOKEN</code>. O Asaas não assina payloads; quem tiver o token ativa/cancela assinaturas.</p>
+    <p><strong>Por quê:</strong> um token fraco/adivinhável permitiria marcar assinaturas como pagas (Premium grátis)
+    ou cancelar assinaturas alheias.</p>
+    <p><strong>Solução:</strong> ao configurar o gateway (pendência D9): gerar token aleatório de ≥32 bytes
+    (<code>openssl rand -hex 32</code>), cadastrá-lo no Asaas e no Vercel env. A idempotência via
+    <code>webhook_eventos</code> já está correta.</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">3.3 BAIXO — /api/assinatura: postura correta (registro).</span></p>
+    <p>Valida o access token do usuário com service role antes de agir, confere duplicidade de assinatura e não
+    aceita valor do cliente (preço fixo no servidor). Manter.</p>
+  </div>
+
+  <h2 id="plataforma">4. Plataforma, headers e frontend</h2>
+
+  <div class="item a">
+    <p><span class="alto">4.1 ALTO — Sem security headers.</span></p>
+    <p><strong>Problema:</strong> <code>next.config.ts</code> está vazio — a aplicação responde sem
+    <code>Content-Security-Policy</code>, <code>X-Frame-Options</code>/<code>frame-ancestors</code>,
+    <code>Strict-Transport-Security</code>, <code>Referrer-Policy</code>, <code>X-Content-Type-Options</code> e
+    <code>Permissions-Policy</code>.</p>
+    <p><strong>Por quê:</strong> sem CSP, qualquer XSS que passe vira execução plena (com acesso ao token de sessão
+    no localStorage — ver 4.3); sem frame-ancestors há clickjacking (embutir o site num iframe e roubar cliques de
+    admin); sem HSTS, downgrade para HTTP em redes hostis.</p>
+    <p><strong>Solução:</strong> bloco <code>headers()</code> no next.config.ts. Sugestão inicial (CSP em
+    Report-Only primeiro, para calibrar sem quebrar):</p>
+    <pre>Strict-Transport-Security: max-age=63072000; includeSubDomains
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(self), geolocation=(self), microphone=()
+Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:
+  https://*.supabase.co; connect-src 'self' https://*.supabase.co
+  https://nominatim.openstreetmap.org; style-src 'self' 'unsafe-inline';
+  script-src 'self' 'unsafe-inline'; frame-ancestors 'none'</pre>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">4.2 MÉDIO — Links e imagens de anúncios são conteúdo controlado por formulário.</span></p>
+    <p><strong>Problema:</strong> <code>anuncios.link</code> e <code>imagem_url</code> viram <code>href</code>/<code>src</code>
+    no site público. Hoje só admins cadastram, mas nada valida o esquema da URL — um <code>javascript:</code> em
+    <code>link</code> executaria no clique.</p>
+    <p><strong>Por quê:</strong> XSS armazenado no site público caso uma conta admin seja comprometida (ou pelo 2.1,
+    antes do fix).</p>
+    <p><strong>Solução:</strong> validar no cadastro (aba Anúncios) e/ou na renderização: aceitar apenas
+    <code>https://</code>. Uma linha no AdCreative: <code>ad.link?.startsWith('https://') ? ad.link : undefined</code>.</p>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">4.3 MÉDIO — Token de sessão no localStorage (padrão supabase-js).</span></p>
+    <p><strong>Problema:</strong> a sessão fica em localStorage, legível por qualquer script na página.</p>
+    <p><strong>Por quê:</strong> amplia o impacto de um eventual XSS (roubo de sessão persistente). É o padrão da
+    biblioteca e o app depende dele (usuarioDoStorage).</p>
+    <p><strong>Solução:</strong> aceitar o padrão MAS reduzir a chance de XSS (CSP do 4.1, validação de URLs do 4.2).
+    Alternativa futura: migrar auth para cookies httpOnly com @supabase/ssr — mudança grande, baixo retorno agora.</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">4.4 BAIXO — Lock de auth desabilitado no client.</span></p>
+    <p><strong>Problema:</strong> <code>lib/supabase.ts</code> desativa o navigator.locks (workaround documentado de
+    deadlock em navegação SPA/PWA).</p>
+    <p><strong>Por quê:</strong> duas abas renovando o token ao mesmo tempo podem invalidar a sessão uma da outra
+    (refresh token single-use) — é problema de disponibilidade, não de exposição.</p>
+    <p><strong>Solução:</strong> manter (o retry de perfil já mitiga); reavaliar quando o supabase-js corrigir o
+    deadlock upstream.</p>
+  </div>
+
+  <h2 id="deps">5. Dependências (npm audit de 09/07/2026 — 9 vulnerabilidades: 8 high, 1 moderate)</h2>
+
+  <div class="item a">
+    <p><span class="alto">5.1 ALTO — Next.js com 4 CVEs na versão atual.</span></p>
+    <p><strong>Problema:</strong> HTTP request smuggling em rewrites, DoS por buffering, bypass de checagem CSRF de
+    Server Actions com origin null, crescimento ilimitado do cache de imagens.</p>
+    <p><strong>Por quê:</strong> são CVEs publicados do framework que serve TODA a aplicação.</p>
+    <p><strong>Solução:</strong> atualizar para o patch mais novo da linha 15 (<code>npm install next@latest</code>)
+    e rodar o build/regressão. Baixo risco de quebra (mesma major).</p>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">5.2 MÉDIO — xlsx (SheetJS) sem fix disponível.</span></p>
+    <p><strong>Problema:</strong> prototype pollution/ReDoS conhecidos, sem patch no npm. Usado só em
+    <code>lib/exportar.ts</code> (exportação admin).</p>
+    <p><strong>Por quê:</strong> o risco real é baixo (nós geramos o arquivo, não parseamos arquivos de terceiros),
+    mas fica um alerta permanente no audit.</p>
+    <p><strong>Solução:</strong> ou aceitar (documentado), ou trocar por <code>exceljs</code>, ou usar o build
+    oficial do SheetJS via CDN deles (fora do npm). Recomendação: trocar por exportação CSV nativa (zero deps).</p>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">5.3 MÉDIO — react-simple-maps antigo puxa d3-color vulnerável (ReDoS).</span></p>
+    <p><strong>Problema:</strong> a versão instalada depende de d3-color &lt; 3.1.0.</p>
+    <p><strong>Por quê:</strong> ReDoS explorável apenas se cores vierem de input do usuário — no app as cores são
+    fixas; risco baixo na prática, mas é dívida.</p>
+    <p><strong>Solução:</strong> subir react-simple-maps para a major nova (testar o MapaBrasil) ou substituir o
+    mapa por SVG próprio (já é semi-estático).</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">5.4 BAIXO — ws (dependência transitiva do supabase realtime).</span></p>
+    <p><strong>Solução:</strong> <code>npm audit fix</code> resolve sem breaking change. Incluir
+    <code>npm audit</code> no checklist mensal.</p>
+  </div>
+
+  <h2 id="segredos">6. Segredos e chaves</h2>
+
+  <div class="item a">
+    <p><span class="alto">6.1 ALTO — Chave SerpAPI exposta em conversa.</span></p>
+    <p><strong>Problema:</strong> a 4ª chave SerpAPI foi colada em texto plano numa conversa com IA (09/07/2026)
+    antes de virar secret.</p>
+    <p><strong>Por quê:</strong> logs/histórico de conversas são um canal de vazamento fora do seu controle; com a
+    chave, terceiros esgotam sua cota (e coletas param de funcionar).</p>
+    <p><strong>Solução:</strong> rotacionar no painel da SerpAPI e atualizar com
+    <code>gh secret set SERPAPI_KEY_4</code>. Regra permanente: chave nova nasce direto no secret, nunca em chat.</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">6.2 BAIXO — Anon key e URL do Supabase hardcoded como fallback no repositório.</span></p>
+    <p><strong>Problema:</strong> <code>lib/supabase.ts</code> e <code>app/api/card/route.tsx</code> trazem a anon
+    key literal como fallback de env ausente (inclusive uma anon key ANTIGA no api/card, de antes da troca de
+    projeto).</p>
+    <p><strong>Por quê:</strong> a anon key é pública por design (vai ao browser de qualquer forma) — não é
+    vazamento. O problema é operacional: o fallback mascara erro de configuração e a key antiga confunde. Além
+    disso, o repositório é o lugar errado para qualquer credencial, por princípio.</p>
+    <p><strong>Solução:</strong> remover os fallbacks (falhar alto se <code>NEXT_PUBLIC_SUPABASE_*</code> faltar) e
+    apagar a key antiga do api/card. As envs já existem no Vercel.</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">6.3 BAIXO — Postura atual correta (registro).</span></p>
+    <p><code>.env*</code> no gitignore (nunca commitado); service role só em GitHub Actions secrets e Vercel env
+    (nunca no client); chaves SerpAPI em secrets. Manter.</p>
+  </div>
+
+  <h2 id="lgpd">7. Dados pessoais (LGPD)</h2>
+
+  <div class="item m">
+    <p><span class="medio">7.1 MÉDIO — CPF e chave PIX em claro, duplicados em duas tabelas.</span></p>
+    <p><strong>Problema:</strong> <code>profiles.cpf/chave_pix</code> e cópias em <code>pagamentos</code>. Legíveis
+    por qualquer admin e presentes em backups em claro.</p>
+    <p><strong>Por quê:</strong> CPF é dado pessoal sensível na prática (fraude); vazamento de banco expõe tudo, e a
+    LGPD exige minimização e proteção proporcional.</p>
+    <p><strong>Solução:</strong> curto prazo — mascarar o CPF na UI admin (só últimos 4 dígitos; o admin não precisa
+    do CPF inteiro para conferir saque) e não copiar CPF para <code>pagamentos</code> (referenciar o perfil). Médio
+    prazo — criptografar a coluna com pgcrypto (chave em env do servidor) e descriptografar só no fluxo de
+    pagamento. Já existe consentimento registrado (<code>consentimento_cpf_em</code>) — bom.</p>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">7.2 MÉDIO — Localização precisa dos usuários nas contribuições.</span></p>
+    <p><strong>Problema:</strong> lat/lng exatos de onde o usuário fotografou (casa/trabalho às vezes), visíveis a
+    admins e usados no mapa de "Meus envios".</p>
+    <p><strong>Por quê:</strong> padrão de deslocamento de uma pessoa é dado sensível; reter para sempre aumenta o
+    passivo.</p>
+    <p><strong>Solução:</strong> truncar coordenadas para 3 casas decimais (~110 m) no INSERT — precisão suficiente
+    para validar a leitura por bairro/cidade — e política de retenção (ex.: apagar lat/lng após aprovação, mantendo
+    cidade/UF).</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">7.3 BAIXO — Direitos do titular sem fluxo (exclusão de conta).</span></p>
+    <p><strong>Problema:</strong> não há botão "excluir minha conta"; exclusão exige pedido manual.</p>
+    <p><strong>Solução:</strong> fluxo de auto-exclusão (RPC que anonimiza profile + apaga fotos do storage) e
+    página de política de privacidade (o link "Privacidade" do footer hoje não leva a lugar algum).</p>
+  </div>
+
+  <h2 id="operacional">8. Operacional</h2>
+
+  <div class="item m">
+    <p><span class="medio">8.1 MÉDIO — Sem 2FA nas contas de admin/super.</span></p>
+    <p><strong>Problema:</strong> as contas com poder total (aprovar saques, editar índice) entram só com e-mail e
+    senha.</p>
+    <p><strong>Por quê:</strong> phishing/reuso de senha em outra base vazada compromete o app inteiro.</p>
+    <p><strong>Solução:</strong> ativar MFA TOTP do Supabase e exigir para is_admin (checagem de
+    <code>aal2</code> nas policies de admin, ou no gate do /admin). Também: aumentar a senha mínima para 8+ e ligar
+    a proteção contra senhas vazadas (painel Supabase → Auth).</p>
+  </div>
+
+  <div class="item m">
+    <p><span class="medio">8.2 MÉDIO — Backup e recuperação.</span></p>
+    <p><strong>Problema:</strong> plano free do Supabase tem backup diário com retenção curta e sem PITR; nenhum
+    backup externo dos dados (o índice histórico é o ativo do produto).</p>
+    <p><strong>Por quê:</strong> um DELETE errado (ou conta comprometida — ver 2.1) pode destruir o histórico além
+    da janela de backup.</p>
+    <p><strong>Solução:</strong> job semanal (GitHub Actions) de <code>pg_dump</code> das tabelas de dados
+    (snapshots, precos, custos_pratos, resultados_brutos, ingredientes, receitas) para artefato/storage privado.</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">8.3 BAIXO — Monitoramento de segurança.</span></p>
+    <p><strong>Problema:</strong> as trilhas existem (audit_log, login_log, super_acoes — bom), mas ninguém é
+    avisado de eventos anômalos (ex.: novo is_admin, rajada de saques).</p>
+    <p><strong>Solução:</strong> trigger que registra mudanças de is_admin/is_super (já coberto pelo audit_log) +
+    conferência quinzenal da aba Auditoria; futuramente webhook para notificação.</p>
+  </div>
+
+  <div class="item b">
+    <p><span class="baixo">8.4 BAIXO — Projeto dentro do iCloud Drive.</span></p>
+    <p><strong>Problema:</strong> o sync do iCloud já corrompeu refs do git e duplica arquivos de build
+    ("arquivo 2.ts") — em 09/07 aconteceu 4 vezes.</p>
+    <p><strong>Por quê:</strong> além do risco de corromper o repositório, o código (com eventuais segredos em
+    .env.local) é sincronizado para a nuvem da Apple sem necessidade.</p>
+    <p><strong>Solução:</strong> mover para fora do iCloud (ex.: <code>~/dev/indice-pf</code>).</p>
+  </div>
+
+  <footer>Auditoria de 09/07/2026 · migração 33 (fixes 2.1 e 2.2) incluída no mesmo PR · reavaliar após ativar o
+  gateway de pagamento (D9) e a cada release grande</footer>
+</div>
+</body>
+</html>
