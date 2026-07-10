@@ -25,6 +25,11 @@ import OrientPopup from '@/components/site/OrientPopup'
 import type { ModoKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
+// eixo X por tempo real: timestamp da coleta e formatação dd/mm a partir de ms
+const tsDe = (d: string) => new Date(d + 'T00:00:00').getTime()
+const fmtMs = (ms: number) => { const d = new Date(ms); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}` }
+// props comuns do eixo temporal (Recharts: escala de tempo = distância proporcional à data)
+const eixoTempo = { dataKey: 'ts', type: 'number' as const, scale: 'time' as const, domain: ['dataMin', 'dataMax'] as [string, string], tickFormatter: fmtMs }
 
 // ícones dos grupos de filtro (mockup usa emoji; decisão de 08/07: SVG equivalente)
 const ico = (d: string, size = 12) => (
@@ -163,7 +168,7 @@ export default function Dashboard() {
       const vals = serie.pratos.filter(p => idsRecorte.has(p.id))
         .map(p => serie.custos[p.id]?.[i]).filter((v): v is number => v != null && v > 0)
       const med = mediana(vals)
-      const row: Record<string, number | string> = { data: fmtCurta(s.data), indice: +(med * fator).toFixed(2) }
+      const row: Record<string, number | string> = { data: fmtCurta(s.data), ts: tsDe(s.data), indice: +(med * fator).toFixed(2) }
       for (const n of MODOS) row[n.key] = +(med * (1 - n.desc)).toFixed(2)   // uma linha por nível (legenda clicável)
       for (const r of REGIOES) {
         const vr = serie.pratos.filter(p => p.regiao === r).map(p => serie.custos[p.id]?.[i])
@@ -513,10 +518,10 @@ export default function Dashboard() {
                             ))}
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                          <XAxis dataKey="data" tick={{ fontSize: 12, fill: DIM }} />
+                          <XAxis {...eixoTempo} tick={{ fontSize: 12, fill: DIM }} />
                           <YAxis tick={{ fontSize: 12, fill: DIM }} width={52} domain={['auto', 'auto']}
                             tickFormatter={(v: number) => `R$${v}`} />
-                          <Tooltip formatter={(v) => brl(Number(v))} />
+                          <Tooltip formatter={(v) => brl(Number(v))} labelFormatter={(l) => fmtMs(Number(l))} />
                           {MODOS.filter(n => !legendOff.has(n.key)).map(n => (
                             <Area key={n.key} type="monotone" dataKey={n.key} name={n.label}
                               stroke={NIVEL_HEX[n.key]} strokeWidth={n.key === modo ? 2.5 : 1.8}
@@ -588,10 +593,10 @@ export default function Dashboard() {
                           ))}
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                        <XAxis dataKey="data" tick={{ fontSize: 12, fill: DIM }} />
+                        <XAxis {...eixoTempo} tick={{ fontSize: 12, fill: DIM }} />
                         <YAxis tick={{ fontSize: 12, fill: DIM }} width={52} domain={['auto', 'auto']}
                           tickFormatter={(v: number) => `R$${v}`} />
-                        <Tooltip formatter={(v) => brl(Number(v))} />
+                        <Tooltip formatter={(v) => brl(Number(v))} labelFormatter={(l) => fmtMs(Number(l))} />
                         {REGIOES.filter(r => !regioes.size || regioes.has(r)).map(r => (
                           <Area key={r} type="monotone" dataKey={r} name={r}
                             stroke={CORES_REGIAO[r]} strokeWidth={regioes.has(r) ? 2.5 : 1.8} dot={{ r: 3 }}
@@ -753,7 +758,7 @@ export default function Dashboard() {
           itens={detalhes ? (detalhes[selecionado.pratos.id] ?? []) : null}
           fontesPorIngrediente={fontes} manuaisPorIngrediente={fontesManuais} fator={fator} modo={modo}
           dataColeta={snapshot.data}
-          serie={serie ? { labels: serie.snaps.map(s => fmtCurta(s.data)), valores: serie.custos[selecionado.pratos.id] ?? [] } : undefined}
+          serie={serie ? { datas: serie.snaps.map(s => s.data), valores: serie.custos[selecionado.pratos.id] ?? [] } : undefined}
           onShare={() => setShare(true)}
           onClose={() => setSelecionado(null)} />
       )}
@@ -784,7 +789,7 @@ export default function Dashboard() {
                 <>
                   <div className="h-52 mb-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={serieIng.map(p => ({ data: fmtCurta(p.data), valor: +(p.valor * fator).toFixed(2) }))}
+                      <ComposedChart data={serieIng.map(p => ({ ts: tsDe(p.data), valor: +(p.valor * fator).toFixed(2) }))}
                         margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
                         <defs>
                           <linearGradient id="grad-drill-ing" x1="0" y1="0" x2="0" y2="1">
@@ -793,10 +798,10 @@ export default function Dashboard() {
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                        <XAxis dataKey="data" tick={{ fontSize: 11, fill: DIM }} />
+                        <XAxis {...eixoTempo} tick={{ fontSize: 11, fill: DIM }} />
                         <YAxis tick={{ fontSize: 11, fill: DIM }} width={46} domain={['auto', 'auto']}
                           tickFormatter={(v: number) => `R$${v}`} />
-                        <Tooltip formatter={(v) => `${brl(Number(v))}${serieIng[0]?.label ? `/${serieIng[0].label}` : ''}`} />
+                        <Tooltip formatter={(v) => `${brl(Number(v))}${serieIng[0]?.label ? `/${serieIng[0].label}` : ''}`} labelFormatter={(l) => fmtMs(Number(l))} />
                         <Area type="monotone" dataKey="valor" name="Preço"
                           stroke={NIVEL_HEX[modo]} strokeWidth={2.5} dot={{ r: 4 }} fill="url(#grad-drill-ing)" />
                       </ComposedChart>

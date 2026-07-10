@@ -8,7 +8,10 @@ import ModalFontes from './ModalFontes'
 import type { DishCost, ItemDetalhe, Fonte, ModoKey } from '@/lib/types'
 import type { FonteManual } from '@/lib/queries'
 
-export type SerieDoPrato = { labels: string[]; valores: (number | null)[] }
+// datas = ISO (YYYY-MM-DD) de cada coleta, para o eixo X por tempo real
+export type SerieDoPrato = { datas: string[]; valores: (number | null)[] }
+const tsDe = (d: string) => new Date(d + 'T00:00:00').getTime()
+const fmtMs = (ms: number) => { const d = new Date(ms); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}` }
 
 // Drill do prato — modal central do mockup (openDishDrill): head, segbar de
 // níveis, gráfico, stats, ações e a composição por ingrediente.
@@ -30,8 +33,8 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
 
   const total = (itens || []).reduce((s, i) => s + i.custo, 0) * f
   const pontos = (serie?.valores ?? [])
-    .map((v, i) => v != null ? { data: serie!.labels[i], valor: +(v * f).toFixed(2) } : null)
-    .filter((p): p is { data: string; valor: number } => p != null)
+    .map((v, i) => v != null ? { ts: tsDe(serie!.datas[i]), valor: +(v * f).toFixed(2) } : null)
+    .filter((p): p is { ts: number; valor: number } => p != null)
   const vA = pontos[pontos.length - 1]?.valor, vP = pontos[pontos.length - 2]?.valor, v0 = pontos[0]?.valor
   const dAnt = vA != null && vP != null && vP > 0 ? (vA - vP) / vP * 100 : null
   const dIni = vA != null && v0 != null && v0 > 0 && pontos.length > 2 ? (vA - v0) / v0 * 100 : null
@@ -70,9 +73,10 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="data" tick={{ fontSize: 11, fill: DIM }} />
+                  <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                    tickFormatter={fmtMs} tick={{ fontSize: 11, fill: DIM }} />
                   <YAxis tick={{ fontSize: 11, fill: DIM }} width={46} domain={['auto', 'auto']} tickFormatter={(v: number) => `R$${v}`} />
-                  <Tooltip formatter={(v) => brl(Number(v))} />
+                  <Tooltip formatter={(v) => brl(Number(v))} labelFormatter={(l) => fmtMs(Number(l))} />
                   <Area type="monotone" dataKey="valor" name="Custo" stroke={NIVEL_HEX[nivel]} strokeWidth={2.5} dot={{ r: 4 }} fill="url(#grad-drill-prato)" />
                 </ComposedChart>
               </ResponsiveContainer>
