@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://indice-pf-ashen.vercel.app"),
+  metadataBase: new URL("https://indicepratofeito.com.br"),
   title: "Índice PF — custo do prato feito no Brasil",
   description:
     "O custo de produção de pratos feitos regionais brasileiros, medido a cada coleta.",
