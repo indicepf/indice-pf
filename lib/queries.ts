@@ -67,9 +67,10 @@ export async function getColetas(opts: { ini?: string; fim?: string; page?: numb
   const lista = (snaps || []) as { id: number; data: string; custo_total_pf: number | null }[]
   if (!lista.length) return { coletas: [], total: count || 0 }
   const ids = lista.map(s => s.id)
-  const [{ data: precosRows }, { data: cpRows }] = await Promise.all([
-    supabase.from('precos').select('snapshot_id,qtd_resultados').in('snapshot_id', ids),
-    supabase.from('custos_pratos').select('snapshot_id').in('snapshot_id', ids),
+  // fetchAll: 10 snapshots × ~115 precos passam do teto de 1000 linhas do PostgREST
+  const [precosRows, cpRows] = await Promise.all([
+    fetchAll(() => supabase.from('precos').select('snapshot_id,qtd_resultados').in('snapshot_id', ids).order('id')),
+    fetchAll(() => supabase.from('custos_pratos').select('snapshot_id').in('snapshot_id', ids).order('id')),
   ])
   const conta = new Map<number, { a: number; n: number }>()
   ;((precosRows || []) as any[]).forEach(r => {
@@ -1041,13 +1042,15 @@ export async function excluirEntradaERecalcular(id: number, snapshotId: number, 
     const med = n % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2
     const media = vals.reduce((a, b) => a + b, 0) / n
     const dp = Math.sqrt(vals.reduce((s, x) => s + (x - media) ** 2, 0) / n)
-    await supabase.from('precos').update({
+    const { error: upErr } = await supabase.from('precos').update({
       mediana_normalizada: med, mediana_exibicao: r2(med * 1000), media_exibicao: r2(media * 1000),
       minimo_exibicao: r2(vals[0] * 1000), maximo_exibicao: r2(vals[n - 1] * 1000), desvio_padrao: r2(dp * 1000), qtd_resultados: n,
     }).eq('snapshot_id', snapshotId).eq('ingrediente_id', ingredienteId)
+    if (upErr) return { error: upErr }   // estatística não atualizou: não reporta sucesso
   } else {
-    await supabase.from('precos').update({ mediana_normalizada: null, mediana_exibicao: null, media_exibicao: null, minimo_exibicao: null, maximo_exibicao: null, desvio_padrao: null, qtd_resultados: 0 })
+    const { error: upErr } = await supabase.from('precos').update({ mediana_normalizada: null, mediana_exibicao: null, media_exibicao: null, minimo_exibicao: null, maximo_exibicao: null, desvio_padrao: null, qtd_resultados: 0 })
       .eq('snapshot_id', snapshotId).eq('ingrediente_id', ingredienteId)
+    if (upErr) return { error: upErr }
   }
   return recalcularCustos()
 }
@@ -1194,9 +1197,13 @@ export type Anuncio = {
 // criativo de um slot, sorteado por peso; null se não há (ou a migração 28
 // ainda não rodou — o slot simplesmente não renderiza)
 export async function getAnuncioParaSlot(slot: string): Promise<Anuncio | null> {
+  // janela de veiculação: inicio/fim nulos = sem limite (os .or() combinam com AND)
+  const hoje = new Date().toISOString().slice(0, 10)
   const { data, error } = await supabase.from('anuncios')
     .select('id,slot,titulo,texto,imagem_url,link,anunciante,ativo,inicio,fim,peso,escala')
     .eq('slot', slot).eq('ativo', true)
+    .or(`inicio.is.null,inicio.lte.${hoje}`)
+    .or(`fim.is.null,fim.gte.${hoje}`)
   if (error || !data?.length) return null
   const total = data.reduce((s, a) => s + (a.peso || 1), 0)
   let sorteio = Math.random() * total

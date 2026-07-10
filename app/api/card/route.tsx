@@ -69,7 +69,7 @@ export async function GET() {
 
         {/* rodapé com a régua da marca */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div style={{ fontSize: 24, color: '#9aa7bd' }}>indicepf.com.br — dados do varejo e de campo, abertos até a fonte</div>
+          <div style={{ fontSize: 24, color: '#9aa7bd' }}>indicepratofeito.com.br — dados do varejo e de campo, abertos até a fonte</div>
           <div style={{ display: 'flex', height: 10, borderRadius: 5, backgroundImage: GRAD, width: '100%' }} />
         </div>
       </div>
