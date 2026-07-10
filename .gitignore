@@ -45,6 +45,6 @@ __pycache__/
 *.pyc
 
 # artefatos de runtime (regeneráveis)
-cache_serpapi.json
-snapshot_pf.json
-tabela_canonica_ingredientes.xlsx
+pipeline/cache_serpapi.json
+pipeline/snapshot_pf.json
+data/tabela_canonica_ingredientes.xlsx
