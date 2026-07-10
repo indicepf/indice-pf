@@ -3,9 +3,12 @@
 // trocar de provedor = reescrever este arquivo + o webhook, nada mais.
 import 'server-only'
 
-const BASE = process.env.ASAAS_BASE_URL || 'https://api-sandbox.asaas.com/v3'
+// Sem fallback de URL: um default sandbox em produção criaria assinaturas
+// de mentira sem erro visível (cliente "assina", nada é cobrado).
+const BASE = process.env.ASAAS_BASE_URL
 
 async function asaas(path: string, init?: RequestInit) {
+  if (!BASE) throw new Error('ASAAS_BASE_URL não configurada')
   const key = process.env.ASAAS_API_KEY
   if (!key) throw new Error('ASAAS_API_KEY não configurada')
   const r = await fetch(`${BASE}${path}`, {
