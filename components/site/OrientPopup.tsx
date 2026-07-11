@@ -6,10 +6,12 @@ import { useEffect, useState } from 'react'
 export default function OrientPopup() {
   const [aberto, setAberto] = useState(false)
 
-  // como no mockup: aparece na abertura do site, 1× por sessão (qualquer tela)
+  // aparece na abertura do site, 1× por sessão, só em tela estreita na vertical
+  // (em desktop/horizontal o aviso não faz sentido)
   useEffect(() => {
     try {
       if (sessionStorage.getItem('orient') === '1') return
+      if (!window.matchMedia('(max-width: 768px) and (orientation: portrait)').matches) return
       setAberto(true)
     } catch { /* sessão privada */ }
   }, [])
