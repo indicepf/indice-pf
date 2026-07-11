@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth, perfilCompleto } from './useAuth'
@@ -86,13 +87,16 @@ export default function AuthControls() {
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
   useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
-  return (
+  // portal: o overlay é position:fixed e o header (ancestral) anima com
+  // transform ao esconder no scroll — transform em ancestral quebra fixed
+  return createPortal(
     <div className="fixed inset-0 z-[100] grid place-items-center bg-ink/30 px-4" onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
         className="bg-surface border border-border rounded-[var(--r-lg)] p-6 max-w-sm w-full shadow-[var(--shadow-lg)] relative">
         <button onClick={onClose} className="absolute top-3 right-4 text-dim hover:text-ink text-xl leading-none cursor-pointer">×</button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
