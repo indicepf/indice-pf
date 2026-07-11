@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin, usuarioDoToken } from '@/lib/server/supabase-admin'
 import { criarCliente, criarAssinatura, cancelarAssinatura, primeiraCobranca } from '@/lib/server/gateway'
+import { FASE_LANCAMENTO } from '@/lib/format'
 
 const VALOR_PREMIUM = 99.99
 
@@ -42,18 +43,22 @@ export async function POST(req: Request) {
       .eq('user_id', user.id).in('status', ['ativa', 'pendente']).limit(1)
     if (viva?.length) return NextResponse.json({ erro: 'Você já tem uma assinatura em andamento.' }, { status: 409 })
 
-    // FASE DE LANÇAMENTO: sem gateway configurado, o Premium é ativado
-    // gratuitamente (valor 0, sem periodo_fim). Quando a cobrança entrar no ar
-    // (envs ASAAS_* setadas), este ramo deixa de existir para novas assinaturas;
-    // as de lançamento são encerradas/convertidas manualmente via banco.
-    const gatewayConfigurado = !!(process.env.ASAAS_API_KEY && process.env.ASAAS_BASE_URL)
-    if (!gatewayConfigurado) {
+    // FASE DE LANÇAMENTO: a MESMA flag do front (lib/format.ts) decide aqui —
+    // um interruptor só, sem risco de o botão dizer "gratuito" e a API cobrar.
+    // Com a flag ligada, o Premium é ativado gratuitamente (valor 0, sem
+    // periodo_fim); as assinaturas de lançamento são encerradas/convertidas
+    // manualmente via banco quando a cobrança entrar no ar.
+    if (FASE_LANCAMENTO) {
       const { error } = await db.from('assinaturas').insert({
         user_id: user.id, gateway: 'lancamento',
         status: 'ativa', plano: 'premium', valor: 0, periodo_fim: null,
       })
       if (error) return NextResponse.json({ erro: 'Falha ao ativar o Premium.' }, { status: 500 })
       return NextResponse.json({ ok: true, gratuito: true })
+    }
+    // cobrança ativa (flag desligada) exige o gateway configurado
+    if (!(process.env.ASAAS_API_KEY && process.env.ASAAS_BASE_URL)) {
+      return NextResponse.json({ erro: 'Serviço de assinatura não configurado.' }, { status: 503 })
     }
 
     const metodo = body?.metodo === 'cartao' ? 'CREDIT_CARD' : 'PIX'

@@ -12,7 +12,7 @@ const FONTES = [
   ['ABIA', 'Dados repassados pela Associação Brasileira da Indústria de Alimentos.'],
   ['Fotos de usuários', 'Preços enviados e validados pela comunidade.'],
   ['Scraping', 'Marketplaces, apps de pedidos e mídias de busca.'],
-  ['Aproveitamento', 'Preço final calculado sobre o peso do produto já cozido.'],
+  ['Aproveitamento', 'Cada receita registra o peso cru comprado (base do custo) e o peso após o preparo, exibido no detalhe do prato.'],
 ] as const
 
 export default function MetodologiaPage() {

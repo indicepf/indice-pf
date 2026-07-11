@@ -140,8 +140,9 @@ export const SAQUE_MINIMO = 10; // R$ mínimo para solicitar saque
 export const CORTE_COLETA = "2026-06-21";
 
 // Fase de lançamento: gateway de pagamento inativo, Premium liberado gratuitamente
-// com aviso de que vai virar assinatura paga. Trocar para false quando a cobrança
-// entrar no ar (junto com as envs ASAAS_* — o backend segue o mesmo critério).
+// com aviso de que vai virar assinatura paga. É o ÚNICO interruptor: o front e a
+// API de assinatura importam esta flag. Para ativar a cobrança: setar as envs
+// ASAAS_* no Vercel e trocar para false (a API exige as envs quando false).
 export const FASE_LANCAMENTO = true;
 
 export function mascararCpf(v: string) {

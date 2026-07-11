@@ -21,7 +21,7 @@ export default function Footer() {
         </div>
         <div>
           <h5>Infinity</h5>
-          <a>Rede Food Service</a>
+          <a href="https://redefoodservice.com.br/" target="_blank" rel="noopener">Rede Food Service</a>
           <a>Seasoning</a>
           <a>Ponto Food</a>
           <Link href="/sobre">Sobre</Link>
