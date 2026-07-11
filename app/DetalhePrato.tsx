@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
-import { NIVEIS_PRECO, brl, limparNome } from '@/lib/format'
+import { NIVEIS_PRECO, brl, limparNome, slugPrato } from '@/lib/format'
 import { DIM, NIVEL_HEX } from '@/lib/theme'
 import ModalFontes from './ModalFontes'
 import type { DishCost, ItemDetalhe, Fonte, ModoKey } from '@/lib/types'
@@ -48,7 +48,8 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
         <div className="modal-head">
           <div>
             <h2>{limparNome(dish.pratos.nome)}</h2>
-            <p>{dish.pratos.regiao}{dataColeta ? ` · coleta de ${dataColeta.split('-').reverse().join('/')}` : ''} · margem ±5%</p>
+            <p>{dish.pratos.regiao}{dataColeta ? ` · coleta de ${dataColeta.split('-').reverse().join('/')}` : ''} · margem ±5% · <a
+              href={`/prato/${slugPrato(dish.pratos.id, dish.pratos.nome)}`} className="underline hover:text-ink">página do prato</a></p>
           </div>
           <div className="modal-x" onClick={onClose}>×</div>
         </div>

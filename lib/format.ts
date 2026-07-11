@@ -94,6 +94,17 @@ export function nomeOrdenacao(nome: string) {
 	return limparNome(nome).replace(/^[^\p{L}\p{N}]+/u, "");
 }
 
+// slug da página pública do prato: 45 + "Feijoada Completa" → "45-feijoada-completa"
+export function slugPrato(id: number, nome: string) {
+	const s = limparNome(nome)
+		.toLowerCase()
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	return `${id}-${s}`;
+}
+
 // unidade do ingrediente → rótulo do campo de quantidade na contribuição
 export function rotuloQtd(unidade?: string | null) {
 	switch (unidade) {
