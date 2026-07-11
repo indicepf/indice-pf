@@ -5,6 +5,7 @@ import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, 
 import { NIVEIS_PRECO, brl, limparNome, slugPrato } from '@/lib/format'
 import { DIM, NIVEL_HEX } from '@/lib/theme'
 import ModalFontes from './ModalFontes'
+import { useDialogo } from '@/components/ui/useDialogo'
 import type { DishCost, ItemDetalhe, Fonte, ModoKey } from '@/lib/types'
 import type { FonteManual } from '@/lib/queries'
 
@@ -29,6 +30,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
 }) {
   const [fonteAberta, setFonteAberta] = useState<{ nome: string; id: number; origem: ItemDetalhe['origem'] } | null>(null)
   const [nivel, setNivel] = useState<ModoKey>(modo)
+  const dlgRef = useDialogo<HTMLDivElement>(onClose)
   const f = 1 - (NIVEIS_PRECO.find(n => n.key === nivel)?.desc ?? 0)
 
   const total = (itens || []).reduce((s, i) => s + i.custo, 0) * f
@@ -44,14 +46,15 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
 
   return (
     <div className="modal-back z-[100]" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="modal-mk wide">
+      <div ref={dlgRef} onClick={e => e.stopPropagation()} className="modal-mk wide"
+        role="dialog" aria-modal="true" aria-label={limparNome(dish.pratos.nome)}>
         <div className="modal-head">
           <div>
             <h2>{limparNome(dish.pratos.nome)}</h2>
             <p>{dish.pratos.regiao}{dataColeta ? ` · coleta de ${dataColeta.split('-').reverse().join('/')}` : ''} · margem ±5% · <a
               href={`/prato/${slugPrato(dish.pratos.id, dish.pratos.nome)}`} className="underline hover:text-ink">página do prato</a></p>
           </div>
-          <div className="modal-x" onClick={onClose}>×</div>
+          <button className="modal-x" onClick={onClose} aria-label="Fechar"><span aria-hidden="true">×</span></button>
         </div>
 
         <div className="modal-body">

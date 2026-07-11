@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Logo from './Logo'
+import LinkCookies from './LinkCookies'
 
 // footer escuro do mockup (.site-footer): brand + 3 colunas + linha inferior
 export default function Footer() {
@@ -30,6 +31,7 @@ export default function Footer() {
           <h5>Legal</h5>
           <a>Termos</a>
           <a>Privacidade</a>
+          <LinkCookies />
           <Link href="/metodologia">Margem de erro ±5%</Link>
         </div>
         <div className="fbottom">

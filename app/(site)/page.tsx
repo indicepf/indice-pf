@@ -22,6 +22,7 @@ import AdGate from '@/components/ads/AdGate'
 import AdPopup from '@/components/ads/AdPopup'
 import ShareModal from '@/components/dashboard/ShareModal'
 import OrientPopup from '@/components/site/OrientPopup'
+import { useDialogo } from '@/components/ui/useDialogo'
 import type { ModoKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
@@ -50,6 +51,35 @@ const ICO = {
 }
 
 type ColunaSort = 'nome' | 'regiao' | 'custo' | 'delta'
+
+// cabeçalho ordenável acessível: anuncia a direção (aria-sort) e opera por teclado
+function ThSort({ col, sort, onSort, right, children, className }: {
+  col: ColunaSort; sort: { col: ColunaSort; dir: 1 | -1 }; onSort: (c: ColunaSort) => void
+  right?: boolean; children: React.ReactNode; className?: string
+}) {
+  const ativo = sort.col === col
+  return (
+    <th scope="col" className={className} aria-sort={ativo ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}
+      style={right ? { textAlign: 'right' } : undefined}>
+      <button onClick={() => onSort(col)}
+        style={{ all: 'unset', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {children}{ativo && <span aria-hidden="true">{sort.dir === 1 ? '▲' : '▼'}</span>}
+      </button>
+    </th>
+  )
+}
+
+// invólucro do drill de produto: dialog acessível (foco, trap, Esc)
+function DialogoDrill({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
+  const ref = useDialogo<HTMLDivElement>(onClose)
+  return (
+    <div className="modal-back z-[100]" onClick={onClose}>
+      <div ref={ref} onClick={e => e.stopPropagation()} className="modal-mk wide" role="dialog" aria-modal="true" aria-label={label}>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const { profile, isPremium } = useAuth()
@@ -307,9 +337,26 @@ export default function Dashboard() {
   ].filter(Boolean).join(' · ')
 
   if (loading) {
+    // skeleton com a silhueta da página (hero + KPIs + gráfico + tabela)
     return (
-      <main className="min-h-screen grid place-items-center text-dim">
-        <p className="font-bold tracking-tight text-lg">Carregando o Índice PF…</p>
+      <main className="min-h-screen" aria-busy="true" aria-label="Carregando o Índice PF">
+        <div className="hero"><div className="hero-inner"><div className="hero-copy">
+          <div className="skel" style={{ height: 44, maxWidth: 560 }} />
+          <div className="skel" style={{ height: 18, maxWidth: 420, marginTop: 14 }} />
+          <div className="flex gap-6 mt-7">{[0, 1, 2, 3].map(i => <div key={i} className="skel" style={{ width: 72, height: 40 }} />)}</div>
+        </div></div></div>
+        <div className="site-main">
+          <div className="layout">
+            <aside className="filters max-lg:hidden"><div className="skel" style={{ height: 380 }} /></aside>
+            <div className="content">
+              <div className="grid sm:grid-cols-3 gap-[14px]">
+                {[0, 1, 2].map(i => <div key={i} className="skel" style={{ height: 118 }} />)}
+              </div>
+              <div className="skel" style={{ height: 320 }} />
+              <div className="skel" style={{ height: 420 }} />
+            </div>
+          </div>
+        </div>
       </main>
     )
   }
@@ -690,11 +737,11 @@ export default function Dashboard() {
                 <table className="tbl-mk">
                   <thead>
                     <tr>
-                      <th onClick={() => toggleSort('nome')}>Prato{sort.col === 'nome' ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>
-                      <th className="max-sm:hidden" onClick={() => toggleSort('regiao')}>Região{sort.col === 'regiao' ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>
-                      <th style={{ textAlign: 'right' }} onClick={() => toggleSort('custo')}>Custo{sort.col === 'custo' ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>
-                      {temSerie && <th className="max-md:hidden" style={{ textAlign: 'right' }} onClick={() => toggleSort('delta')}>Δ última{sort.col === 'delta' ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>}
-                      {temSerie && <th className="max-lg:hidden" style={{ textAlign: 'right', cursor: 'default' }}>Tendência</th>}
+                      <ThSort col="nome" sort={sort} onSort={toggleSort}>Prato</ThSort>
+                      <ThSort col="regiao" sort={sort} onSort={toggleSort} className="max-sm:hidden">Região</ThSort>
+                      <ThSort col="custo" sort={sort} onSort={toggleSort} right>Custo</ThSort>
+                      {temSerie && <ThSort col="delta" sort={sort} onSort={toggleSort} right className="max-md:hidden">Δ última</ThSort>}
+                      {temSerie && <th scope="col" className="max-lg:hidden" style={{ textAlign: 'right', cursor: 'default' }}>Tendência</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -767,14 +814,13 @@ export default function Dashboard() {
 
       {/* drill de produto — modal central do mockup (openProductDrill) */}
       {ingModal && (
-        <div className="modal-back z-[100]" onClick={() => setIngModal(null)}>
-          <div onClick={e => e.stopPropagation()} className="modal-mk wide">
+        <DialogoDrill label={ingModal.nome} onClose={() => setIngModal(null)}>
             <div className="modal-head">
               <div>
                 <h2>{ingModal.nome}</h2>
                 <p>preço rastreado · margem ±5%</p>
               </div>
-              <div className="modal-x" onClick={() => setIngModal(null)}>×</div>
+              <button className="modal-x" onClick={() => setIngModal(null)} aria-label="Fechar"><span aria-hidden="true">×</span></button>
             </div>
             <div className="modal-body">
               <div className="segbar" style={{ marginBottom: 14 }}>
@@ -860,8 +906,7 @@ export default function Dashboard() {
                 </>
               )}
             </div>
-          </div>
-        </div>
+        </DialogoDrill>
       )}
     </main>
   )

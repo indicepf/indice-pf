@@ -1,3 +1,8 @@
+// xlsx aparece no npm audit (prototype pollution + ReDoS, sem fix publicado no
+// npm). Ambas as falhas estão no PARSING de arquivos de terceiros — aqui o
+// pacote só ESCREVE planilhas a partir de dados do próprio app, nunca lê
+// arquivo de usuário. Risco aceito; se um dia houver import de planilha,
+// trocar por exceljs antes.
 import * as XLSX from 'xlsx'
 
 export type AbaExport = { nome: string; linhas: Record<string, any>[] }

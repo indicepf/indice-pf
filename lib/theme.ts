@@ -21,7 +21,7 @@ export const SEMANTIC = {
 } as const
 
 export const INK = '#12203a'
-export const DIM = '#6b7a93'
+export const DIM = '#5d6c86' // AA sobre superfícies claras (espelha --dim)
 export const FAINT = '#9aa7bd'
 export const SURFACE = '#ffffff'
 export const BORDER = '#e2e8f2'

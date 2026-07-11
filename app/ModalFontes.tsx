@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect } from 'react'
 import { brl } from '@/lib/format'
+import { useDialogo } from '@/components/ui/useDialogo'
 import type { Fonte } from '@/lib/types'
 import type { FonteManual } from '@/lib/queries'
 
@@ -10,16 +10,15 @@ const fmtBr = (d: string) => { const [a, m, dia] = d.split('-'); return `${dia}/
 export default function ModalFontes({ nome, fontes, manuais, dataColeta, onClose }: {
   nome: string; fontes: Fonte[]; manuais: FonteManual[]; dataColeta?: string; onClose: () => void
 }) {
-  const esc = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }, [onClose])
-  useEffect(() => { document.addEventListener('keydown', esc); return () => document.removeEventListener('keydown', esc) }, [esc])
+  const ref = useDialogo<HTMLDivElement>(onClose)
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-ink/30 px-4" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
+      <div ref={ref} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Fontes — ${nome}`}
         className="bg-panel border border-line rounded-lg max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-xl">
         <div className="flex justify-between items-center px-5 py-4 border-b border-line sticky top-0 bg-panel">
           <h4 className="font-[family-name:var(--font-serif)] text-lg">Fontes — {nome}</h4>
-          <button onClick={onClose} className="text-muted hover:text-ink text-xl leading-none">×</button>
+          <button onClick={onClose} aria-label="Fechar" className="text-muted hover:text-ink text-xl leading-none"><span aria-hidden="true">×</span></button>
         </div>
         <div className="p-4 space-y-4">
           {manuais.length > 0 && (

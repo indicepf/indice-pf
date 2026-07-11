@@ -35,7 +35,7 @@
   /* texto */
   --ink:   #12203a;
   --ink-2: #3f4d66;
-  --dim:   #6b7a93;
+  --dim:   #5d6c86; /* 5.0:1 sobre branco (AA em texto pequeno; era #6b7a93 = 4.35:1) */
   --faint: #9aa7bd;
 
   /* semânticas */
@@ -376,6 +376,11 @@ body {
 .crumbs .current{color:var(--ink);font-weight:650}
 
 /* modal central do mockup + stats do drill */
+/* skeleton de carregamento (shimmer) */
+.skel{border-radius:var(--r-sm);background:linear-gradient(90deg,var(--surface-3) 25%,var(--surface-2) 42%,var(--surface-3) 60%);background-size:220% 100%;animation:skel 1.3s ease-in-out infinite}
+@keyframes skel{from{background-position:130% 0}to{background-position:-90% 0}}
+@media (prefers-reduced-motion: reduce){.skel{animation:none}}
+
 .modal-back{position:fixed;inset:0;background:rgba(18,32,58,.5);backdrop-filter:blur(4px);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px}
 .modal-mk{background:var(--surface);border-radius:var(--r-xl);width:100%;max-width:520px;max-height:90vh;overflow:auto;box-shadow:var(--shadow-lg);animation:pop .2s}
 .modal-mk.wide{max-width:720px}
@@ -383,7 +388,7 @@ body {
 .modal-head{display:flex;justify-content:space-between;align-items:flex-start;padding:22px 24px 14px;gap:12px}
 .modal-head h2{font-size:19px;font-weight:750;letter-spacing:-.02em}
 .modal-head p{font-size:13px;color:var(--dim);margin-top:3px}
-.modal-x{cursor:pointer;color:var(--faint);font-size:22px;line-height:1;padding:2px 8px;border-radius:8px}
+.modal-x{cursor:pointer;color:var(--faint);font-size:22px;line-height:1;padding:2px 8px;border-radius:8px;background:none;border:none}
 .modal-x:hover{background:var(--surface-3);color:var(--ink)}
 .modal-body{padding:6px 24px 24px}
 

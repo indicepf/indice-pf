@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase, usuarioDoStorage } from '@/lib/supabase'
+import { supabase, usuarioDoStorage, limparSessaoLocal } from '@/lib/supabase'
 import {
   getProfile, getRecompensa, getDadosRecompensa, salvarDadosRecompensa, solicitarSaque, getMeusSaques, comRetry,
 } from '@/lib/queries'
 import { REGIOES, SEXOS, idade, mascararTel, telValido, mascararCpf, cpfValido, brl, SAQUE_MINIMO } from '@/lib/format'
-import { Badge, Button, Input, Select, Tabs, type BadgeTone } from '@/components/ui'
+import { Badge, Button, Input, Modal, Select, Tabs, type BadgeTone } from '@/components/ui'
 
 type MeuSaque = { id: number; valor: number; status: string; criado_em: string; pago_em: string | null }
 const SAQUE_STATUS: Record<string, { txt: string; tone: BadgeTone }> = {
@@ -52,6 +52,10 @@ export default function ConfiguracoesPage() {
   const [recBusy, setRecBusy] = useState(false)
   const [erroCarga, setErroCarga] = useState(false)
   const [tentativa, setTentativa] = useState(0)
+  const [modalExcluir, setModalExcluir] = useState(false)
+  const [confirmaExcluir, setConfirmaExcluir] = useState('')
+  const [excluindo, setExcluindo] = useState(false)
+  const [erroExcluir, setErroExcluir] = useState('')
 
   // sessão garantida pelo layout do shell — aqui só resolve o uid
   useEffect(() => {
@@ -113,6 +117,26 @@ export default function ConfiguracoesPage() {
     if (error) { setRecErro(error.message); return }
     setRecMsg('Saque solicitado. O pagamento será feito no PIX informado em breve.')
     setRec(await getRecompensa(userId!))
+  }
+
+  async function excluirConta() {
+    setErroExcluir(''); setExcluindo(true)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) { setErroExcluir('Sessão expirada — entre de novo.'); return }
+      const r = await fetch('/api/conta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ acao: 'excluir' }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setErroExcluir(j.erro ?? 'Falha ao excluir a conta.'); return }
+      limparSessaoLocal()
+      window.location.href = '/'
+    } finally {
+      setExcluindo(false)
+    }
   }
 
   async function trocarAvatar(e: React.ChangeEvent<HTMLInputElement>) {
@@ -217,7 +241,38 @@ export default function ConfiguracoesPage() {
             {salvando ? 'Salvando…' : 'Salvar'}
           </Button>
         </div>
+
+        <div className="mt-10 border border-danger/40 rounded-[var(--r)] p-4">
+          <h3 className="text-sm font-medium">Excluir conta</h3>
+          <p className="text-xs text-dim mt-1 leading-relaxed">
+            Apaga seu perfil, assinatura, CPF, chave PIX e foto — sem volta. Preços que você enviou
+            e já foram aprovados continuam no índice, de forma anônima. Saldo de recompensa não
+            sacado é perdido.
+          </p>
+          <Button variant="secondary" className="mt-3 border-danger/40 text-danger"
+            onClick={() => { setConfirmaExcluir(''); setErroExcluir(''); setModalExcluir(true) }}>
+            Excluir minha conta
+          </Button>
+        </div>
       </section>
+      )}
+
+      {modalExcluir && (
+        <Modal title="Excluir conta" onClose={() => setModalExcluir(false)}>
+          <p className="text-sm text-dim leading-relaxed">
+            Esta ação é permanente. Para confirmar, digite <b className="text-ink">EXCLUIR</b> abaixo.
+          </p>
+          <Input className="mt-3" value={confirmaExcluir} onChange={e => setConfirmaExcluir(e.target.value)}
+            placeholder="EXCLUIR" aria-label="Digite EXCLUIR para confirmar" />
+          {erroExcluir && <p className="text-xs text-danger mt-2">{erroExcluir}</p>}
+          <div className="flex gap-2 mt-4">
+            <Button variant="secondary" disabled={excluindo} onClick={() => setModalExcluir(false)}>Cancelar</Button>
+            <Button disabled={excluindo || confirmaExcluir.trim().toUpperCase() !== 'EXCLUIR'}
+              className="bg-danger hover:brightness-110" onClick={excluirConta}>
+              {excluindo ? 'Excluindo…' : 'Excluir definitivamente'}
+            </Button>
+          </div>
+        </Modal>
       )}
 
       {aba === 'recompensas' && (
