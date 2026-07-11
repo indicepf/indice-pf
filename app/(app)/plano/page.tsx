@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase, usuarioDoStorage } from '@/lib/supabase'
-import { Badge, Button, Card, type BadgeTone } from '@/components/ui'
+import { Badge, Button, Card, Modal, type BadgeTone } from '@/components/ui'
 import { FASE_LANCAMENTO } from '@/lib/format'
 
 type Assinatura = {
@@ -23,6 +23,7 @@ export default function PlanoPage() {
   const [assinatura, setAssinatura] = useState<Assinatura | null | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [erro, setErro] = useState('')
+  const [confirmaCancelar, setConfirmaCancelar] = useState(false)
 
   useEffect(() => {
     const u = usuarioDoStorage()
@@ -39,7 +40,7 @@ export default function PlanoPage() {
   }, [uid])
 
   async function cancelar() {
-    if (!confirm('Cancelar a assinatura Premium? O acesso vale até o fim do período pago.')) return
+    setConfirmaCancelar(false)
     setErro(''); setBusy(true)
     try {
       const { data } = await supabase.auth.getSession()
@@ -89,9 +90,20 @@ export default function PlanoPage() {
             </p>
           )}
           {erro && <p className="text-xs text-danger mt-3">{erro}</p>}
-          <Button variant="secondary" disabled={busy} onClick={cancelar} className="mt-5">
+          <Button variant="secondary" disabled={busy} onClick={() => setConfirmaCancelar(true)} className="mt-5">
             {busy ? 'Cancelando…' : 'Cancelar assinatura'}
           </Button>
+          {confirmaCancelar && (
+            <Modal title="Cancelar assinatura" onClose={() => setConfirmaCancelar(false)}>
+              <p className="text-sm text-dim leading-relaxed">
+                Cancelar a assinatura Premium? O acesso vale até o fim do período pago.
+              </p>
+              <div className="flex gap-2 mt-4">
+                <Button variant="secondary" onClick={() => setConfirmaCancelar(false)}>Manter assinatura</Button>
+                <Button onClick={cancelar}>Cancelar assinatura</Button>
+              </div>
+            </Modal>
+          )}
         </Card>
       ) : (
         <>

@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { GoogleTagManager } from "@next/third-parties/google";
 import "./globals.css";
 import RegistrarSW from "./RegistrarSW";
+import CookieConsent from "@/components/site/CookieConsent";
 import { AuthProvider } from "./useAuth";
 
 const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim();
@@ -51,10 +51,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      {gtmId && <GoogleTagManager gtmId={gtmId} />}
       <body className={`${inter.variable} antialiased`}>
         <RegistrarSW />
         <AuthProvider>{children}</AuthProvider>
+        {/* LGPD: GTM/GA4 só carrega após o aceite no banner */}
+        <CookieConsent gtmId={gtmId} />
       </body>
     </html>
   );
