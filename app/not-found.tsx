@@ -4,7 +4,7 @@ import Header from '@/components/site/Header'
 import Footer from '@/components/site/Footer'
 
 export const metadata: Metadata = {
-  title: 'Página não encontrada — Índice PF',
+  title: 'Erro 404 — Índice Prato Feito',
 }
 
 // not-found raiz renderiza só dentro do layout root (fora do grupo (site)),
@@ -14,14 +14,29 @@ export default function NotFound() {
     <>
       <Header />
       <main className="site-main" style={{ marginTop: 0, paddingTop: 40 }}>
-        <div className="box" style={{ maxWidth: 760, margin: '0 auto' }}>
-          <h2>Página não encontrada</h2>
-          <p style={{ color: 'var(--ink-2)', lineHeight: 1.7 }}>
+        <div className="box" style={{ maxWidth: 760, margin: '0 auto', textAlign: 'center', padding: '64px 32px' }}>
+          <p
+            style={{
+              fontSize: 96,
+              fontWeight: 800,
+              lineHeight: 1,
+              background: 'var(--grad-cta)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              color: 'transparent',
+            }}
+          >
+            404
+          </p>
+          <h2 style={{ fontSize: 28, justifyContent: 'center', margin: '18px 0 10px' }}>
+            Página não encontrada
+          </h2>
+          <p style={{ color: 'var(--ink-2)', fontSize: 18, lineHeight: 1.7, marginBottom: 28 }}>
             O endereço que você acessou não existe ou foi removido.
           </p>
-          <p>
-            <Link href="/">Voltar ao índice</Link>
-          </p>
+          <Link href="/" className="btn-mk primary" style={{ fontSize: 16, padding: '12px 24px' }}>
+            Voltar ao Índice Prato Feito
+          </Link>
         </div>
       </main>
       <Footer />
