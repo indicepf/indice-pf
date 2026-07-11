@@ -33,8 +33,8 @@ export default function CookieConsent({ gtmId }: { gtmId?: string }) {
           className="fixed bottom-0 inset-x-0 z-[95] border-t border-border bg-surface shadow-[var(--shadow-lg)] px-5 py-4">
           <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-3">
             <p className="text-sm text-ink-2 leading-relaxed flex-1 min-w-[240px]">
-              Usamos cookies apenas para medir o uso do site (Google Analytics). Nenhuma métrica é
-              coletada sem o seu consentimento.
+              Usamos cookies para melhorar sua experiência e entender como o site é utilizado.
+              Você pode aceitar ou recusar.
             </p>
             <div className="flex gap-2 shrink-0">
               <button className="btn-mk sm" onClick={() => decidir('0')}>Recusar</button>
