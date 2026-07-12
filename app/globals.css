@@ -383,7 +383,11 @@ body {
 
 .modal-back{position:fixed;inset:0;background:rgba(18,32,58,.5);backdrop-filter:blur(4px);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px}
 .modal-mk{background:var(--surface);border-radius:var(--r-xl);width:100%;max-width:520px;max-height:90vh;overflow:auto;box-shadow:var(--shadow-lg);animation:pop .2s}
-.modal-mk.wide{max-width:720px}
+.modal-mk.wide{max-width:940px}
+/* tabela compacta do detalhe do prato: 7 colunas sem scroll lateral */
+.tbl-mk.compact th{padding:9px 8px;cursor:default}
+.tbl-mk.compact td{padding:9px 8px;font-size:13px}
+.tbl-mk.compact tbody tr{cursor:default}
 @keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
 .modal-head{display:flex;justify-content:space-between;align-items:flex-start;padding:22px 24px 14px;gap:12px}
 .modal-head h2{font-size:19px;font-weight:750;letter-spacing:-.02em}
