@@ -739,59 +739,68 @@ REVISAR = {
 # (9 regras explícitas) + fusões seguras de variantes equivalentes.
 # Bases não citadas aqui permanecem como estão.
 CONSOLIDA = {
-    # — Cortes bovinos baratos → Acém bovino (carne moída des-consolidada).
-    "Acém/Músculo bovino": "Acém bovino",
-    "Peito bovino":        "Acém bovino",
-    "Matambre bovino":     "Acém bovino",
+    # EXPLOSÃO de 12/07/2026 (decisão do responsável, com folga de API):
+    # as fusões de cortes bovinos, carne seca/sol, linguiças, lombo/pernil,
+    # bacon/panceta, queijos, fubá/flocão, molho/extrato, folhas e pimentas
+    # foram DESFEITAS — cada base volta a ter cotação própria. Ficaram apenas
+    # as fusões de peixes (2ª rodada), coxão duro, fradinho, cebola e manteiga.
+    #
     # — Coxão duro segue em Alcatra (genérico). Mignon, contrafilé, coxão mole,
     #   patinho e carne moída foram DES-consolidados (cotação própria, nome fiel).
     "Coxão duro bovino":   "Alcatra bovina",
-    # — Regra: carne seca = charque = carne de sol
-    "Carne seca/Charque":  "Carne seca/charque/sol",
-    "Carne de sol":        "Carne seca/charque/sol",
-    # — Regra: linguiça defumada = linguiça calabresa
-    "Linguiça calabresa":  "Linguiça calabresa/defumada",
-    "Linguiça defumada":   "Linguiça calabresa/defumada",
     # — Peixe genérico de mar → Pescada (cavala/tainha des-consolidados).
+    #   RODADA 2 (decisões do responsável em 12/07/2026, implementar após
+    #   validar a 1ª explosão na coleta de segunda):
+    #     · "Posta de Peixe (Cavala/Dourado)" (Moqueca NE)      → Cavala (base já existe)
+    #     · "Posta de peixe (Pescada/Tucunaré)" (Caldeirada N)  → Tucunaré (termo novo)
+    #     · "Posta badejo/namorado/dourado" (Moqueca Capixaba)  → Badejo/Namorado (termo novo)
+    #     · "Pescada branca em tiras"                           → fica em Pescada
     "Peixe de mar (posta)":    "Pescada (peixe)",
     # — Peixe genérico de rio → Pintado (tambaqui/pacu des-consolidados).
+    #   RODADA 2:
+    #     · "Pescado Filhote em cubos" (Guisado N) → Filhote/Piraíba (termo novo,
+    #       busca "filé de piraíba filhote", nao: piramutaba/pirara/tilápia;
+    #       certamente coberto por preço manual — sem oferta online)
+    #     · "Pescado Piranha em postas" (Caldo CO) → Piranha (preço manual)
+    #     · "Peixe fluvial (Lambari/Traíra)"       → Lambari/Traíra (termo novo)
+    #     · "Peixe regional desfiado" (Mujica N) e Pintado/Cachara → ficam em Pintado
     "Peixe de água doce (posta)":"Pintado (peixe)",
     # — Regra: feijão fradinho = feijão de corda
     "Feijão fradinho":     "Feijão de corda",
     # — Regra: cebola única (roxa e branca)
     "Cebola roxa":         "Cebola",
-    # — Fusões seguras de variantes equivalentes
-    "Lombo suíno":         "Lombo/Pernil suíno",
-    "Pernil suíno":        "Lombo/Pernil suíno",
-    "Panceta/Barriga suína": "Bacon/Panceta",
-    "Bacon":               "Bacon/Panceta",
-    # — Lote de fusões seguras adicionais (aprovadas) ─────────────────────────
+    # — Manteiga de garrafa segue em Manteiga
     "Manteiga de garrafa": "Manteiga",
-    "Queijo prato":        "Queijo mussarela/prato",
-    "Queijo mussarela":    "Queijo mussarela/prato",
-    "Fubá de milho":       "Fubá/Flocão de milho",
-    "Flocão de milho (cuscuz)": "Fubá/Flocão de milho",
-    "Extrato de tomate":   "Molho/extrato de tomate",
-    "Molho de tomate (sachê)": "Molho/extrato de tomate",
-    "Rúcula":              "Alface",
-    "Escarola/Chicória":   "Alface",
-    "Pimenta do reino":    "Pimenta",
-    "Pimenta (fresca)":    "Pimenta",
-    "Linguiça toscana (suína)": "Linguiça calabresa/defumada",
 }
 
-# Categorias das bases consolidadas novas (para a aba Ingredientes Canônicos)
+# Categorias de bases novas (para a aba Ingredientes Canônicos)
 BASE.update({
-    "Acém bovino":                 "Proteína bovina",
-    "Carne seca/charque/sol":      "Proteína bovina",
-    "Linguiça calabresa/defumada": "Proteína suína",
-    "Lombo/Pernil suíno":          "Proteína suína",
-    "Bacon/Panceta":               "Proteína suína",
-    "Queijo mussarela/prato":      "Laticínio",
-    "Fubá/Flocão de milho":        "Grão/Cereal",
-    "Molho/extrato de tomate":     "Condimento/Molho",
-    "Pimenta":                     "Tempero/Erva",
+    "Feijão branco":               "Leguminosa",   # criado p/ Dobradinha à Paulista (12/07/2026)
 })
+
+# ─── Receitas extras (pratos que não estão na planilha original) ─────────────
+# Linhas em nível de base canônica FINAL: (região, prato, base, PB g, PC g).
+# Dobradinha à Paulista PF: planilha do sócio de 12/07/2026 (entra no lugar do
+# Estrogonofe de Carne Bovina, que fica inativo). O composto cebola/alho/
+# cheiro-verde/sal (30g→24g) foi decomposto nas proporções usuais de refogado.
+RECEITAS_EXTRA = [
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Bucho/Dobradinha bovina", 150.0, 90.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Feijão branco",            50.0, 130.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Linguiça calabresa",       40.0, 35.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Arroz branco",             60.0, 150.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Extrato de tomate",        20.0, 20.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Óleo de soja",             15.0, 15.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Limão",                    30.0, None),  # limpeza, descartado
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Cebola",                   15.0, 12.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Alho",                      5.0, 4.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Cheiro-verde",              5.0, 4.0),
+    ("Sudeste", "11. Dobradinha à Paulista PF", "Sal",                       5.0, 4.0),
+]
+
+# Pratos mantidos no banco mas FORA de tabelas, gráficos e índice (pratos.ativo=false)
+PRATOS_INATIVOS = {
+    ("Sudeste", "11. Estrogonofe de Carne Bovina"),   # substituído pela Dobradinha (12/07/2026)
+}
 
 
 def consolidar(base):
@@ -804,5 +813,7 @@ def consolidar(base):
 # como "4. Tacacá Reforçado", partindo o prato em dois. Unifica.
 PRATO_ALIAS = {
     "4. Tacacá Reforçado (Adaptado para PF)": "4. Tacacá Reforçado",
+    # grafia errada na planilha original — o correto é Mujica (12/07/2026)
+    "20. Majica de Peixe": "20. Mujica de Peixe",
 }
 

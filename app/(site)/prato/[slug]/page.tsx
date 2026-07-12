@@ -19,8 +19,8 @@ type Dados = {
 // cache() deduplica entre generateMetadata e a página na mesma request
 const getDados = cache(async (id: number): Promise<Dados | null> => {
   const db = supabasePublico()
-  const { data: prato } = await db.from('pratos').select('id,nome,regiao').eq('id', id).single()
-  if (!prato) return null
+  const { data: prato } = await db.from('pratos').select('id,nome,regiao,ativo').eq('id', id).single()
+  if (!prato || prato.ativo === false) return null
   const [{ data: custos }, { data: receitas }] = await Promise.all([
     db.from('custos_pratos').select('custo_total,snapshots(data)').eq('prato_id', id),
     db.from('receitas').select('qtd_g,qtd_pb_g,qtd_cozida_g,qtd_meta_g,ingredientes(nome)').eq('prato_id', id),
