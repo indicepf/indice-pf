@@ -13,7 +13,7 @@ type Dados = {
   prato: { id: number; nome: string; regiao: string }
   custo: number | null
   dataColeta: string | null
-  itens: { nome: string; qtd_g: number; qtd_cozida_g: number | null }[]
+  itens: { nome: string; qtd_g: number; qtd_pb_g: number | null; qtd_cozida_g: number | null; qtd_meta_g: number | null }[]
 }
 
 // cache() deduplica entre generateMetadata e a página na mesma request
@@ -23,7 +23,7 @@ const getDados = cache(async (id: number): Promise<Dados | null> => {
   if (!prato) return null
   const [{ data: custos }, { data: receitas }] = await Promise.all([
     db.from('custos_pratos').select('custo_total,snapshots(data)').eq('prato_id', id),
-    db.from('receitas').select('qtd_g,qtd_cozida_g,ingredientes(nome)').eq('prato_id', id),
+    db.from('receitas').select('qtd_g,qtd_pb_g,qtd_cozida_g,qtd_meta_g,ingredientes(nome)').eq('prato_id', id),
   ])
   // última coleta válida (>= corte) — poucas linhas por prato, resolve no JS
   const ult = ((custos || []) as any[])
@@ -34,7 +34,9 @@ const getDados = cache(async (id: number): Promise<Dados | null> => {
     .map(r => ({
       nome: r.ingredientes?.nome as string,
       qtd_g: Number(r.qtd_g),
+      qtd_pb_g: r.qtd_pb_g != null ? Number(r.qtd_pb_g) : null,
       qtd_cozida_g: r.qtd_cozida_g != null ? Number(r.qtd_cozida_g) : null,
+      qtd_meta_g: r.qtd_meta_g != null ? Number(r.qtd_meta_g) : null,
     }))
     .filter(i => i.nome)
     .sort((a, b) => b.qtd_g - a.qtd_g)
@@ -75,8 +77,8 @@ export default async function PratoPage({ params }: { params: Promise<{ slug: st
   if (slug !== canonico) permanentRedirect(`/prato/${canonico}`)
 
   const nome = limparNome(d.prato.nome)
-  const pesoCru = d.itens.reduce((s, i) => s + i.qtd_g, 0)
-  const pesoPronto = d.itens.reduce((s, i) => s + (i.qtd_cozida_g || 0), 0)
+  const pesoCompra = d.itens.reduce((s, i) => s + i.qtd_g, 0)
+  const pesoServido = d.itens.reduce((s, i) => s + (i.qtd_meta_g || 0), 0)
 
   return (
     <main className="site-main" style={{ marginTop: 0, paddingTop: 40 }}>
@@ -105,29 +107,37 @@ export default async function PratoPage({ params }: { params: Promise<{ slug: st
       <div className="box" style={{ maxWidth: 760, margin: '0 auto' }}>
         <h2>Composição da porção</h2>
         <p className="hint">
-          {d.itens.length} ingredientes · {Math.round(pesoCru)} g crus comprados
-          {pesoPronto > 0 ? ` · ~${Math.round(pesoPronto)} g no prato pronto` : ''}
+          {d.itens.length} ingredientes · {Math.round(pesoCompra)} g comprados (cru)
+          {pesoServido > 0 ? ` · ~${Math.round(pesoServido)} g servidos no prato` : ''}
         </p>
         <div className="overflow-x-auto">
           <table className="tbl-mk">
             <thead>
-              <tr><th>Ingrediente</th><th style={{ textAlign: 'right' }}>Qtd (cru)</th><th style={{ textAlign: 'right' }}>No prato</th></tr>
+              <tr>
+                <th>Ingrediente</th>
+                <th style={{ textAlign: 'right' }} title="Quantidade bruta da receita original (peso cru)">Receita (PB)</th>
+                <th style={{ textAlign: 'right' }} title="Quanto o PB rende depois do preparo (peso cozido)">Rende (PC)</th>
+                <th style={{ textAlign: 'right' }} title="Quantidade desejada servida no prato">Meta no prato</th>
+                <th style={{ textAlign: 'right' }} title="Quanto comprar (cru) para servir a meta — base do custo">Compra</th>
+              </tr>
             </thead>
             <tbody>
               {d.itens.map(i => (
                 <tr key={i.nome}>
                   <td>{i.nome}</td>
-                  <td className="text-right text-dim tnum">{i.qtd_g} g</td>
+                  <td className="text-right text-dim tnum">{i.qtd_pb_g ? `${i.qtd_pb_g} g` : '—'}</td>
                   <td className="text-right text-dim tnum">{i.qtd_cozida_g ? `${i.qtd_cozida_g} g` : '—'}</td>
+                  <td className="text-right text-dim tnum">{i.qtd_meta_g ? `${i.qtd_meta_g} g` : '—'}</td>
+                  <td className="text-right tnum font-medium">{i.qtd_g} g</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="text-xs text-dim leading-relaxed mt-4">
-          O custo usa o peso cru (quantidade comprada) × preço de varejo. A coluna
-          &ldquo;No prato&rdquo; mostra o peso após o preparo (aproveitamento): carnes encolhem,
-          arroz e feijão expandem. Preços por ingrediente, fontes e evolução na{' '}
+          O custo é preço de varejo × <b>Compra</b>: quanto se compra cru para servir a
+          <b> Meta no prato</b>, corrigido pelo rendimento do preparo (carnes encolhem ao cozinhar;
+          arroz e feijão expandem). Preços por ingrediente, fontes e evolução na{' '}
           <Link href={`/?prato=${d.prato.id}`} className="underline">visão interativa</Link>.
         </p>
       </div>

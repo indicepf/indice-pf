@@ -34,7 +34,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
   const f = 1 - (NIVEIS_PRECO.find(n => n.key === nivel)?.desc ?? 0)
 
   const total = (itens || []).reduce((s, i) => s + i.custo, 0) * f
-  const pesoPronto = (itens || []).reduce((s, i) => s + (i.qtd_cozida_g || 0), 0)
+  const pesoServido = (itens || []).reduce((s, i) => s + (i.qtd_meta_g || 0), 0)
   const pontos = (serie?.valores ?? [])
     .map((v, i) => v != null ? { ts: tsDe(serie!.datas[i]), valor: +(v * f).toFixed(2) } : null)
     .filter((p): p is { ts: number; valor: number } => p != null)
@@ -103,43 +103,56 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
           {!itens ? (
             <p className="text-sm text-dim">Carregando composição…</p>
           ) : (
-            <table className="tbl-mk">
-              <thead>
-                <tr><th>Ingrediente</th><th style={{ textAlign: 'right' }}>Qtd (cru)</th><th style={{ textAlign: 'right' }}>No prato</th><th style={{ textAlign: 'right' }}>Custo</th><th></th></tr>
-              </thead>
-              <tbody>
-                {itens.map(i => (
-                  <tr key={i.ingrediente_id} style={{ cursor: 'default' }}>
-                    <td>{i.nome}
-                      {i.origem === 'manual' && <Etq t="manual" />}
-                      {i.origem === 'misto' && <Etq t="manual+online" />}
-                      {i.origem === 'fixo' && <Etq t="fixo" />}
-                      {i.origem === 'sem' && <Etq t="sem preço" />}
-                    </td>
-                    <td className="text-right text-dim tnum">{i.qtd_g} g</td>
-                    <td className="text-right text-dim tnum">{i.qtd_cozida_g ? `${i.qtd_cozida_g} g` : '—'}</td>
-                    <td className="text-right tnum">{brl(i.custo * f)}</td>
-                    <td className="text-right whitespace-nowrap">
-                      {(i.origem === 'online' || i.origem === 'manual' || i.origem === 'misto') && (
-                        <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id, origem: i.origem })}
-                          className="text-xs text-accent hover:underline cursor-pointer">fontes</button>
-                      )}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="tbl-mk">
+                <thead>
+                  <tr>
+                    <th>Ingrediente</th>
+                    <th style={{ textAlign: 'right' }} title="Quantidade bruta da receita original (peso cru)">Receita (PB)</th>
+                    <th style={{ textAlign: 'right' }} title="Quanto o PB rende depois do preparo (peso cozido)">Rende (PC)</th>
+                    <th style={{ textAlign: 'right' }} title="Quantidade desejada servida no prato">Meta no prato</th>
+                    <th style={{ textAlign: 'right' }} title="Quanto comprar (cru) para servir a meta — base do custo">Compra</th>
+                    <th style={{ textAlign: 'right' }}>Custo</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {itens.map(i => (
+                    <tr key={i.ingrediente_id} style={{ cursor: 'default' }}>
+                      <td>{i.nome}
+                        {i.origem === 'manual' && <Etq t="manual" />}
+                        {i.origem === 'misto' && <Etq t="manual+online" />}
+                        {i.origem === 'fixo' && <Etq t="fixo" />}
+                        {i.origem === 'sem' && <Etq t="sem preço" />}
+                      </td>
+                      <td className="text-right text-dim tnum">{i.qtd_pb_g ? `${i.qtd_pb_g} g` : '—'}</td>
+                      <td className="text-right text-dim tnum">{i.qtd_cozida_g ? `${i.qtd_cozida_g} g` : '—'}</td>
+                      <td className="text-right text-dim tnum">{i.qtd_meta_g ? `${i.qtd_meta_g} g` : '—'}</td>
+                      <td className="text-right tnum font-medium">{i.qtd_g} g</td>
+                      <td className="text-right tnum">{brl(i.custo * f)}</td>
+                      <td className="text-right whitespace-nowrap">
+                        {(i.origem === 'online' || i.origem === 'manual' || i.origem === 'misto') && (
+                          <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id, origem: i.origem })}
+                            className="text-xs text-accent hover:underline cursor-pointer">fontes</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
-          {itens && pesoPronto > 0 && (
+          {itens && pesoServido > 0 && (
             <p className="text-xs text-dim tnum mt-2">
-              Peso do prato pronto: ~{Math.round(pesoPronto)} g · custo por 100 g servidos: {brl(total / pesoPronto * 100)}
+              Peso servido do prato: ~{Math.round(pesoServido)} g · custo por 100 g servidos: {brl(total / pesoServido * 100)}
             </p>
           )}
 
           <p className="text-xs text-dim leading-relaxed mt-4 border border-border rounded-[var(--r-sm)] bg-surface-2 p-3">
-            O custo usa o peso cru (quantidade comprada) × preço de varejo. A coluna &ldquo;No prato&rdquo;
-            mostra o peso após o preparo (aproveitamento): carnes encolhem, arroz e feijão expandem.
+            O custo é preço de varejo × <b>Compra</b>: quanto se compra cru para servir a <b>Meta no
+            prato</b>, corrigido pelo rendimento do preparo (carnes encolhem ao cozinhar; arroz e
+            feijão expandem, então a compra é menor que a porção servida).
           </p>
         </div>
       </div>
