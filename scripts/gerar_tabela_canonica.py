@@ -60,17 +60,41 @@ def carregar_linhas(var2canon):
             ing = ing.strip()
             prato_nome = prato.strip() if prato else ""
             prato_nome = PRATO_ALIAS.get(prato_nome, prato_nome)
+            pb = parse_qtd_g(qbruta)
+            pc = parse_qtd_g(aprov)
+            meta, compra = meta_e_compra(qbruta, pb, pc)
             linhas.append({
                 "regiao": regiao,
                 "prato": prato_nome,
                 "ingrediente_raw": ing,
                 "canon": var2canon.get(ing),
                 "qtd_txt": qbruta.strip() if qbruta else "",
-                "qtd_g": parse_qtd_g(qbruta),
-                # peso cozido/aproveitamento (coluna PC) — só exibição, não entra no custo
-                "qtd_cozida_g": parse_qtd_g(aprov),
+                "qtd_pb_g": pb,           # receita crua original (PB)
+                "qtd_cozida_g": pc,       # rendimento do PB (PC)
+                "qtd_meta_g": meta,       # meta servida no prato
+                "qtd_g": compra,          # COMPRA necessária — base do custo em todo o app
             })
     return linhas
+
+
+def meta_e_compra(pb_txt, pb, pc):
+    """Modelo por meta servida (planilha do sócio, 12/07/2026): FC = PB/PC.
+
+    - Itens que ENCOLHEM ao cozinhar (FC > 1, carnes): a quantidade da receita
+      era a porção desejada NO PRATO → meta = PB, compra = PB × FC.
+    - Itens que EXPANDEM (FC <= 1, arroz/feijão) e itens por UNIDADE (ovos):
+      a quantidade da receita já era a compra → compra = PB, meta = PC.
+    - Sem PC parseável: compra = PB, meta indefinida.
+    """
+    if pb is None:
+        return None, None
+    if pc is None or pc <= 0:
+        return None, pb
+    por_unidade = bool(re.search(r'\bun\b|\bunid', (pb_txt or '').lower()))
+    fc = pb / pc
+    if fc > 1.001 and not por_unidade:
+        return pb, round(pb * fc, 2)
+    return pc, pb
 
 
 def validar(canons):
@@ -154,7 +178,7 @@ def main():
     # ── Aba 2: Receitas Decompostas ──────────────────────────────────────────
     ws2 = wb.create_sheet("Receitas Decompostas")
     ws2.append(["Região", "Prato", "Ingrediente original", "Qtd original",
-                "Qtd (g/ml)", "Ingrediente canônico (base)", "Qtd atribuída (g/ml)", "Origem"])
+                "Compra (g/ml)", "Ingrediente canônico (base)", "Compra atribuída (g/ml)", "Origem"])
     for l in linhas:
         comps = base_de(l["canon"]) if l["canon"] else [("(SEM CANÔNICO)", 1.0)]
         origem = "direto" if l["canon"] in ATOMICO else "decomposto"
@@ -205,20 +229,21 @@ def main():
     # Consolida: soma a quantidade quando o mesmo ingrediente-base aparece em
     # mais de uma linha do prato. Remove água/subproduto (não é item de compra).
     from collections import defaultdict
-    consol = defaultdict(float)
-    consol_coz = defaultdict(float)
+    CAMPOS = ("qtd_g", "qtd_pb_g", "qtd_cozida_g", "qtd_meta_g")
+    consol = {c: defaultdict(float) for c in CAMPOS}
     for l in linhas:
         if not l["canon"]:
             continue
         for b, prop in base_de(l["canon"]):
             if b == "Água/Subproduto (sem custo)":
                 continue
-            consol[(l["regiao"], l["prato"], b)] += (l["qtd_g"] or 0) * prop
-            consol_coz[(l["regiao"], l["prato"], b)] += (l["qtd_cozida_g"] or 0) * prop
+            for c in CAMPOS:
+                consol[c][(l["regiao"], l["prato"], b)] += (l[c] or 0) * prop
 
     ws_f = wb.create_sheet("Receitas Finais", 0)
-    ws_f.append(["Região", "Prato", "Ingrediente canônico", "Categoria", "Qtd/porção (g ou ml)", "Qtd cozida/porção (g)", "Obs"])
-    for (regiao, prato, base), qtd in sorted(consol.items()):
+    ws_f.append(["Região", "Prato", "Ingrediente canônico", "Categoria",
+                 "Compra/porção (g ou ml)", "PB receita (g)", "PC rendimento (g)", "Meta no prato (g)", "Obs"])
+    for (regiao, prato, base), qtd in sorted(consol["qtd_g"].items()):
         tb = TRIPE.get(base, {})
         if tb.get("unidade") == "fixo":
             obs = f"preço fixo R${tb.get('custo_fixo', 0):.2f}"
@@ -226,20 +251,22 @@ def main():
             obs = "SEM COTAÇÃO — revisar"
         else:
             obs = ""
+        k = (regiao, prato, base)
         ws_f.append([regiao, prato, base, BASE.get(base, "?"), round(qtd, 1),
-                     round(consol_coz[(regiao, prato, base)], 1), obs])
+                     round(consol["qtd_pb_g"][k], 1), round(consol["qtd_cozida_g"][k], 1),
+                     round(consol["qtd_meta_g"][k], 1), obs])
     estilizar_header(ws_f)
 
     # ── Aba 0b: Pratos (resumo) ──────────────────────────────────────────────
-    por_prato = defaultdict(lambda: {"ing": 0, "peso": 0.0, "peso_coz": 0.0})
-    for (regiao, prato, base), qtd in consol.items():
+    por_prato = defaultdict(lambda: {"ing": 0, "compra": 0.0, "meta": 0.0})
+    for (regiao, prato, base), qtd in consol["qtd_g"].items():
         por_prato[(regiao, prato)]["ing"] += 1
-        por_prato[(regiao, prato)]["peso"] += qtd
-        por_prato[(regiao, prato)]["peso_coz"] += consol_coz[(regiao, prato, base)]
+        por_prato[(regiao, prato)]["compra"] += qtd
+        por_prato[(regiao, prato)]["meta"] += consol["qtd_meta_g"][(regiao, prato, base)]
     ws_p = wb.create_sheet("Pratos (resumo)", 1)
-    ws_p.append(["Região", "Prato", "Nº ingredientes canônicos", "Peso bruto/porção (g)", "Peso pronto/porção (g)"])
+    ws_p.append(["Região", "Prato", "Nº ingredientes canônicos", "Compra/porção (g)", "Meta no prato/porção (g)"])
     for (regiao, prato), d in sorted(por_prato.items()):
-        ws_p.append([regiao, prato, d["ing"], round(d["peso"], 1), round(d["peso_coz"], 1)])
+        ws_p.append([regiao, prato, d["ing"], round(d["compra"], 1), round(d["meta"], 1)])
     estilizar_header(ws_p)
 
     # ── Aba: Scraping (proposta de tripé) ────────────────────────────────────

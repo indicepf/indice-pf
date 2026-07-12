@@ -59,22 +59,23 @@ def main():
     var2 = G.carregar_var2canon()
     linhas = G.carregar_linhas(var2)
 
-    # receitas consolidadas: (regiao, prato, base) -> qtd_g (cru) e qtd cozida
+    # receitas consolidadas: (regiao, prato, base) -> compra (qtd_g), PB, PC e meta
     from collections import defaultdict
-    consol = defaultdict(float)
-    consol_coz = defaultdict(float)
+    CAMPOS = ("qtd_g", "qtd_pb_g", "qtd_cozida_g", "qtd_meta_g")
+    consol = {c: defaultdict(float) for c in CAMPOS}
     for l in linhas:
         if not l["canon"]:
             continue
         for b, prop in G.base_de(l["canon"]):
             if b in SENTINELAS:
                 continue
-            consol[(l["regiao"], l["prato"], b)] += (l["qtd_g"] or 0) * prop
-            consol_coz[(l["regiao"], l["prato"], b)] += (l["qtd_cozida_g"] or 0) * prop
+            for c in CAMPOS:
+                consol[c][(l["regiao"], l["prato"], b)] += (l[c] or 0) * prop
 
-    bases = sorted({b for (_, _, b) in consol})
-    pratos = sorted({(r, p) for (r, p, _) in consol})
-    print(f"ingredientes={len(bases)} pratos={len(pratos)} receitas={len(consol)}")
+    chaves = consol["qtd_g"]
+    bases = sorted({b for (_, _, b) in chaves})
+    pratos = sorted({(r, p) for (r, p, _) in chaves})
+    print(f"ingredientes={len(bases)} pratos={len(pratos)} receitas={len(chaves)}")
 
     # ── 1) ingredientes ──────────────────────────────────────────────────────
     ing_rows = []
@@ -102,9 +103,11 @@ def main():
     rec_rows = [{
         "prato_id": prato_id[(r, p)],
         "ingrediente_id": ing_id[b],
-        "qtd_g": round(q, 1),
-        "qtd_cozida_g": round(consol_coz[(r, p, b)], 1) or None,
-    } for (r, p, b), q in consol.items()]
+        "qtd_g": round(q, 1),                                        # compra (base do custo)
+        "qtd_pb_g": round(consol["qtd_pb_g"][(r, p, b)], 1) or None,
+        "qtd_cozida_g": round(consol["qtd_cozida_g"][(r, p, b)], 1) or None,
+        "qtd_meta_g": round(consol["qtd_meta_g"][(r, p, b)], 1) or None,
+    } for (r, p, b), q in chaves.items()]
     # receitas é totalmente derivada: apaga tudo e reinsere (evita linhas órfãs
     # quando o mapeamento de um ingrediente muda — ex: des-consolidação).
     requests.delete(f"{SUPABASE_URL}/rest/v1/receitas?id=gte.0", headers=H)

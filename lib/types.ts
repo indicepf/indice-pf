@@ -15,8 +15,10 @@ export type ItemDetalhe = {
   ingrediente_id: number
   nome: string
   categoria: string | null
-  qtd_g: number
-  qtd_cozida_g: number | null   // peso após preparo (PC) — exibição, não entra no custo
+  qtd_g: number                 // COMPRA necessária (g) — base do custo (migração 36)
+  qtd_pb_g: number | null       // quantidade bruta da receita original (PB) — exibição
+  qtd_cozida_g: number | null   // rendimento do PB após preparo (PC) — exibição
+  qtd_meta_g: number | null     // meta servida no prato — exibição
   preco_g: number | null
   origem: 'online' | 'manual' | 'misto' | 'fixo' | 'sem'
   custo: number
