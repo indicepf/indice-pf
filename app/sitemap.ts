@@ -16,7 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   );
   // páginas por prato — se o banco falhar, o sitemap sai só com as estáticas
   try {
-    const { data } = await supabasePublico().from("pratos").select("id,nome");
+    const { data } = await supabasePublico().from("pratos").select("id,nome").eq("ativo", true);
     const pratos: MetadataRoute.Sitemap = (data || []).map((p) => ({
       url: `${base}/prato/${slugPrato(p.id, p.nome)}`,
       lastModified: now,

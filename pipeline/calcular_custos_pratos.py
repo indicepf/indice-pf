@@ -82,7 +82,11 @@ def main():
     # ── dados ──────────────────────────────────────────────────────────────
     ingredientes = {i["id"]: i for i in get_all("ingredientes", "id,nome,custo_fixo,preco_manual")}
     receitas     = get_all("receitas", "prato_id,ingrediente_id,qtd_g")
-    pratos       = {p["id"]: p for p in get_all("pratos", "id,regiao,nome")}
+    pratos       = {p["id"]: p for p in get_all("pratos", "id,regiao,nome,ativo")}
+    # pratos inativos (substituídos) ficam fora do custo e do índice (migração 37)
+    inativos = {pid for pid, p in pratos.items() if p.get("ativo") is False}
+    if inativos:
+        receitas = [r for r in receitas if r["prato_id"] not in inativos]
 
     # preços do snapshot atual: ingrediente_id -> R$/g
     preco_atual = {}

@@ -316,9 +316,10 @@ TRIPE = {
         "ok": ["repolho"],
         "nao": ["chucrute", "conserva"]},
     "Alface": {
+        # rúcula/escarola saíram daqui na explosão de 12/07/2026 (bases próprias)
         "busca": "alface crespa unidade", "unidade": "maco", "peso_ref_g": 300,
-        "ok": ["alface", "rúcula", "rucula", "escarola", "chicória", "chicoria"],
-        "nao": ["semente", "kit", "desidratada"]},
+        "ok": ["alface"],
+        "nao": ["semente", "kit", "desidratada", "muda"]},
     "Abóbora": {
         "busca": "abóbora cabotiá kg", "unidade": "g",
         "ok": ["abóbora", "abobora", "moranga", "jerimum", "cabotiá"],
@@ -484,6 +485,106 @@ TRIPE = {
         "busca": "caldo de carne tablete 114g", "unidade": "g",
         "ok": ["caldo", "carne"],
         "nao": ["galinha", "legumes", "camarão", "costela", "zero sal"]},
+
+    # ── Explosão das consolidações (12/07/2026) ─────────────────────────────
+    # Bases que estavam fundidas voltam a ter cotação própria. Palavras nao
+    # cruzadas entre os pares separam os resultados (calabresa × toscana,
+    # charque × carne de sol, fubá × flocão...). Complementam as palavras
+    # negativas GLOBAIS do scraper (gourmet, premium, kit, cesta...).
+    "Acém/Músculo bovino": {
+        "busca": "acém bovino kg", "unidade": "g",
+        "ok": ["acém", "acem", "músculo", "musculo", "paleta"],
+        "nao": ["temperado", "moída", "moida", "hambúrguer", "almôndega", "caldo", "tablete", "defumado"]},
+    "Peito bovino": {
+        "busca": "peito bovino kg", "unidade": "g",
+        "ok": ["peito"],
+        "nao": ["frango", "suíno", "suino", "temperado", "defumado", "caldo"]},
+    "Matambre bovino": {
+        "busca": "matambre bovino kg", "unidade": "g",
+        "ok": ["matambre"],
+        "nao": ["recheado", "temperado", "enrolado"]},
+    "Carne seca/Charque": {
+        "busca": "charque carne seca kg", "unidade": "g",
+        "ok": ["charque", "carne seca", "jerked"],
+        "nao": ["carne de sol", "caldo", "tablete", "temperado pronto", "desfiada pronta"]},
+    "Carne de sol": {
+        "busca": "carne de sol kg", "unidade": "g",
+        "ok": ["carne de sol"],
+        "nao": ["charque", "carne seca", "caldo", "tablete", "desfiada pronta"]},
+    "Linguiça calabresa": {
+        "busca": "linguiça calabresa kg", "unidade": "g",
+        "ok": ["calabresa"],
+        "nao": ["toscana", "pizza", "sabor calabresa", "snack", "instantâneo", "instantaneo"]},
+    "Linguiça defumada": {
+        "busca": "linguiça defumada kg", "unidade": "g",
+        "ok": ["defumada", "defumado", "paio"],
+        "nao": ["toscana", "frescal", "sabor", "snack"]},
+    "Linguiça toscana (suína)": {
+        "busca": "linguiça toscana kg", "unidade": "g",
+        "ok": ["toscana"],
+        "nao": ["calabresa", "defumada", "sabor"]},
+    "Lombo suíno": {
+        "busca": "lombo suíno kg", "unidade": "g",
+        "ok": ["lombo"],
+        "nao": ["canadense", "defumado", "temperado", "atum", "bacalhau"]},
+    "Pernil suíno": {
+        "busca": "pernil suíno kg", "unidade": "g",
+        "ok": ["pernil"],
+        "nao": ["temperado", "defumado", "tender", "frango"]},
+    "Panceta/Barriga suína": {
+        "busca": "panceta suína kg", "unidade": "g",
+        "ok": ["panceta", "barriga"],
+        "nao": ["bacon", "defumada", "defumado", "frango"]},
+    "Bacon": {
+        "busca": "bacon defumado kg", "unidade": "g",
+        "ok": ["bacon"],
+        "nao": ["sabor", "aroma", "snack", "batata", "amendoim", "ração", "racao"]},
+    "Queijo prato": {
+        "busca": "queijo prato kg", "unidade": "g",
+        "ok": ["queijo prato"],
+        "nao": ["mussarela", "muçarela", "ralado", "sabor"]},
+    "Queijo mussarela": {
+        "busca": "queijo mussarela kg", "unidade": "g",
+        "ok": ["mussarela", "muçarela", "mozarela"],
+        "nao": ["búfala", "bufala", "ralado", "queijo prato", "sabor"]},
+    "Fubá de milho": {
+        "busca": "fubá mimoso kg", "unidade": "g",
+        "ok": ["fubá", "fuba"],
+        "nao": ["flocão", "flocao", "cuscuz", "canjica", "pipoca"]},
+    "Flocão de milho (cuscuz)": {
+        "busca": "flocão de milho cuscuz", "unidade": "g",
+        "ok": ["flocão", "flocao", "flocos de milho"],
+        "nao": ["fubá", "fuba", "canjica", "pipoca", "aveia"]},
+    "Extrato de tomate": {
+        "busca": "extrato de tomate", "unidade": "g",
+        "ok": ["extrato"],
+        "nao": ["molho", "ketchup", "polpa"]},
+    "Molho de tomate (sachê)": {
+        "busca": "molho de tomate sachê", "unidade": "g",
+        "ok": ["molho de tomate"],
+        "nao": ["extrato", "ketchup", "pizza", "pimenta"]},
+    "Rúcula": {
+        "busca": "rúcula maço", "unidade": "maco", "peso_ref_g": 100,
+        "ok": ["rúcula", "rucula"],
+        "nao": ["semente", "kit", "desidratada", "muda"]},
+    "Escarola/Chicória": {
+        "busca": "escarola maço", "unidade": "maco", "peso_ref_g": 250,
+        "ok": ["escarola", "chicória", "chicoria"],
+        "nao": ["semente", "kit", "desidratada", "muda"]},
+    "Pimenta do reino": {
+        "busca": "pimenta do reino moída", "unidade": "g",
+        "ok": ["pimenta do reino", "reino"],
+        "nao": ["moedor", "kit", "dedo de moça", "calabresa", "biquinho"]},
+    "Pimenta (fresca)": {
+        "busca": "pimenta dedo de moça kg", "unidade": "g",
+        "ok": ["pimenta"],
+        "nao": ["reino", "moedor", "molho", "kit", "semente", "calabresa seca", "biquinho em conserva"]},
+
+    # ── Novo ingrediente (Dobradinha à Paulista, 12/07/2026) ─────────────────
+    "Feijão branco": {
+        "busca": "feijão branco kg", "unidade": "g",
+        "ok": ["feijão branco", "feijao branco"],
+        "nao": ["preto", "carioca", "fradinho", "corda", "verde", "lata", "temperado"]},
 
     # ── Preço fixo (não-scrapeável) ─────────────────────────────────────────
     # unidade='fixo' → o scraper PULA (não gasta SerpAPI); o custo por prato

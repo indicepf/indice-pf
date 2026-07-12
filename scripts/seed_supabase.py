@@ -22,7 +22,7 @@ except ImportError:
     pass
 
 sys.path.insert(0, os.path.dirname(__file__))
-from mapa_canonico import BASE, consolidar, PRATO_ALIAS  # noqa
+from mapa_canonico import BASE, consolidar, PRATO_ALIAS, PRATOS_INATIVOS  # noqa
 from tripe_scraping import TRIPE
 import gerar_tabela_canonica as G
 
@@ -64,9 +64,7 @@ def main():
     CAMPOS = ("qtd_g", "qtd_pb_g", "qtd_cozida_g", "qtd_meta_g")
     consol = {c: defaultdict(float) for c in CAMPOS}
     for l in linhas:
-        if not l["canon"]:
-            continue
-        for b, prop in G.base_de(l["canon"]):
+        for b, prop in G.bases_da_linha(l):
             if b in SENTINELAS:
                 continue
             for c in CAMPOS:
@@ -89,10 +87,23 @@ def main():
             "palavras_ok": "|".join(t["ok"]), "palavras_nao": "|".join(t["nao"]),
             "ativo": True})
     upsert("ingredientes", ing_rows, "nome")
+    # desativa ingredientes que saíram do catálogo (ex.: bases consolidadas
+    # desfeitas na explosão) — o scraper só coleta ativo=true
+    todos = get_all("ingredientes", "id,nome,ativo")
+    fora = [x for x in todos if x["nome"] not in set(bases) and x.get("ativo")]
+    for x in fora:
+        requests.patch(f"{SUPABASE_URL}/rest/v1/ingredientes?id=eq.{x['id']}",
+                       headers={**H, "Prefer": "return=minimal"}, json={"ativo": False})
+    if fora:
+        print(f"  ✓ ingredientes desativados (fora do catálogo): {[x['nome'] for x in fora]}")
     print("  ✓ ingredientes")
 
     # ── 2) pratos ──────────────────────────────────────────────────────────
-    upsert("pratos", [{"regiao": r, "nome": p} for (r, p) in pratos], "regiao,nome")
+    upsert("pratos", [{"regiao": r, "nome": p, "ativo": True} for (r, p) in pratos], "regiao,nome")
+    # pratos substituídos ficam no banco com ativo=false (fora de tudo)
+    for r, p in PRATOS_INATIVOS:
+        requests.patch(f"{SUPABASE_URL}/rest/v1/pratos?regiao=eq.{requests.utils.quote(r)}&nome=eq.{requests.utils.quote(p)}",
+                       headers={**H, "Prefer": "return=minimal"}, json={"ativo": False})
     print("  ✓ pratos")
 
     # mapeia nomes -> ids

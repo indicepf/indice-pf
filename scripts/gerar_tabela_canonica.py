@@ -13,7 +13,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 
 sys.path.insert(0, os.path.dirname(__file__))
-from mapa_canonico import BASE, ATOMICO, COMPOSTO, REVISAR, consolidar, PRATO_ALIAS
+from mapa_canonico import BASE, ATOMICO, COMPOSTO, REVISAR, consolidar, PRATO_ALIAS, RECEITAS_EXTRA
 from tripe_scraping import TRIPE
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -74,7 +74,22 @@ def carregar_linhas(var2canon):
                 "qtd_meta_g": meta,       # meta servida no prato
                 "qtd_g": compra,          # COMPRA necessária — base do custo em todo o app
             })
+    # receitas extras (pratos fora da planilha original) — já em nível de base final
+    for regiao, prato, base, pb, pc in RECEITAS_EXTRA:
+        meta, compra = meta_e_compra(f"{pb}g", pb, pc)
+        linhas.append({
+            "regiao": regiao, "prato": prato, "ingrediente_raw": base,
+            "canon": None, "base_direta": base, "qtd_txt": f"{pb}g",
+            "qtd_pb_g": pb, "qtd_cozida_g": pc, "qtd_meta_g": meta, "qtd_g": compra,
+        })
     return linhas
+
+
+def bases_da_linha(l):
+    """Bases finais de uma linha: direta (receita extra) ou via mapa canônico."""
+    if l.get("base_direta"):
+        return [(l["base_direta"], 1.0)]
+    return base_de(l["canon"]) if l["canon"] else []
 
 
 def meta_e_compra(pb_txt, pb, pc):
@@ -164,9 +179,7 @@ def main():
     # conta uso de cada base nas receitas decompostas
     uso_linhas, uso_pratos = {}, {}
     for l in linhas:
-        if not l["canon"]:
-            continue
-        for b, _ in base_de(l["canon"]):
+        for b, _ in bases_da_linha(l):
             uso_linhas[b] = uso_linhas.get(b, 0) + 1
             uso_pratos.setdefault(b, set()).add((l["regiao"], l["prato"]))
     for base in sorted(uso_linhas):
@@ -232,9 +245,7 @@ def main():
     CAMPOS = ("qtd_g", "qtd_pb_g", "qtd_cozida_g", "qtd_meta_g")
     consol = {c: defaultdict(float) for c in CAMPOS}
     for l in linhas:
-        if not l["canon"]:
-            continue
-        for b, prop in base_de(l["canon"]):
+        for b, prop in bases_da_linha(l):
             if b == "Água/Subproduto (sem custo)":
                 continue
             for c in CAMPOS:
