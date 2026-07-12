@@ -103,44 +103,42 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
           {!itens ? (
             <p className="text-sm text-dim">Carregando composição…</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="tbl-mk">
-                <thead>
-                  <tr>
-                    <th>Ingrediente</th>
-                    <th style={{ textAlign: 'right' }} title="Quantidade bruta da receita original (peso cru)">Receita (PB)</th>
-                    <th style={{ textAlign: 'right' }} title="Quanto o PB rende depois do preparo (peso cozido)">Rende (PC)</th>
-                    <th style={{ textAlign: 'right' }} title="Quantidade desejada servida no prato">Meta no prato</th>
-                    <th style={{ textAlign: 'right' }} title="Quanto comprar (cru) para servir a meta — base do custo">Compra</th>
-                    <th style={{ textAlign: 'right' }}>Custo</th>
-                    <th></th>
+            <table className="tbl-mk compact">
+              <thead>
+                <tr>
+                  <th>Ingrediente</th>
+                  <th className="max-sm:hidden" style={{ textAlign: 'right' }} title="Quantidade bruta da receita original (peso cru)">PB (g)</th>
+                  <th className="max-sm:hidden" style={{ textAlign: 'right' }} title="Quanto o PB rende depois do preparo (peso cozido)">PC (g)</th>
+                  <th style={{ textAlign: 'right' }} title="Quantidade desejada servida no prato">Meta (g)</th>
+                  <th style={{ textAlign: 'right' }} title="Quanto comprar (cru) para servir a meta — base do custo">Compra (g)</th>
+                  <th style={{ textAlign: 'right' }}>Custo</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map(i => (
+                  <tr key={i.ingrediente_id}>
+                    <td>{i.nome}
+                      {i.origem === 'manual' && <Etq t="manual" />}
+                      {i.origem === 'misto' && <Etq t="manual+online" />}
+                      {i.origem === 'fixo' && <Etq t="fixo" />}
+                      {i.origem === 'sem' && <Etq t="sem preço" />}
+                    </td>
+                    <td className="max-sm:hidden text-right text-dim tnum">{i.qtd_pb_g ?? '—'}</td>
+                    <td className="max-sm:hidden text-right text-dim tnum">{i.qtd_cozida_g ?? '—'}</td>
+                    <td className="text-right text-dim tnum">{i.qtd_meta_g ?? '—'}</td>
+                    <td className="text-right tnum font-medium">{i.qtd_g}</td>
+                    <td className="text-right tnum">{brl(i.custo * f)}</td>
+                    <td className="text-right whitespace-nowrap">
+                      {(i.origem === 'online' || i.origem === 'manual' || i.origem === 'misto') && (
+                        <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id, origem: i.origem })}
+                          className="text-xs text-accent hover:underline cursor-pointer">fontes</button>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {itens.map(i => (
-                    <tr key={i.ingrediente_id} style={{ cursor: 'default' }}>
-                      <td>{i.nome}
-                        {i.origem === 'manual' && <Etq t="manual" />}
-                        {i.origem === 'misto' && <Etq t="manual+online" />}
-                        {i.origem === 'fixo' && <Etq t="fixo" />}
-                        {i.origem === 'sem' && <Etq t="sem preço" />}
-                      </td>
-                      <td className="text-right text-dim tnum">{i.qtd_pb_g ? `${i.qtd_pb_g} g` : '—'}</td>
-                      <td className="text-right text-dim tnum">{i.qtd_cozida_g ? `${i.qtd_cozida_g} g` : '—'}</td>
-                      <td className="text-right text-dim tnum">{i.qtd_meta_g ? `${i.qtd_meta_g} g` : '—'}</td>
-                      <td className="text-right tnum font-medium">{i.qtd_g} g</td>
-                      <td className="text-right tnum">{brl(i.custo * f)}</td>
-                      <td className="text-right whitespace-nowrap">
-                        {(i.origem === 'online' || i.origem === 'manual' || i.origem === 'misto') && (
-                          <button onClick={() => setFonteAberta({ nome: i.nome, id: i.ingrediente_id, origem: i.origem })}
-                            className="text-xs text-accent hover:underline cursor-pointer">fontes</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           )}
 
           {itens && pesoServido > 0 && (
@@ -150,9 +148,10 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
           )}
 
           <p className="text-xs text-dim leading-relaxed mt-4 border border-border rounded-[var(--r-sm)] bg-surface-2 p-3">
-            O custo é preço de varejo × <b>Compra</b>: quanto se compra cru para servir a <b>Meta no
-            prato</b>, corrigido pelo rendimento do preparo (carnes encolhem ao cozinhar; arroz e
-            feijão expandem, então a compra é menor que a porção servida).
+            <b>PB</b> = quantidade bruta da receita (cru) · <b>PC</b> = quanto o PB rende após o preparo ·
+            <b> Meta</b> = porção desejada no prato · <b>Compra</b> = quanto comprar cru para servir a meta.
+            O custo é preço de varejo × Compra: carnes encolhem ao cozinhar (compra maior que a meta);
+            arroz e feijão expandem (compra menor).
           </p>
         </div>
       </div>
