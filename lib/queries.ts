@@ -1148,13 +1148,21 @@ export type ProdutoRegiao = {
   id: number; nome: string; label: string | null
   online: number | null
   campo: Record<string, { valor: number; n: number }>
+  fc: number   // rendimento mediano do preparo (PB/PC): R$/kg no prato = R$/kg cru × fc
 }
 export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoRegiao[]> {
-  const [precos, ingsQ, contribs] = await Promise.all([
+  const [precos, ingsQ, contribs, receitas] = await Promise.all([
     supabase.from('precos').select('ingrediente_id,nome_ingrediente,mediana_exibicao,label').eq('snapshot_id', snapshotId),
     supabase.from('ingredientes').select('id,unidade,peso_ref_g'),
     fetchAll(() => supabase.from('contribuicoes').select('ingrediente_id,preco,peso_g,regiao,uf').eq('status', 'aprovada')),
+    fetchAll(() => supabase.from('receitas').select('ingrediente_id,qtd_pb_g,qtd_cozida_g').order('id')),
   ])
+  // fator de correção mediano por ingrediente (PB/PC nas receitas que o usam)
+  const fcAgg: Record<number, number[]> = {}
+  ;(receitas as any[]).forEach(r => {
+    const pb = Number(r.qtd_pb_g), pc = Number(r.qtd_cozida_g)
+    if (pb > 0 && pc > 0) (fcAgg[r.ingrediente_id] ||= []).push(pb / pc)
+  })
   const ing = new Map(((ingsQ.data || []) as any[]).map(i => [i.id, i]))
   const porIngReg: Record<string, number[]> = {}
   ;(contribs as any[]).forEach(c => {
@@ -1178,8 +1186,44 @@ export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoReg
     return {
       id: p.ingrediente_id, nome: p.nome_ingrediente, label: p.label,
       online: p.mediana_exibicao != null ? Number(p.mediana_exibicao) : null, campo,
+      fc: fcAgg[p.ingrediente_id]?.length ? mediana(fcAgg[p.ingrediente_id]) : 1,
     }
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+}
+
+// Calculadora de PF (aba do Painel): ingredientes ativos com preço da última
+// coleta (blend com manual quando há) e fator de rendimento mediano — o
+// usuário informa a porção SERVIDA e a calculadora corrige pela compra,
+// mesma metodologia do índice. Sem histórico, só leitura.
+export type ItemCalc = { id: number; nome: string; categoria: string | null; preco_g: number; fc: number }
+export async function getCalculadora(): Promise<ItemCalc[]> {
+  const novos = await getSnapshotsNovos()
+  if (!novos.length) return []
+  const [{ data: precos }, { data: ings }, receitas] = await Promise.all([
+    supabase.from('precos').select('ingrediente_id,mediana_normalizada')
+      .eq('snapshot_id', novos[0].id).not('mediana_normalizada', 'is', null),
+    supabase.from('ingredientes').select('id,nome,categoria,preco_manual,custo_fixo').eq('ativo', true),
+    fetchAll(() => supabase.from('receitas').select('ingrediente_id,qtd_pb_g,qtd_cozida_g').order('id')),
+  ])
+  const precoMap: Record<number, number> = {}
+  ;(precos || []).forEach((p: any) => { precoMap[p.ingrediente_id] = Number(p.mediana_normalizada) })
+  const fcAgg: Record<number, number[]> = {}
+  ;(receitas as any[]).forEach(r => {
+    const pb = Number(r.qtd_pb_g), pc = Number(r.qtd_cozida_g)
+    if (pb > 0 && pc > 0) (fcAgg[r.ingrediente_id] ||= []).push(pb / pc)
+  })
+  return ((ings || []) as any[])
+    .filter(i => i.custo_fixo == null)   // itens de custo fixo não têm preço/g
+    .map(i => {
+      const o = precoMap[i.id]
+      const m = i.preco_manual != null ? Number(i.preco_manual) / 1000 : null
+      const preco_g = o != null && m != null ? (o + m) / 2 : (o ?? m)
+      if (preco_g == null) return null
+      return { id: i.id, nome: i.nome as string, categoria: i.categoria ?? null, preco_g,
+               fc: fcAgg[i.id]?.length ? mediana(fcAgg[i.id]) : 1 }
+    })
+    .filter((x): x is ItemCalc => x != null)
+    .sort((a, b) => a.nome.localeCompare(b.nome))
 }
 
 // pratos que usam um ingrediente (modal da tabela produtos × região)

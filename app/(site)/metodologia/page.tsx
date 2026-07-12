@@ -48,7 +48,9 @@ export default function MetodologiaPage() {
         <p className="hint">Do preço do ingrediente ao custo do prato</p>
         <ol className="list-decimal pl-5 space-y-2 text-sm" style={{ color: 'var(--ink-2)', lineHeight: 1.7 }}>
           <li>Cada ingrediente recebe um preço por grama (R$/g) a partir das fontes acima — o valor oficial é a mediana das cotações, com filtros estatísticos de outliers.</li>
-          <li>O custo de um prato é a soma de <b>preço × quantidade da receita</b> de cada ingrediente da porção.</li>
+          <li>O custo de um prato é a soma de <b>preço × quantidade de compra</b> de cada ingrediente —
+            a quantidade crua que precisa ser comprada para servir a porção-meta no prato, corrigida pelo
+            rendimento do preparo (carnes encolhem ao cozinhar; arroz e feijão rendem mais que o peso seco).</li>
           <li>O <b>índice é a mediana dos custos dos 100 pratos</b> em cada coleta. Os índices regionais usam a mediana dos 20 pratos da região.</li>
           <li>Os níveis <b>Mercado (−10%)</b> e <b>Atacarejo (−22%)</b> são estimativas sobre o preço online, em calibração contínua com os dados de campo.</li>
         </ol>

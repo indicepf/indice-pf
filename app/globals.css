@@ -376,6 +376,20 @@ body {
 .crumbs .current{color:var(--ink);font-weight:650}
 
 /* modal central do mockup + stats do drill */
+/* tooltip dos gráficos (Recharts) no padrão do site — cobre todos os charts */
+.recharts-default-tooltip{
+  font-family:var(--font-sans),system-ui,sans-serif !important;
+  font-size:12.5px !important;
+  border:1px solid var(--border-2) !important;
+  border-radius:var(--r-sm) !important;
+  box-shadow:var(--shadow-lg) !important;
+  padding:9px 12px !important;
+  background:var(--surface) !important;
+}
+.recharts-tooltip-label{color:var(--ink) !important;font-weight:700;margin-bottom:3px !important}
+.recharts-tooltip-item-list li{padding:1.5px 0 !important;font-weight:600}
+.recharts-tooltip-item-name,.recharts-tooltip-item-separator{color:var(--ink-2) !important;font-weight:500}
+
 /* skeleton de carregamento (shimmer) */
 .skel{border-radius:var(--r-sm);background:linear-gradient(90deg,var(--surface-3) 25%,var(--surface-2) 42%,var(--surface-3) 60%);background-size:220% 100%;animation:skel 1.3s ease-in-out infinite}
 @keyframes skel{from{background-position:130% 0}to{background-position:-90% 0}}
