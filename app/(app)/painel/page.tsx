@@ -5,8 +5,7 @@ import Link from 'next/link'
 import { useAuth } from '@/app/useAuth'
 import { getMinhasContribuicoes, getRecompensa, comRetry } from '@/lib/queries'
 import { brl, SAQUE_MINIMO } from '@/lib/format'
-import { Card, Tabs } from '@/components/ui'
-import Calculadora from './Calculadora'
+import { Card } from '@/components/ui'
 import type { Contribuicao } from '@/lib/types'
 
 export default function PainelPage() {
@@ -14,7 +13,6 @@ export default function PainelPage() {
   const [contribs, setContribs] = useState<Contribuicao[] | null>(null)
   const [rec, setRec] = useState<{ aprovadas: number; ganho: number; disponivel: number } | null>(null)
   const [erro, setErro] = useState(false)
-  const [aba, setAba] = useState<'inicio' | 'calculadora'>('inicio')
 
   const carregar = useCallback((uid: string) => {
     setErro(false)
@@ -37,14 +35,6 @@ export default function PainelPage() {
         Envie fotos de preços de mercado — cada contribuição aprovada rende recompensa via PIX.
       </p>
 
-      <Tabs className="mt-5"
-        tabs={[['inicio', 'Visão geral'], ['calculadora', 'Calculadora de PF']] as const}
-        active={aba} onChange={setAba} />
-
-      {aba === 'calculadora' ? (
-        <div className="mt-6"><Calculadora /></div>
-      ) : (
-      <>
       {erro && (
         <div className="mt-4 border border-danger/40 bg-danger-bg text-sm rounded-[var(--r-sm)] px-4 py-3 flex items-center justify-between gap-3">
           <span>Não foi possível carregar seus dados.</span>
@@ -70,7 +60,13 @@ export default function PainelPage() {
         </Card>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-4 mt-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+        <Link href="/calculadora" className="block">
+          <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
+            <p className="font-medium text-sm">Calculadora de PF</p>
+            <p className="text-xs text-dim mt-1">Monte seu prato e veja quanto custa produzi-lo hoje.</p>
+          </Card>
+        </Link>
         <Link href="/contribuir" className="block">
           <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
             <p className="font-medium text-sm">Enviar preços</p>
@@ -90,8 +86,6 @@ export default function PainelPage() {
           </Card>
         </Link>
       </div>
-      </>
-      )}
     </main>
   )
 }

@@ -226,7 +226,21 @@ const CAT_GRUPO: Record<string, string> = {
   'Tempero/Erva': 'Temperos', 'Condimento/Molho': 'Temperos', 'Líquido regional': 'Temperos',
   'Gordura/Óleo': 'Gordura/Laticínio', 'Laticínio': 'Gordura/Laticínio',
 }
-const grupoDe = (cat: string | null | undefined) => (cat && CAT_GRUPO[cat]) || 'Outro'
+export const grupoDe = (cat: string | null | undefined) => (cat && CAT_GRUPO[cat]) || 'Outro'
+
+// fator de rendimento mediano por ingrediente (PB/PC das receitas que o usam):
+// R$/kg no prato = R$/kg cru × fator. Usado nos toggles cru × cozido.
+export async function getFatoresRendimento(): Promise<Record<number, number>> {
+  const receitas = await fetchAll(() => supabase.from('receitas').select('ingrediente_id,qtd_pb_g,qtd_cozida_g').order('id'))
+  const agg: Record<number, number[]> = {}
+  ;(receitas as any[]).forEach(r => {
+    const pb = Number(r.qtd_pb_g), pc = Number(r.qtd_cozida_g)
+    if (pb > 0 && pc > 0) (agg[r.ingrediente_id] ||= []).push(pb / pc)
+  })
+  const out: Record<number, number> = {}
+  for (const k of Object.keys(agg)) out[+k] = mediana(agg[+k])
+  return out
+}
 
 // Série do índice ao longo das coletas, por fonte (blend / online / manual). Recalcula
 // o custo de cada prato em cada snapshot do modelo novo, sob cada premissa de fonte:
@@ -235,19 +249,23 @@ const grupoDe = (cat: string | null | undefined) => (cat && CAT_GRUPO[cat]) || '
 //   manual = manual (janela ±10d) preferido (cai p/ online/fixo onde não há manual).
 export async function getEvolucao(): Promise<Evolucao> {
   const [cp, snaps, receitas, ingRows, precosRows, manRows, pratosRows] = await Promise.all([
-    supabase.from('custos_pratos').select('snapshot_id'),
+    // fetchAll: custos_pratos passa de 1000 linhas — sem paginação os snapshots
+    // recentes somem e TODAS as abas do Histórico ficam em branco
+    fetchAll(() => supabase.from('custos_pratos').select('snapshot_id').order('id')),
     supabase.from('snapshots').select('id,data').gte('data', CORTE_COLETA).order('data', { ascending: true }),
     fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
     supabase.from('ingredientes').select('id,custo_fixo,preco_manual,categoria'),
     fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada,media_exibicao,desvio_padrao').order('id')),
     fetchAll(() => supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual,criado_em').order('id')),
-    supabase.from('pratos').select('id,nome,regiao'),
+    supabase.from('pratos').select('id,nome,regiao,ativo'),
   ])
-  const novos = new Set(((cp.data || []) as any[]).map(r => r.snapshot_id))
+  const novos = new Set((cp as any[]).map(r => r.snapshot_id))
   const snapList = ((snaps.data || []) as any[]).filter(s => novos.has(s.id))   // só modelo novo, cronológico
   const ing = new Map<number, any>(); ((ingRows.data || []) as any[]).forEach(i => ing.set(i.id, i))
+  // pratos inativos (substituídos) ficam fora do Histórico inteiro
+  const ativos = new Set(((pratosRows.data || []) as any[]).filter(p => p.ativo !== false).map(p => p.id))
   const recPorPrato: Record<number, { ing: number; qtd: number }[]> = {}
-  ;(receitas as any[]).forEach(r => { (recPorPrato[r.prato_id] ||= []).push({ ing: r.ingrediente_id, qtd: Number(r.qtd_g) }) })
+  ;(receitas as any[]).forEach(r => { if (ativos.has(r.prato_id)) (recPorPrato[r.prato_id] ||= []).push({ ing: r.ingrediente_id, qtd: Number(r.qtd_g) }) })
   const precoPorSnap: Record<number, Record<number, number>> = {}
   const cvIngPorSnap: Record<number, Record<number, number>> = {}   // CV (±DP/média) por ingrediente por coleta
   ;(precosRows as any[]).forEach(p => {
@@ -330,7 +348,8 @@ export async function getEvolucao(): Promise<Evolucao> {
     const cvVals = Object.values(cvIngThis)
     cvLojas.push({ data: snap.data, cv: cvVals.length ? cvVals.reduce((a, b) => a + b, 0) / cvVals.length : 0 })
   }
-  const pratos = ((pratosRows.data || []) as any[]).map(p => ({ id: p.id, nome: p.nome, regiao: p.regiao }))
+  const pratos = ((pratosRows.data || []) as any[]).filter(p => p.ativo !== false)
+    .map(p => ({ id: p.id, nome: p.nome, regiao: p.regiao }))
   return { serie, pratos, porPrato, composicao, porPratoComp, cvLojas, porPratoCV }
 }
 
@@ -376,7 +395,7 @@ export async function getCalibracao(ini?: string, fim?: string): Promise<Calibra
     fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
     supabase.from('ingredientes').select('id,nome,unidade,peso_ref_g,custo_fixo,preco_manual'),
     fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada').order('id')),
-    supabase.from('pratos').select('id,nome,regiao'),
+    supabase.from('pratos').select('id,nome,regiao').eq('ativo', true),
     fetchAll(() => supabase.from('contribuicoes').select('user_id,ingrediente_id,preco,peso_g,tipo_loja,regiao,uf,cidade,criado_em').eq('status', 'aprovada')),
   ])
   const snapAll = ((snaps.data || []) as any[])
@@ -1107,7 +1126,7 @@ export async function getUsoPorIngrediente(): Promise<Record<number, number>> {
 export type StatsPublicas = { pratos: number; ingredientes: number; contribuicoesAprovadas: number }
 export async function getStatsPublicas(): Promise<StatsPublicas> {
   const [p, i, c] = await Promise.all([
-    supabase.from('pratos').select('id', { count: 'exact', head: true }),
+    supabase.from('pratos').select('id', { count: 'exact', head: true }).eq('ativo', true),
     supabase.from('ingredientes').select('id', { count: 'exact', head: true }).eq('ativo', true),
     supabase.from('contribuicoes').select('id', { count: 'exact', head: true }).eq('status', 'aprovada'),
   ])
@@ -1195,7 +1214,7 @@ export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoReg
 // coleta (blend com manual quando há) e fator de rendimento mediano — o
 // usuário informa a porção SERVIDA e a calculadora corrige pela compra,
 // mesma metodologia do índice. Sem histórico, só leitura.
-export type ItemCalc = { id: number; nome: string; categoria: string | null; preco_g: number; fc: number }
+export type ItemCalc = { id: number; nome: string; categoria: string | null; grupo: string; preco_g: number; fc: number }
 export async function getCalculadora(): Promise<ItemCalc[]> {
   const novos = await getSnapshotsNovos()
   if (!novos.length) return []
@@ -1219,7 +1238,7 @@ export async function getCalculadora(): Promise<ItemCalc[]> {
       const m = i.preco_manual != null ? Number(i.preco_manual) / 1000 : null
       const preco_g = o != null && m != null ? (o + m) / 2 : (o ?? m)
       if (preco_g == null) return null
-      return { id: i.id, nome: i.nome as string, categoria: i.categoria ?? null, preco_g,
+      return { id: i.id, nome: i.nome as string, categoria: i.categoria ?? null, grupo: grupoDe(i.categoria), preco_g,
                fc: fcAgg[i.id]?.length ? mediana(fcAgg[i.id]) : 1 }
     })
     .filter((x): x is ItemCalc => x != null)

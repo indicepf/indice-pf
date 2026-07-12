@@ -9,6 +9,7 @@ import Logo, { INF_PATH } from '@/components/site/Logo'
 
 const TITULOS: Record<string, string> = {
   '/painel': 'Meu painel',
+  '/calculadora': 'Calculadora de PF',
   '/contribuir': 'Enviar preços',
   '/meus-envios': 'Meus envios',
   '/configuracoes': 'Configurações',
@@ -25,6 +26,7 @@ const ico = (d: string) => (
 )
 const ICONES: Record<string, React.ReactNode> = {
   '/painel': ico('M4 20V10m6 10V4m6 16v-7m4 7H2'),
+  '/calculadora': ico('M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm1 4h8M9 12h.01M12 12h.01M15 12h.01M9 15h.01M12 15h.01M15 15h.01M9 18h.01M12 18h.01M15 18h.01'),
   '/contribuir': ico('M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zm8 8.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z'),
   '/meus-envios': ico('M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z'),
   '/plano': ico('M12 3l2.7 5.6 6.3.9-4.5 4.3 1 6.2-5.5-3-5.5 3 1-6.2L3 9.5l6.3-.9L12 3z'),
@@ -35,10 +37,10 @@ const ICONES: Record<string, React.ReactNode> = {
   '/': ico('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm-9-9h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z'),
 }
 
-// menu por papel: contribuição / assinatura / administração; Configurações
+// menu por papel: área do usuário / assinatura / administração; Configurações
 // vive no rodapé, junto do cartão do usuário (pedido de 09/07)
 const SECOES: { titulo: string; itens: readonly (readonly [string, string])[]; admin?: boolean }[] = [
-  { titulo: 'Contribuição', itens: [['/painel', 'Meu painel'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios']] },
+  { titulo: 'Minha área', itens: [['/painel', 'Meu painel'], ['/calculadora', 'Calculadora de PF'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios']] },
   { titulo: 'Assinatura', itens: [['/plano', 'Plano & assinatura']] },
   { titulo: 'Administração', admin: true, itens: [['/admin', 'Administração'], ['/evolucao', 'Histórico'], ['/contribuidores', 'Ranking']] },
 ]
