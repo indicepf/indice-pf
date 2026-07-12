@@ -242,7 +242,7 @@ export default function ConfiguracoesPage() {
           </Button>
         </div>
 
-        <div className="mt-10 border border-danger/40 rounded-[var(--r)] p-4">
+        <div className="mt-10 border border-danger/40 bg-surface rounded-[var(--r)] p-4">
           <h3 className="text-sm font-medium">Excluir conta</h3>
           <p className="text-xs text-dim mt-1 leading-relaxed">
             Apaga seu perfil, assinatura, CPF, chave PIX e foto — sem volta. Preços que você enviou

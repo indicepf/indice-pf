@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { inputBase } from '@/components/ui'
 import {
-  getSnapshotsNovos, getDetalheIngredientesRange, getAllFontes, getAllFontesManuais,
+  getSnapshotsNovos, getDetalheIngredientesRange, getAllFontes, getAllFontesManuais, getFatoresRendimento,
   type LinhaIngrediente, type FonteManual,
 } from '@/lib/queries'
 import type { Fonte } from '@/lib/types'
@@ -38,8 +38,11 @@ export default function TabelaIngredientes() {
   const [modal, setModal] = useState<{ id: number; nome: string } | null>(null)
   const [dataFontes, setDataFontes] = useState('')
   const [loading, setLoading] = useState(true)
+  // R$/kg do produto cru (como vendido) × R$/kg já preparado no prato (cru × rendimento)
+  const [kgPrato, setKgPrato] = useState(false)
+  const [fcs, setFcs] = useState<Record<number, number>>({})
 
-  useEffect(() => { getSnapshotsNovos().then(s => { setSnaps(s); if (s[0]) { setIni(s[0].data); setFim(s[0].data) } }) }, [])
+  useEffect(() => { getSnapshotsNovos().then(s => { setSnaps(s); if (s[0]) { setIni(s[0].data); setFim(s[0].data) } }); getFatoresRendimento().then(setFcs) }, [])
   useEffect(() => {
     if (!snaps.length || !fim) return
     const range = snaps.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim))
@@ -73,8 +76,6 @@ export default function TabelaIngredientes() {
     })
   }, [linhas, busca, ordCol, ordDir])
 
-  const cel = (v: number | null) => v == null ? '—' : brl(v)
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-end gap-3 flex-wrap">
@@ -94,6 +95,13 @@ export default function TabelaIngredientes() {
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="ingrediente ou categoria…" className={inputCls} />
         </label>
         {nColetas > 1 && <p className="text-xs text-dim self-end pb-2">Média de {nColetas} coletas no período</p>}
+        <div className="self-end pb-1">
+          <div className="segbar">
+            <button className={kgPrato ? '' : 'on'} onClick={() => setKgPrato(false)}>R$/kg cru</button>
+            <button className={kgPrato ? 'on' : ''} onClick={() => setKgPrato(true)}
+              title="Preço por kg já preparado no prato: cru × fator de rendimento do preparo (mediano das receitas)">R$/kg no prato</button>
+          </div>
+        </div>
         <div className="sm:ml-auto self-end pb-1">
           <BotaoExportar nome="indice-pf-ingredientes" abas={() => {
             const compilado = vis.map(l => ({
@@ -130,15 +138,17 @@ export default function TabelaIngredientes() {
             <tbody>
               {vis.map(l => {
                 const temFonte = (fontesMap[l.id]?.length || 0) > 0 || (manuaisMap[l.id]?.length || 0) > 0
+                const f = kgPrato ? (fcs[l.id] ?? 1) : 1
+                const celF = (v: number | null) => v == null ? '—' : brl(v * f)
                 return (
                   <tr key={l.id} className="border-t border-border/60">
-                    <td className="px-2 py-1.5">{l.nome} <span className="text-[0.6rem] text-dim">/{l.label}</span></td>
+                    <td className="px-2 py-1.5">{l.nome} <span className="text-[0.6rem] text-dim">/{l.label}{kgPrato ? ' no prato' : ''}</span></td>
                     <td className="px-2 py-1.5 text-dim">{l.categoria || '—'}</td>
-                    <td className="px-2 py-1.5 text-right tnum font-medium text-accent">{cel(l.mediana)}</td>
-                    <td className="px-2 py-1.5 text-right tnum text-dim">{cel(l.media)}</td>
-                    <td className="px-2 py-1.5 text-right tnum text-dim">{cel(l.min)}</td>
-                    <td className="px-2 py-1.5 text-right tnum text-dim">{cel(l.max)}</td>
-                    <td className="px-2 py-1.5 text-right tnum text-dim">{l.dp == null ? '—' : `±${brl(l.dp)}`}</td>
+                    <td className="px-2 py-1.5 text-right tnum font-medium text-accent">{celF(l.mediana)}</td>
+                    <td className="px-2 py-1.5 text-right tnum text-dim">{celF(l.media)}</td>
+                    <td className="px-2 py-1.5 text-right tnum text-dim">{celF(l.min)}</td>
+                    <td className="px-2 py-1.5 text-right tnum text-dim">{celF(l.max)}</td>
+                    <td className="px-2 py-1.5 text-right tnum text-dim">{l.dp == null ? '—' : `±${brl(l.dp * f)}`}</td>
                     <td className="px-2 py-1.5 text-right tnum text-dim">{l.n}</td>
                     <td className="px-2 py-1.5 text-right tnum">
                       {l.inflacao == null ? <span className="text-dim">—</span>
