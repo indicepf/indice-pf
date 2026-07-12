@@ -15,6 +15,8 @@ export default function TabelaProdutosRegiao({ linhas, destravada, filtroNome, o
 }) {
   const [busca, setBusca] = useState('')
   const [sort, setSort] = useState<{ col: SortCol; dir: 1 | -1 }>({ col: 'nome', dir: 1 })
+  // R$/kg do produto cru (como vendido) ou por kg JÁ NO PRATO (cru × rendimento do preparo)
+  const [kgPrato, setKgPrato] = useState(false)
 
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -47,6 +49,13 @@ export default function TabelaProdutosRegiao({ linhas, destravada, filtroNome, o
           <div className="sub">Detalhamento produto a produto — preço online nacional e campo por região</div>
         </div>
         <div className="panel-tools">
+          {destravada && (
+            <div className="segbar">
+              <button className={kgPrato ? '' : 'on'} onClick={() => setKgPrato(false)}>R$/kg cru</button>
+              <button className={kgPrato ? 'on' : ''} onClick={() => setKgPrato(true)}
+                title="Preço por kg já preparado no prato: R$/kg cru × fator de rendimento do preparo">R$/kg no prato</button>
+            </div>
+          )}
           {filtroNome && onLimparFiltro && (
             <button onClick={onLimparFiltro}
               className="text-xs bg-accent/10 text-accent border border-accent/30 rounded-full px-2.5 py-1 hover:bg-accent/20 transition cursor-pointer">
@@ -73,25 +82,27 @@ export default function TabelaProdutosRegiao({ linhas, destravada, filtroNome, o
               </tr>
             </thead>
             <tbody>
-              {visiveis.map(l => (
+              {visiveis.map(l => {
+                const f = kgPrato ? (l.fc || 1) : 1
+                return (
                 <tr key={l.id}
                   onClick={destravada && onIngrediente ? () => onIngrediente({ id: l.id, nome: l.nome }) : undefined}
                   style={destravada && onIngrediente ? undefined : { cursor: 'default' }}
                   title={destravada && onIngrediente ? 'Ver os pratos que usam este produto' : undefined}>
                   <td className="font-medium">{l.nome}</td>
                   <td className="text-right tnum">
-                    {l.online != null ? `${brl(l.online)}${l.label ? `/${l.label}` : ''}` : '—'}
+                    {l.online != null ? `${brl(l.online * f)}${l.label ? `/${l.label}` : ''}` : '—'}
                   </td>
                   {REGIOES.map(r => {
                     const c = l.campo[r]
                     return (
                       <td key={r} className="text-right tnum text-dim">
-                        {c ? <span title={`${c.n} leitura${c.n === 1 ? '' : 's'} de campo`}>{brl(c.valor)}/kg</span> : '—'}
+                        {c ? <span title={`${c.n} leitura${c.n === 1 ? '' : 's'} de campo`}>{brl(c.valor * f)}/kg</span> : '—'}
                       </td>
                     )
                   })}
                 </tr>
-              ))}
+              )})}
               {!visiveis.length && (
                 <tr><td colSpan={2 + REGIOES.length} className="text-center text-dim" style={{ padding: '32px 16px' }}>Nenhum produto encontrado.</td></tr>
               )}
@@ -115,8 +126,9 @@ export default function TabelaProdutosRegiao({ linhas, destravada, filtroNome, o
         )}
       </div>
       <p className="text-xs text-faint" style={{ padding: '10px 20px 14px' }}>
-        Preços de campo em R$/kg (itens vendidos por unidade ou maço convertidos pelo peso de referência);
-        células vazias indicam região ainda sem leitura de campo para o produto.
+        {kgPrato
+          ? 'R$/kg no prato = preço do produto cru × fator de rendimento do preparo (carnes encolhem ao cozinhar, então o kg servido custa mais; arroz e feijão rendem, custa menos). Fator mediano das receitas que usam o produto.'
+          : 'Preços de campo em R$/kg (itens vendidos por unidade ou maço convertidos pelo peso de referência); células vazias indicam região ainda sem leitura de campo para o produto.'}
       </p>
     </div>
   )

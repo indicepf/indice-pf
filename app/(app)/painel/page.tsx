@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useAuth } from '@/app/useAuth'
 import { getMinhasContribuicoes, getRecompensa, comRetry } from '@/lib/queries'
 import { brl, SAQUE_MINIMO } from '@/lib/format'
-import { Card } from '@/components/ui'
+import { Card, Tabs } from '@/components/ui'
+import Calculadora from './Calculadora'
 import type { Contribuicao } from '@/lib/types'
 
 export default function PainelPage() {
@@ -13,6 +14,7 @@ export default function PainelPage() {
   const [contribs, setContribs] = useState<Contribuicao[] | null>(null)
   const [rec, setRec] = useState<{ aprovadas: number; ganho: number; disponivel: number } | null>(null)
   const [erro, setErro] = useState(false)
+  const [aba, setAba] = useState<'inicio' | 'calculadora'>('inicio')
 
   const carregar = useCallback((uid: string) => {
     setErro(false)
@@ -35,6 +37,14 @@ export default function PainelPage() {
         Envie fotos de preços de mercado — cada contribuição aprovada rende recompensa via PIX.
       </p>
 
+      <Tabs className="mt-5"
+        tabs={[['inicio', 'Visão geral'], ['calculadora', 'Calculadora de PF']] as const}
+        active={aba} onChange={setAba} />
+
+      {aba === 'calculadora' ? (
+        <div className="mt-6"><Calculadora /></div>
+      ) : (
+      <>
       {erro && (
         <div className="mt-4 border border-danger/40 bg-danger-bg text-sm rounded-[var(--r-sm)] px-4 py-3 flex items-center justify-between gap-3">
           <span>Não foi possível carregar seus dados.</span>
@@ -80,6 +90,8 @@ export default function PainelPage() {
           </Card>
         </Link>
       </div>
+      </>
+      )}
     </main>
   )
 }

@@ -23,6 +23,7 @@ import AdPopup from '@/components/ads/AdPopup'
 import ShareModal from '@/components/dashboard/ShareModal'
 import OrientPopup from '@/components/site/OrientPopup'
 import { useDialogo } from '@/components/ui/useDialogo'
+import InfoTip from '../InfoTip'
 import type { ModoKey, Snapshot, DishCost, ItemDetalhe, Fonte } from '@/lib/types'
 
 const fmtCurta = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
@@ -720,7 +721,8 @@ export default function Dashboard() {
               <div className="panel-head">
                 <div>
                   <h2>Pratos Feitos{regioes.size > 0 && <span className="premium-tag" style={{ background: 'var(--info-bg)', color: 'var(--azul)' }}>{rotuloRecorte}</span>}</h2>
-                  <div className="sub">{lista.length} pratos · {nivel.label}{snapshot ? ` · coleta de ${fmtData(snapshot.data)}` : ''}</div>
+                  <div className="sub">{lista.length} pratos · {nivel.label}{snapshot ? ` · coleta de ${fmtData(snapshot.data)}` : ''} · custo da porção servida
+                    <InfoTip w="w-72" texto="O custo é o gasto de compra para SERVIR a porção do prato: cada ingrediente entra pela quantidade crua necessária, corrigida pelo rendimento do preparo (carne encolhe ao cozinhar, arroz e feijão rendem mais). Por isso o custo difere de multiplicar o preço/kg das fontes pela porção no prato — o detalhe do prato mostra as 4 colunas (PB, PC, meta e compra)." /></div>
                 </div>
                 <div className="panel-tools">
                   {filtroIng && (
