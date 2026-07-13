@@ -135,12 +135,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Link href="/contribuir" className="btn-mk sm max-sm:hidden">Enviar preço</Link>
           </div>
         </header>
-        {/* nav mobile */}
-        <nav className="lg:hidden px-5 py-2.5 border-b border-border bg-surface flex items-center gap-3 overflow-x-auto">
+        {/* nav mobile: quebra em linhas (chips) — sem side-scroll mesmo com os
+            itens de admin; o rótulo usa a versão curta para caber mais por linha */}
+        <nav className="lg:hidden px-4 py-2 border-b border-border bg-surface flex items-center gap-1.5 flex-wrap">
           {links.map(([href, label]) => (
             <Link key={href} href={href}
-              className={`text-sm whitespace-nowrap ${pathname === href ? 'text-accent font-medium' : 'text-dim'}`}>
-              {label}
+              className={`text-[13px] whitespace-nowrap px-2.5 py-1 rounded-full border transition ${
+                pathname === href
+                  ? 'text-accent font-medium border-accent/40 bg-accent/10'
+                  : 'text-dim border-transparent hover:text-ink'}`}>
+              {label.replace('Plano & assinatura', 'Plano').replace('Calculadora de PF', 'Calculadora')}
             </Link>
           ))}
         </nav>
