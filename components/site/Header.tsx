@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import AuthControls from '@/app/Auth'
-import { useAuth } from '@/app/useAuth'
 import Logo from './Logo'
 
 const NAV = [
@@ -16,8 +15,6 @@ const NAV = [
 
 export default function Header() {
   const pathname = usePathname()
-  const { profile } = useAuth()
-  const isAdmin = !!profile?.is_admin
 
   // Mobile: o header (2 linhas, sticky) some ao rolar para baixo e volta ao
   // primeiro gesto de rolar para cima — libera a tela toda para o conteúdo,
@@ -49,8 +46,6 @@ export default function Header() {
           ))}
         </nav>
         <div className="header-right">
-          {isAdmin && <a href="/evolucao" className="text-sm text-dim hover:text-ink max-lg:hidden">Histórico</a>}
-          {isAdmin && <a href="/contribuidores" className="text-sm text-dim hover:text-ink max-lg:hidden">Ranking</a>}
           <AuthControls />
         </div>
       </div>

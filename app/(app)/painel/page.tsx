@@ -60,32 +60,35 @@ export default function PainelPage() {
         </Card>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-        <Link href="/calculadora" className="block">
-          <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
-            <p className="font-medium text-sm">Calculadora de PF</p>
-            <p className="text-xs text-dim mt-1">Monte seu prato e veja quanto custa produzi-lo hoje.</p>
-          </Card>
-        </Link>
-        <Link href="/contribuir" className="block">
-          <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
-            <p className="font-medium text-sm">Enviar preços</p>
-            <p className="text-xs text-dim mt-1">Fotografe etiquetas no mercado — uma ou várias de uma vez.</p>
-          </Card>
-        </Link>
-        <Link href="/meus-envios" className="block">
-          <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
-            <p className="font-medium text-sm">Meus envios</p>
-            <p className="text-xs text-dim mt-1">Acompanhe o status de cada contribuição.</p>
-          </Card>
-        </Link>
-        <Link href="/configuracoes" className="block">
-          <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
-            <p className="font-medium text-sm">Configurações</p>
-            <p className="text-xs text-dim mt-1">Perfil, CPF e chave PIX para saques.</p>
-          </Card>
-        </Link>
-      </div>
+      {/* acesso rápido em grupos (aprovado em 13/07): Ferramentas / Contribuição / Conta */}
+      {([
+        ['Ferramentas', [
+          ['/calculadora', 'Calculadora de PF', 'Monte seu prato e veja quanto custa produzi-lo hoje.'],
+          ['/meus-pratos', 'Meus pratos', 'Acompanhe o custo dos pratos que você salvou, coleta a coleta.'],
+        ]],
+        ['Contribuição', [
+          ['/contribuir', 'Enviar preços', 'Fotografe etiquetas no mercado — uma ou várias de uma vez.'],
+          ['/meus-envios', 'Meus envios', 'Acompanhe o status de cada contribuição.'],
+        ]],
+        ['Conta', [
+          ['/configuracoes', 'Configurações', 'Perfil, CPF e chave PIX para saques.'],
+          ['/plano', 'Plano & assinatura', 'Seu plano atual e os benefícios do Premium.'],
+        ]],
+      ] as [string, [string, string, string][]][]).map(([grupo, cards]) => (
+        <div key={grupo} className="mt-5">
+          <p className="text-[0.7rem] uppercase tracking-[0.12em] text-dim font-bold mb-2">{grupo}</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {cards.map(([href, titulo, desc]) => (
+              <Link key={href} href={href} className="block">
+                <Card className="p-4 hover:bg-surface-2 transition-colors h-full">
+                  <p className="font-medium text-sm">{titulo}</p>
+                  <p className="text-xs text-dim mt-1">{desc}</p>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ))}
     </main>
   )
 }
