@@ -299,23 +299,24 @@ export default function AdminPage() {
     ['auditoria', 'Auditoria', 'Trilha de ações administrativas.'],
     ...(souSuper ? [['super', 'Ações do super', 'Operações sensíveis: exclusões e perfis.'] as AbaInfo] : []),
   ]
-  const abas: [typeof aba, string][] = abasInfo.map(([k, l]) => [k, l])
+  // "Painel administrativo" também é uma aba; o menu de abas some quando se
+  // está nele (os cards são o menu) e o chip "Início" sempre volta para ele.
+  const abas: [typeof aba, string][] = [['inicio', 'Painel administrativo'], ...abasInfo.map(([k, l]) => [k, l] as [typeof aba, string])]
 
   return (
     <main className="min-h-screen">
       <header className="border-b border-border bg-surface">
-        <div className="max-w-6xl mx-auto px-6 pt-4 flex items-center gap-3">
-          {aba === 'inicio' ? <BotaoInicio /> : (
-            <button onClick={() => setAba('inicio')} className={chip}>
-              <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor"
-                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M10 3 L5 8 L10 13" />
-              </svg>
-              Painel administrativo
-            </button>
-          )}
+        <div className={`max-w-6xl mx-auto px-6 pt-4 flex items-center gap-3 ${aba === 'inicio' ? 'pb-4' : ''}`}>
+          <button onClick={() => setAba('inicio')} className={chip}>
+            <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor"
+              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10 3 L5 8 L10 13" />
+            </svg>
+            Início
+          </button>
           <h1 className="font-bold tracking-tight text-xl ml-1">Administração</h1>
         </div>
+        {aba !== 'inicio' && (
         <div className="max-w-6xl mx-auto px-6 mt-3">
           {/* mobile: dropdown (evita o menu correndo pro lado) */}
           <select value={aba} onChange={e => setAba(e.target.value as typeof aba)}
@@ -332,6 +333,7 @@ export default function AdminPage() {
             ))}
           </div>
         </div>
+        )}
       </header>
 
       {aba === 'inicio' ? (
