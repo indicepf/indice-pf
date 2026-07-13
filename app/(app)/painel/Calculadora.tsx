@@ -326,7 +326,9 @@ export default function Calculadora() {
         </p>
       )}
 
-      {share && <ShareModal contexto={`meu prato de ${brl(total)} na calculadora do Índice PF`} onClose={() => setShare(false)} />}
+      {share && <ShareModal contexto={`meu prato de ${brl(total)} na calculadora do Índice PF`}
+        url={`${window.location.origin}/prato-compartilhado?itens=${linhas.map(l => `${l.id}:${l.g}`).join(',')}${nivel !== 'online' ? `&nivel=${nivel}` : ''}`}
+        onClose={() => setShare(false)} />}
 
       {modalSalvar && (
         <Modal title="Salvar prato" onClose={() => setModalSalvar(false)}>
