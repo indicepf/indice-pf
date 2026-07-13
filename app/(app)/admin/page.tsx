@@ -299,32 +299,25 @@ export default function AdminPage() {
     ['auditoria', 'Auditoria', 'Trilha de ações administrativas.'],
     ...(souSuper ? [['super', 'Ações do super', 'Operações sensíveis: exclusões e perfis.'] as AbaInfo] : []),
   ]
-  // "Painel administrativo" também é uma aba; o menu de abas some quando se
-  // está nele (os cards são o menu) e o chip "Início" sempre volta para ele.
+  // "Painel administrativo" é a 1ª aba e o menu fica SEMPRE visível
+  // (redundância com os cards é proposital — pedido de 13/07). Sem chip
+  // "Início" aqui; a régua quebra linha em vez de rolar para o lado.
   const abas: [typeof aba, string][] = [['inicio', 'Painel administrativo'], ...abasInfo.map(([k, l]) => [k, l] as [typeof aba, string])]
 
   return (
     <main className="min-h-screen">
       <header className="border-b border-border bg-surface">
-        <div className={`max-w-6xl mx-auto px-6 pt-4 flex items-center gap-3 ${aba === 'inicio' ? 'pb-4' : ''}`}>
-          <button onClick={() => setAba('inicio')} className={chip}>
-            <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor"
-              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M10 3 L5 8 L10 13" />
-            </svg>
-            Início
-          </button>
-          <h1 className="font-bold tracking-tight text-xl ml-1">Administração</h1>
+        <div className="max-w-6xl mx-auto px-6 pt-4 flex items-center gap-3">
+          <h1 className="font-bold tracking-tight text-xl">Administração</h1>
         </div>
-        {aba !== 'inicio' && (
         <div className="max-w-6xl mx-auto px-6 mt-3">
           {/* mobile: dropdown (evita o menu correndo pro lado) */}
           <select value={aba} onChange={e => setAba(e.target.value as typeof aba)}
             className="sm:hidden w-full bg-surface-2 border border-border rounded-md px-3 py-2 text-sm mb-2 focus:outline-none focus:border-accent">
             {abas.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
-          {/* desktop: abas */}
-          <div className="hidden sm:flex gap-5 overflow-x-auto overflow-y-hidden">
+          {/* desktop: abas com quebra de linha — nunca side-scroll */}
+          <div className="hidden sm:flex gap-x-5 gap-y-1 flex-wrap">
             {abas.map(([k, label]) => (
               <button key={k} onClick={() => setAba(k)}
                 className={`text-sm pb-2 border-b-2 -mb-px transition whitespace-nowrap ${aba === k ? 'border-accent text-ink' : 'border-transparent text-dim hover:text-ink'}`}>
@@ -333,7 +326,6 @@ export default function AdminPage() {
             ))}
           </div>
         </div>
-        )}
       </header>
 
       {aba === 'inicio' ? (
