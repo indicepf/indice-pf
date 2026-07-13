@@ -4,11 +4,11 @@ import { useState } from 'react'
 import { useDialogo } from '@/components/ui/useDialogo'
 
 // Modal de compartilhar: copiar o link + WhatsApp + e-mail. O link carrega o
-// estado exato (deep-link) da tela que o usuário está vendo.
-export default function ShareModal({ contexto, onClose }: { contexto?: string; onClose: () => void }) {
+// estado exato (deep-link) da tela — ou uma URL explícita (ex.: prato salvo).
+export default function ShareModal({ contexto, url: urlProp, onClose }: { contexto?: string; url?: string; onClose: () => void }) {
   const [msg, setMsg] = useState('')
   const ref = useDialogo<HTMLDivElement>(onClose)
-  const url = typeof window !== 'undefined' ? window.location.href : ''
+  const url = urlProp ?? (typeof window !== 'undefined' ? window.location.href : '')
   const rotulo = contexto ?? 'o custo do prato feito no Brasil'
   const texto = `Índice PF — ${rotulo}. Comida de verdade, dados de verdade. ${url}`
   const assunto = `Índice PF — ${rotulo}`
