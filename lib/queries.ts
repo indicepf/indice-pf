@@ -1245,6 +1245,45 @@ export async function getCalculadora(): Promise<ItemCalc[]> {
     .sort((a, b) => a.nome.localeCompare(b.nome))
 }
 
+// Série de preço online por ingrediente ao longo das coletas, com carry-forward
+// (gráfico de histórico da calculadora: custo do prato do usuário por coleta).
+export type SeriePrecos = { snaps: { id: number; data: string }[]; precoG: Record<number, (number | null)[]> }
+export async function getSeriePrecos(): Promise<SeriePrecos> {
+  const snaps = [...(await getSnapshotsNovos())].reverse()   // asc
+  if (!snaps.length) return { snaps: [], precoG: {} }
+  const rows = await fetchAll(() => supabase.from('precos')
+    .select('snapshot_id,ingrediente_id,mediana_normalizada')
+    .in('snapshot_id', snaps.map(s => s.id)).not('mediana_normalizada', 'is', null).order('id'))
+  const idx = new Map(snaps.map((s, i) => [s.id, i]))
+  const bruto: Record<number, (number | null)[]> = {}
+  ;(rows as any[]).forEach(r => {
+    const i = idx.get(r.snapshot_id); if (i == null) return
+    ;(bruto[r.ingrediente_id] ||= Array(snaps.length).fill(null))[i] = Number(r.mediana_normalizada)
+  })
+  for (const k of Object.keys(bruto)) {   // carry-forward: sem cotação usa a anterior
+    const arr = bruto[+k]
+    for (let i = 1; i < arr.length; i++) if (arr[i] == null) arr[i] = arr[i - 1]
+  }
+  return { snaps, precoG: bruto }
+}
+
+// Pratos salvos da calculadora (tabela pratos_usuario, RLS por dono).
+export type PratoSalvo = { id: number; nome: string; itens: { id: number; g: number }[]; criado_em: string }
+export const LIMITE_PRATOS_FREE = 3
+export const LIMITE_PRATOS_PREMIUM = 30
+export async function getPratosSalvos(uid: string): Promise<PratoSalvo[]> {
+  const { data, error } = await supabase.from('pratos_usuario')
+    .select('id,nome,itens,criado_em').eq('user_id', uid).order('criado_em', { ascending: false })
+  if (error) return []   // tabela ainda sem migração → trata como vazio
+  return (data as any[]).map(p => ({ ...p, itens: Array.isArray(p.itens) ? p.itens : [] }))
+}
+export async function salvarPratoUsuario(uid: string, nome: string, itens: { id: number; g: number }[]) {
+  return supabase.from('pratos_usuario').insert({ user_id: uid, nome, itens })
+}
+export async function excluirPratoUsuario(id: number) {
+  return supabase.from('pratos_usuario').delete().eq('id', id)
+}
+
 // pratos que usam um ingrediente (modal da tabela produtos × região)
 export type PratoDeIngrediente = { prato_id: number; nome: string; regiao: string; qtd_g: number }
 export async function getPratosPorIngrediente(ingredienteId: number): Promise<PratoDeIngrediente[]> {

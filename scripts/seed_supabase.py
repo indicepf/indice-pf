@@ -76,17 +76,26 @@ def main():
     print(f"ingredientes={len(bases)} pratos={len(pratos)} receitas={len(chaves)}")
 
     # ── 1) ingredientes ──────────────────────────────────────────────────────
-    ing_rows = []
+    # NUNCA enviar preco_manual/custo_fixo com None no upsert: o merge-duplicates
+    # sobrescreve e APAGA os valores definidos pelo admin (foi a causa do bug de
+    # 12/07 — pratos com item manual perderam o preço e o custo desabou). As
+    # colunas só entram nas linhas em que o TRIPE define um valor.
+    ing_rows, ing_rows_fx = [], []
     for b in bases:
         t = TRIPE[b]
-        ing_rows.append({
+        row = {
             "nome": b, "categoria": BASE.get(b, ""),
             "busca": t["busca"], "unidade": t["unidade"],
-            "peso_ref_g": t.get("peso_ref_g"), "custo_fixo": t.get("custo_fixo"),
-            "preco_manual": t.get("preco_manual"),
+            "peso_ref_g": t.get("peso_ref_g"),
             "palavras_ok": "|".join(t["ok"]), "palavras_nao": "|".join(t["nao"]),
-            "ativo": True})
+            "ativo": True}
+        extra = {}
+        if t.get("custo_fixo") is not None: extra["custo_fixo"] = t["custo_fixo"]
+        if t.get("preco_manual") is not None: extra["preco_manual"] = t["preco_manual"]
+        (ing_rows_fx if extra else ing_rows).append({**row, **extra} if extra else row)
     upsert("ingredientes", ing_rows, "nome")
+    for r in ing_rows_fx:   # 1 a 1: chaves diferentes por linha
+        upsert("ingredientes", [r], "nome")
     # desativa ingredientes que saíram do catálogo (ex.: bases consolidadas
     # desfeitas na explosão) — o scraper só coleta ativo=true
     todos = get_all("ingredientes", "id,nome,ativo")
