@@ -17,6 +17,7 @@ const TITULOS: Record<string, string> = {
   '/plano': 'Plano & assinatura',
   '/evolucao': 'Histórico',
   '/contribuidores': 'Ranking',
+  '/painel-administrativo': 'Painel administrativo',
   '/admin': 'Administração',
 }
 
@@ -34,6 +35,7 @@ const ICONES: Record<string, React.ReactNode> = {
   '/plano': ico('M12 3l2.7 5.6 6.3.9-4.5 4.3 1 6.2-5.5-3-5.5 3 1-6.2L3 9.5l6.3-.9L12 3z'),
   '/configuracoes': ico('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.4 7.4 0 0 0-2-1.2L14.5 3h-5l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a7.4 7.4 0 0 0 2 1.2l.4 2.6h5l.4-2.6a7.4 7.4 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z'),
   '/admin': ico('M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z'),
+  '/painel-administrativo': ico('M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z'),
   '/evolucao': ico('M3 17l6-6 4 4 8-8m0 0h-5m5 0v5'),
   '/contribuidores': ico('M8 21h8m-4-4v4m-6-17h12v4a6 6 0 0 1-12 0V4zm-3 2h3m12 0h3v2a3 3 0 0 1-3 3m-15-5v2a3 3 0 0 0 3 3'),
   '/': ico('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm-9-9h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z'),
@@ -44,7 +46,7 @@ const ICONES: Record<string, React.ReactNode> = {
 const SECOES: { titulo: string; itens: readonly (readonly [string, string])[]; admin?: boolean }[] = [
   { titulo: 'Minha área', itens: [['/painel', 'Meu painel'], ['/calculadora', 'Calculadora de PF'], ['/meus-pratos', 'Meus pratos'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios']] },
   { titulo: 'Assinatura', itens: [['/plano', 'Plano & assinatura']] },
-  { titulo: 'Administração', admin: true, itens: [['/admin', 'Administração'], ['/evolucao', 'Histórico'], ['/contribuidores', 'Ranking']] },
+  { titulo: 'Administração', admin: true, itens: [['/painel-administrativo', 'Painel administrativo'], ['/admin', 'Administração'], ['/evolucao', 'Histórico'], ['/contribuidores', 'Ranking']] },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

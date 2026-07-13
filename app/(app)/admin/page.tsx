@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { inputBase } from '@/components/ui'
 import { useRouter } from 'next/navigation'
 import { supabase, limparSessaoLocal, usuarioDoStorage } from '@/lib/supabase'
@@ -31,14 +32,16 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 export default function AdminPage() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
-  type Aba = 'inicio' | 'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'anuncios' | 'auditoria' | 'coleta' | 'dados' | 'super'
-  const ABAS_VALIDAS: Aba[] = ['inicio', 'mod', 'aprovadas', 'painel', 'saques', 'precos', 'anuncios', 'auditoria', 'coleta', 'dados', 'super']
-  // aba persistida na URL (?aba=): sobrevive a reload e é compartilhável
+  type Aba = 'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'anuncios' | 'auditoria' | 'coleta' | 'dados' | 'super'
+  const ABAS_VALIDAS: Aba[] = ['mod', 'aprovadas', 'painel', 'saques', 'precos', 'anuncios', 'auditoria', 'coleta', 'dados', 'super']
+  // aba persistida na URL (?aba=): sobrevive a reload e é compartilhável.
+  // Default = 1ª da régua (precos; super troca para coleta ao resolver)
   const [aba, setAbaState] = useState<Aba>(() => {
-    if (typeof window === 'undefined') return 'inicio'
+    if (typeof window === 'undefined') return 'precos'
     const q = new URLSearchParams(window.location.search).get('aba') as Aba | null
-    return q && ABAS_VALIDAS.includes(q) ? q : 'inicio'
+    return q && ABAS_VALIDAS.includes(q) ? q : 'precos'
   })
+  const abaDaUrl = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('aba')
   const setAba = (a: Aba) => {
     setAbaState(a)
     const url = new URL(window.location.href); url.searchParams.set('aba', a)
@@ -94,7 +97,11 @@ export default function AdminPage() {
     ;(async () => {
       const [adminOk, superOk] = await Promise.all([isAdmin(uid), isSuper(uid)])
       if (!adminOk && !superOk) { if (!cancelado) setEstado('negado'); return }
-      if (!cancelado) setSouSuper(superOk)   // sem aba na URL, todos caem no Painel administrativo
+      if (!cancelado) {
+        setSouSuper(superOk)
+        // sem aba na URL, o super cai na 1ª aba da régua dele (Coleta)
+        if (superOk && !abaDaUrl) setAbaState('coleta')
+      }
       const [ings, itens, saques, manuais, origens] = await Promise.all([
         getIngredientes(), getContribuicoes('pendente'), getSaques('solicitado'),
         getIngredientesManuais(), getOrigensManuais(),
@@ -283,32 +290,29 @@ export default function AdminPage() {
   })
 
   // ordem por fluxo de trabalho: operação do índice → comunidade → negócio → sistema.
-  // Descrições alimentam os score cards do Painel administrativo (aba inicio).
-  type AbaInfo = [Aba, string, string]
-  const abasInfo: AbaInfo[] = [
-    ...(souSuper ? [
-      ['coleta', 'Coleta', 'Última raspagem, itens não encontrados e preço manual inline.'] as AbaInfo,
-      ['dados', 'Alertas de preço', 'Variações fortes entre coletas — revise e exclua entradas ruins.'] as AbaInfo,
-    ] : []),
-    ['precos', `Preços manuais (${manuais.length})`, 'Leituras de preço da equipe por ingrediente (R$/kg).'],
-    ['mod', `Moderação (${itens.length})`, 'Fotos de preço enviadas pelos usuários aguardando aprovação.'],
-    ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`, 'Esteira de contribuições já aprovadas — edição e exclusão.'],
-    ['saques', `Saques (${saques.length})`, 'Fila de pagamento PIX das recompensas solicitadas.'],
-    ['anuncios', 'Anúncios', 'Criativos e slots de publicidade do site.'],
-    ['painel', 'Comunidade', 'Contribuições, usuários, mapa e uso por ingrediente.'],
-    ['auditoria', 'Auditoria', 'Trilha de ações administrativas.'],
-    ...(souSuper ? [['super', 'Ações do super', 'Operações sensíveis: exclusões e perfis.'] as AbaInfo] : []),
+  // A visão geral (score cards) vive na PÁGINA /painel-administrativo — aqui
+  // ficam só as abas de trabalho, com quebra de linha (nunca side-scroll).
+  const abas: [typeof aba, string][] = [
+    ...(souSuper ? [['coleta', 'Coleta'] as [typeof aba, string], ['dados', 'Alertas de preço'] as [typeof aba, string]] : []),
+    ['precos', `Preços manuais (${manuais.length})`],
+    ['mod', `Moderação (${itens.length})`], ['aprovadas', `Aprovadas${aprLoaded ? ` (${aprTotal})` : ''}`],
+    ['saques', `Saques (${saques.length})`], ['anuncios', 'Anúncios'], ['painel', 'Comunidade'],
+    ['auditoria', 'Auditoria'],
+    ...(souSuper ? [['super', 'Ações do super'] as [typeof aba, string]] : []),
   ]
-  // "Painel administrativo" é a 1ª aba e o menu fica SEMPRE visível
-  // (redundância com os cards é proposital — pedido de 13/07). Sem chip
-  // "Início" aqui; a régua quebra linha em vez de rolar para o lado.
-  const abas: [typeof aba, string][] = [['inicio', 'Painel administrativo'], ...abasInfo.map(([k, l]) => [k, l] as [typeof aba, string])]
 
   return (
     <main className="min-h-screen">
       <header className="border-b border-border bg-surface">
         <div className="max-w-6xl mx-auto px-6 pt-4 flex items-center gap-3">
-          <h1 className="font-bold tracking-tight text-xl">Administração</h1>
+          <Link href="/painel-administrativo" className={chip}>
+            <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor"
+              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10 3 L5 8 L10 13" />
+            </svg>
+            Painel administrativo
+          </Link>
+          <h1 className="font-bold tracking-tight text-xl ml-1">Administração</h1>
         </div>
         <div className="max-w-6xl mx-auto px-6 mt-3">
           {/* mobile: dropdown (evita o menu correndo pro lado) */}
@@ -328,29 +332,7 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {aba === 'inicio' ? (
-      <div className="max-w-6xl mx-auto px-6 py-8" key="inicio">
-        <h2 className="text-lg font-bold tracking-tight">Painel administrativo</h2>
-        <p className="text-sm text-dim mt-1">Visão geral das áreas — os números são as pendências de agora.</p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-5">
-          {abasInfo.map(([k, label, desc]) => {
-            const pend = k === 'precos' ? manuais.length : k === 'mod' ? itens.length : k === 'saques' ? saques.length : null
-            return (
-              <button key={k} onClick={() => setAba(k)}
-                className="text-left border border-border rounded-[var(--r)] bg-surface p-4 hover:border-accent/60 hover:bg-surface-2 transition cursor-pointer">
-                <span className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-sm">{label.replace(/ \(\d+\)$/, '')}</span>
-                  {pend != null && (
-                    <span className={`tnum text-xs font-bold rounded-full px-2 py-0.5 ${pend > 0 ? 'bg-accent/10 text-accent' : 'bg-surface-3 text-dim'}`}>{pend}</span>
-                  )}
-                </span>
-                <span className="text-xs text-dim mt-1 block leading-relaxed">{desc}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-      ) : aba === 'mod' ? (
+      {aba === 'mod' ? (
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6" key="mod">
         {!itens.length && <p className="text-sm text-dim text-center py-10">Nenhuma contribuição pendente.</p>}
         {itens.slice(0, visiveisMod).map(c => (
