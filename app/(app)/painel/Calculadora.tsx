@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import {
-  getCalculadora, getSeriePrecos, getPratosSalvos, salvarPratoUsuario, excluirPratoUsuario,
+  getCalculadora, getSeriePrecos, getPratosSalvos, salvarPratoUsuario,
   GRUPOS_CAT, LIMITE_PRATOS_FREE, LIMITE_PRATOS_PREMIUM,
   type ItemCalc, type SeriePrecos, type PratoSalvo,
 } from '@/lib/queries'
-import { NIVEIS_PRECO, brl, fmtData } from '@/lib/format'
+import { NIVEIS_PRECO, brl } from '@/lib/format'
 import { CORES_GRUPO, NIVEL_HEX, DIM } from '@/lib/theme'
 import { useAuth } from '@/app/useAuth'
 import { Button, Input, Modal } from '@/components/ui'
@@ -24,10 +25,13 @@ const G_PADRAO: Record<string, number> = {
 }
 
 // subcategoria por afinidade dentro do grupo. Base = ingredientes.categoria;
-// Pescado é subdividido por nome (mar / água doce / frutos do mar) — a
-// categoria do banco não tem essa distinção (hardcoded consciente).
+// as divisões abaixo (pescado, miúdos, embutidos, ovinos por nome) não existem
+// como coluna no banco — regras por nome, hardcoded conscientes.
 const AGUA_DOCE = /pintado|tambaqui|pacu|tucunar|piranha|filhote|pira[íi]ba|pirarucu|lambari|tra[íi]ra|surubim|cachara/i
 const FRUTOS_MAR = /camar[ãa]o|caranguejo|sururu|marisco|lagosta|siri|polvo|lula/i
+const OVINO_CAPRINO = /bode|ovina|ovelha|cordeiro|carneiro|cabrito/i
+const MIUDOS = /f[íi]gado|bucho|dobradinha|mocot[óo]|rabada|m[íi]údos|miudos|l[íi]ngua|cora[çc][ãa]o|tripa/i
+const EMBUTIDOS = /lingui[çc]a|paio|salsicha|presunto|bacon|mortadela|salame/i
 function subgrupo(i: ItemCalc): string {
   const c = i.categoria || ''
   if (c === 'Pescado' || c === 'Proteína pescado') {
@@ -35,9 +39,18 @@ function subgrupo(i: ItemCalc): string {
     if (AGUA_DOCE.test(i.nome)) return 'Peixe de água doce'
     return 'Peixe do mar'
   }
+  if (c === 'Proteína bovina' || c === 'Proteína ovina/caprina' || c === 'Proteína caprina') {
+    if (OVINO_CAPRINO.test(i.nome)) return 'Ovinos e caprinos'
+    if (MIUDOS.test(i.nome)) return 'Miúdos bovinos'
+    return 'Bovinos'
+  }
+  if (c === 'Proteína suína') {
+    if (EMBUTIDOS.test(i.nome)) return 'Embutidos e defumados'
+    if (MIUDOS.test(i.nome)) return 'Miúdos suínos'
+    return 'Suínos'
+  }
   const MAPA: Record<string, string> = {
-    'Proteína bovina': 'Bovinos', 'Proteína suína': 'Suínos', 'Proteína aves': 'Aves',
-    'Proteína ovina/caprina': 'Ovinos/Caprinos', 'Ovos': 'Ovos',
+    'Proteína aves': 'Aves', 'Ovos': 'Ovos',
     'Grão/Cereal': 'Grãos e cereais', 'Leguminosa': 'Leguminosas',
     'Tubérculo/Raiz': 'Tubérculos e raízes',
     'Legume/Verdura': 'Legumes e verduras', 'Fruta': 'Frutas',
@@ -65,6 +78,7 @@ export default function Calculadora() {
   const [modalSalvar, setModalSalvar] = useState(false)
   const [nomePrato, setNomePrato] = useState('')
   const [msgSalvar, setMsgSalvar] = useState('')
+  const [msgOk, setMsgOk] = useState('')
 
   useEffect(() => {
     getCalculadora().then(setItens).catch(() => setItens([]))
@@ -142,6 +156,7 @@ export default function Calculadora() {
     if (error) { setMsgSalvar('Não foi possível salvar (a tabela de pratos pode não existir ainda).'); return }
     setModalSalvar(false); setNomePrato('')
     getPratosSalvos(user.id).then(setSalvos)
+    setMsgOk('Prato salvo — acompanhe em Meus pratos.')
   }
 
   if (itens === null) return <p className="text-sm text-dim">Carregando ingredientes…</p>
@@ -304,40 +319,12 @@ export default function Calculadora() {
             <Button variant="secondary" onClick={() => setLinhas([])}>Limpar</Button>
           </div>
           {msgSalvar && <p className="text-xs text-danger mt-2">{msgSalvar}</p>}
+          {msgOk && <p className="text-xs text-ok mt-2">{msgOk} <Link href="/meus-pratos" className="underline">Ver agora</Link>.</p>}
         </>
       ) : (
         <p className="text-sm text-dim mt-6 border border-dashed border-border-2 rounded-[var(--r)] p-6 text-center">
           Abra um grupo e clique nos ingredientes para montar o prato — ex.: uma proteína, arroz, feijão e uma salada.
         </p>
-      )}
-
-      {/* pratos salvos */}
-      <h3 className="text-[13px] font-bold mt-8 mb-2">Meus pratos salvos <span className="text-dim font-normal">({salvos.length}/{limite})</span></h3>
-      {!salvos.length ? (
-        <p className="text-sm text-dim">Salve um prato para acompanhar o custo dele a cada coleta.</p>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {salvos.map(p => {
-            const custo = p.itens.reduce((s, it) => {
-              const i = porId.get(it.id); return i ? s + i.preco_g * it.g * i.fc * fator : s
-            }, 0)
-            return (
-              <div key={p.id} className="border border-border rounded-[var(--r)] bg-surface p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-sm truncate">{p.nome}</p>
-                  <button aria-label={`Excluir ${p.nome}`} className="text-dim hover:text-danger cursor-pointer shrink-0"
-                    onClick={async () => { await excluirPratoUsuario(p.id); if (user) getPratosSalvos(user.id).then(setSalvos) }}>×</button>
-                </div>
-                <p className="text-xs text-dim mt-0.5">{p.itens.length} ingredientes · salvo em {fmtData(p.criado_em.slice(0, 10))}</p>
-                <p className="tnum font-bold mt-1.5">{brl(custo)} <span className="text-xs text-dim font-normal">hoje</span></p>
-                <button className="text-xs text-accent hover:underline cursor-pointer mt-1.5"
-                  onClick={() => { setLinhas(p.itens); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
-                  Carregar na calculadora
-                </button>
-              </div>
-            )
-          })}
-        </div>
       )}
 
       {share && <ShareModal contexto={`meu prato de ${brl(total)} na calculadora do Índice PF`} onClose={() => setShare(false)} />}

@@ -55,8 +55,8 @@ BASE = {
     "Bucho/Dobradinha bovina":      "Proteína bovina",
     "Carne seca/Charque":           "Proteína bovina",
     "Carne de sol":                 "Proteína bovina",
-    "Carne ovina (costela)":        "Proteína bovina",
-    "Carne de bode":                "Proteína bovina",
+    "Carne ovina (costela)":        "Proteína ovina/caprina",
+    "Carne de bode":                "Proteína ovina/caprina",
     # Proteína suína
     "Bisteca suína":                "Proteína suína",
     "Lombo suíno":                  "Proteína suína",

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -15,6 +15,17 @@ export default function AuthControls() {
   const { user, profile } = useAuth()
   const [menu, setMenu] = useState(false)
   const [cta, setCta] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // fecha o menu ao clicar fora dele (ou com Esc)
+  useEffect(() => {
+    if (!menu) return
+    const fora = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenu(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(false) }
+    document.addEventListener('mousedown', fora)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', esc) }
+  }, [menu])
 
   function irContribuir() {
     if (!user) { router.push('/cadastro?next=%2Fcontribuir'); return }
@@ -30,7 +41,7 @@ export default function AuthControls() {
           Contribuir
         </button>
         {user ? (
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button onClick={() => setMenu(m => !m)}
               className="flex items-center gap-2 text-sm px-2 py-1 rounded-[var(--r-sm)] hover:bg-surface-2 transition-colors cursor-pointer">
               {profile?.avatar_url

@@ -11,6 +11,11 @@ const FOCAVEL = 'button, [href], input, select, textarea, [tabindex]:not([tabind
 // Usar junto com role="dialog" aria-modal="true" no elemento do ref.
 export function useDialogo<T extends HTMLElement>(onClose: () => void) {
   const ref = useRef<T>(null)
+  // onClose via ref: o callback é recriado a cada render do pai e, como dep do
+  // efeito, fazia o foco "pular" para o 1º focável a CADA tecla digitada num
+  // input do modal (bug do salvar prato, 12/07). O efeito roda 1× por abertura.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     const anterior = document.activeElement as HTMLElement | null
@@ -18,7 +23,7 @@ export function useDialogo<T extends HTMLElement>(onClose: () => void) {
     el?.querySelector<HTMLElement>(FOCAVEL)?.focus()
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return }
+      if (e.key === 'Escape') { onCloseRef.current(); return }
       if (e.key !== 'Tab' || !el) return
       const focaveis = [...el.querySelectorAll<HTMLElement>(FOCAVEL)].filter(f => f.offsetParent !== null)
       if (!focaveis.length) return
@@ -28,7 +33,7 @@ export function useDialogo<T extends HTMLElement>(onClose: () => void) {
     }
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('keydown', onKey); anterior?.focus?.() }
-  }, [onClose])
+  }, [])
 
   return ref
 }
