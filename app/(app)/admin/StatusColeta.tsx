@@ -62,6 +62,11 @@ export default function StatusColeta() {
   const [msg, setMsg] = useState('')
   const [pendente, setPendente] = useState(false)   // staging: coleta gravada sem custos_pratos
   const [aprovando, setAprovando] = useState(false)
+  // não encontrados começam RECOLHIDOS (só nome + manual atual) — a lista é longa
+  const [abertosNE, setAbertosNE] = useState<Set<number>>(new Set())
+  const toggleNE = (id: number) => setAbertosNE(prev => {
+    const nx = new Set(prev); if (nx.has(id)) nx.delete(id); else nx.add(id); return nx
+  })
 
   async function recarregar() {
     setStatus(await getStatusUltimaColeta())
@@ -213,12 +218,18 @@ export default function StatusColeta() {
           <div className="space-y-2">
             {status.naoAchados.map(item => (
               <div key={item.id} className="border border-border rounded-lg bg-surface p-3">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-sm font-medium">{item.nome}</span>
-                  <span className="text-xs text-dim">
+                <button onClick={() => toggleNE(item.id)} aria-expanded={abertosNE.has(item.id)}
+                  className="w-full flex items-baseline justify-between gap-3 text-left cursor-pointer">
+                  <span className="text-sm font-medium">
+                    <span aria-hidden="true" className="text-dim mr-1">{abertosNE.has(item.id) ? '▾' : '▸'}</span>
+                    {item.nome}
+                  </span>
+                  <span className={`text-xs ${item.preco_manual != null ? 'text-dim' : 'text-warn font-medium'}`}>
                     {item.preco_manual != null ? `manual atual: ${brl(Number(item.preco_manual))}/kg` : 'sem manual'}
                   </span>
-                </div>
+                </button>
+                {abertosNE.has(item.id) && (
+                <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 text-xs">
                   <label>Preço pago (R$)
                     <input value={valores[item.id] ?? ''} inputMode="decimal" placeholder="ex: 8,90"
@@ -275,7 +286,9 @@ export default function StatusColeta() {
                   <button onClick={() => verHistorico(item.id)}
                     className="text-xs text-accent hover:underline">{item.id in hist ? 'ocultar histórico' : 'histórico'}</button>
                 </div>
-                {item.id in hist && (
+                </>
+                )}
+                {item.id in hist && abertosNE.has(item.id) && (
                   <div className="mt-3 border-t border-border pt-3">
                     {!hist[item.id].length ? <p className="text-xs text-dim">Sem histórico ainda.</p> : (
                       <table className="w-full text-xs">
