@@ -1283,6 +1283,10 @@ export async function salvarPratoUsuario(uid: string, nome: string, itens: { id:
 export async function excluirPratoUsuario(id: number) {
   return supabase.from('pratos_usuario').delete().eq('id', id)
 }
+// exige a policy de UPDATE da migração 39
+export async function renomearPratoUsuario(id: number, nome: string) {
+  return supabase.from('pratos_usuario').update({ nome }).eq('id', id)
+}
 
 // pratos que usam um ingrediente (modal da tabela produtos × região)
 export type PratoDeIngrediente = { prato_id: number; nome: string; regiao: string; qtd_g: number }

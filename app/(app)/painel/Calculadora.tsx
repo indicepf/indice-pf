@@ -29,8 +29,10 @@ const G_PADRAO: Record<string, number> = {
 // como coluna no banco — regras por nome, hardcoded conscientes.
 const AGUA_DOCE = /pintado|tambaqui|pacu|tucunar|piranha|filhote|pira[íi]ba|pirarucu|lambari|tra[íi]ra|surubim|cachara/i
 const FRUTOS_MAR = /camar[ãa]o|caranguejo|sururu|marisco|lagosta|siri|polvo|lula/i
-const OVINO_CAPRINO = /bode|ovina|ovelha|cordeiro|carneiro|cabrito/i
-const MIUDOS = /f[íi]gado|bucho|dobradinha|mocot[óo]|rabada|m[íi]údos|miudos|l[íi]ngua|cora[çc][ãa]o|tripa/i
+// aprovado em 13/07: miúdos bovinos = fígado, bucho/dobradinha, mocotó e rabada;
+// carne de sol/charque e torresmo ficam nos cortes. CUIDADO: nunca detectar
+// ovinos por /ovina/ — "ovina" é substring de "bOVINA" (bug de 12/07).
+const MIUDOS = /f[íi]gado|bucho|dobradinha|mocot[óo]|rabada|mi[úu]dos|l[íi]ngua|tripa/i
 const EMBUTIDOS = /lingui[çc]a|paio|salsicha|presunto|bacon|mortadela|salame/i
 function subgrupo(i: ItemCalc): string {
   const c = i.categoria || ''
@@ -39,14 +41,11 @@ function subgrupo(i: ItemCalc): string {
     if (AGUA_DOCE.test(i.nome)) return 'Peixe de água doce'
     return 'Peixe do mar'
   }
-  if (c === 'Proteína bovina' || c === 'Proteína ovina/caprina' || c === 'Proteína caprina') {
-    if (OVINO_CAPRINO.test(i.nome)) return 'Ovinos e caprinos'
-    if (MIUDOS.test(i.nome)) return 'Miúdos bovinos'
-    return 'Bovinos'
-  }
+  if (c === 'Proteína ovina/caprina' || c === 'Proteína caprina') return 'Ovinos e caprinos'
+  if (c === 'Proteína bovina') return MIUDOS.test(i.nome) ? 'Miúdos bovinos' : 'Bovinos'
   if (c === 'Proteína suína') {
-    if (EMBUTIDOS.test(i.nome)) return 'Embutidos e defumados'
     if (MIUDOS.test(i.nome)) return 'Miúdos suínos'
+    if (EMBUTIDOS.test(i.nome)) return 'Embutidos e defumados'
     return 'Suínos'
   }
   const MAPA: Record<string, string> = {
