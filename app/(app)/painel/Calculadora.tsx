@@ -24,40 +24,52 @@ const G_PADRAO: Record<string, number> = {
   'Gordura/Laticínio': 15, 'Temperos': 3, 'Outro': 30,
 }
 
-// subcategoria por afinidade dentro do grupo. Base = ingredientes.categoria;
-// as divisões abaixo (pescado, miúdos, embutidos, ovinos por nome) não existem
-// como coluna no banco — regras por nome, hardcoded conscientes.
-const AGUA_DOCE = /pintado|tambaqui|pacu|tucunar|piranha|filhote|pira[íi]ba|pirarucu|lambari|tra[íi]ra|surubim|cachara/i
-const FRUTOS_MAR = /camar[ãa]o|caranguejo|sururu|marisco|lagosta|siri|polvo|lula/i
-// aprovado em 13/07: miúdos bovinos = fígado, bucho/dobradinha, mocotó e rabada;
-// carne de sol/charque e torresmo ficam nos cortes. CUIDADO: nunca detectar
-// ovinos por /ovina/ — "ovina" é substring de "bOVINA" (bug de 12/07).
-const MIUDOS = /f[íi]gado|bucho|dobradinha|mocot[óo]|rabada|mi[úu]dos|l[íi]ngua|tripa/i
-const EMBUTIDOS = /lingui[çc]a|paio|salsicha|presunto|bacon|mortadela|salame/i
+// Subcategoria por afinidade dentro do grupo — agrupamento APROVADO pelo
+// responsável em 13/07/2026. Listas explícitas de nomes (nunca regex de
+// substring: "ovina" ⊂ "bOVINA" causou o bug de 12/07); ingrediente fora
+// das listas cai no subgrupo padrão da categoria dele (fallback, não some).
+const SUB_POR_NOME: Record<string, string> = {}
+const def = (sub: string, nomes: string[]) => nomes.forEach(n => { SUB_POR_NOME[n] = sub })
+// Proteína
+def('Miúdos bovinos', ['Fígado bovino', 'Bucho/Dobradinha bovina', 'Mocotó (pata bovina)', 'Rabada bovina'])
+def('Embutidos e defumados', ['Linguiça calabresa', 'Linguiça defumada', 'Linguiça toscana (suína)', 'Bacon', 'Presunto'])
+def('Miúdos suínos', ['Miúdos suínos'])
+def('Frutos do mar', ['Camarão fresco', 'Camarão seco', 'Carne de siri', 'Sururu'])
+def('Peixe de água doce', ['Pintado (peixe)', 'Tambaqui (peixe)', 'Pacu (peixe)', 'Pirarucu seco'])
+// Base
+def('Feijões e leguminosas', ['Feijão branco', 'Feijão carioca', 'Feijão de corda', 'Feijão preto', 'Grão-de-bico'])
+def('Farinhas e fubás', ['Farinha de mandioca', 'Farinha de rosca', 'Farinha de trigo', 'Fubá de milho', 'Flocão de milho (cuscuz)', 'Goma de tapioca'])
+def('Arroz e massas', ['Arroz branco', 'Macarrão'])
+def('Pães', ['Pão francês', 'Pão de alho (bisnaga)'])
+// Verdura/Fruta
+def('Folhas', ['Alface', 'Rúcula', 'Escarola/Chicória', 'Couve', 'Jambu', 'Maniva (folha de mandioca)'])
+def('Legumes', ['Abóbora', 'Cenoura', 'Milho verde', 'Pimentão', 'Quiabo', 'Repolho', 'Tomate'])
+def('Conservas e regionais', ['Champignon (conserva)', 'Palmito', 'Guariroba'])
+// Temperos
+def('Base de cozinha', ['Alho', 'Cebola', 'Sal'])
+def('Ervas frescas', ['Cheiro-verde', 'Coentro', 'Hortelã', 'Manjericão'])
+def('Especiarias e pimentas', ['Açafrão da terra', 'Colorau/Urucum', 'Cominho', 'Louro (folha)', 'Orégano', 'Pimenta do reino', 'Pimenta (fresca)'])
+def('Regionais', ['Tucupi', 'Açaí (polpa)'])
+// Gordura/Laticínio
+def('Óleos e gorduras', ['Óleo de soja', 'Azeite de oliva', 'Azeite de dendê', 'Banha suína'])
+def('Queijos', ['Queijo coalho', 'Queijo mussarela', 'Queijo parmesão', 'Queijo prato'])
+def('Leites, cremes e manteiga', ['Leite', 'Leite de coco', 'Creme de leite', 'Manteiga'])
+
+// fallback por categoria (item novo sem lista aparece aqui, nunca some)
+const SUB_PADRAO: Record<string, string> = {
+  'Proteína bovina': 'Bovinos', 'Proteína suína': 'Suínos',
+  'Proteína ovina/caprina': 'Ovinos e caprinos', 'Proteína caprina': 'Ovinos e caprinos',
+  'Proteína aves': 'Aves', 'Ovos': 'Ovos',
+  'Pescado': 'Peixe do mar', 'Proteína pescado': 'Peixe do mar',
+  'Grão/Cereal': 'Farinhas e fubás', 'Leguminosa': 'Feijões e leguminosas',
+  'Tubérculo/Raiz': 'Tubérculos e raízes',
+  'Legume/Verdura': 'Legumes', 'Fruta': 'Frutas',
+  'Tempero/Erva': 'Especiarias e pimentas', 'Condimento/Molho': 'Molhos e condimentos',
+  'Líquido regional': 'Regionais',
+  'Gordura/Óleo': 'Óleos e gorduras', 'Laticínio': 'Leites, cremes e manteiga',
+}
 function subgrupo(i: ItemCalc): string {
-  const c = i.categoria || ''
-  if (c === 'Pescado' || c === 'Proteína pescado') {
-    if (FRUTOS_MAR.test(i.nome)) return 'Frutos do mar'
-    if (AGUA_DOCE.test(i.nome)) return 'Peixe de água doce'
-    return 'Peixe do mar'
-  }
-  if (c === 'Proteína ovina/caprina' || c === 'Proteína caprina') return 'Ovinos e caprinos'
-  if (c === 'Proteína bovina') return MIUDOS.test(i.nome) ? 'Miúdos bovinos' : 'Bovinos'
-  if (c === 'Proteína suína') {
-    if (MIUDOS.test(i.nome)) return 'Miúdos suínos'
-    if (EMBUTIDOS.test(i.nome)) return 'Embutidos e defumados'
-    return 'Suínos'
-  }
-  const MAPA: Record<string, string> = {
-    'Proteína aves': 'Aves', 'Ovos': 'Ovos',
-    'Grão/Cereal': 'Grãos e cereais', 'Leguminosa': 'Leguminosas',
-    'Tubérculo/Raiz': 'Tubérculos e raízes',
-    'Legume/Verdura': 'Legumes e verduras', 'Fruta': 'Frutas',
-    'Tempero/Erva': 'Temperos e ervas', 'Condimento/Molho': 'Condimentos e molhos',
-    'Líquido regional': 'Líquidos regionais',
-    'Gordura/Óleo': 'Gorduras e óleos', 'Laticínio': 'Laticínios',
-  }
-  return MAPA[c] || c || 'Outros'
+  return SUB_POR_NOME[i.nome] ?? SUB_PADRAO[i.categoria || ''] ?? 'Outros'
 }
 
 const tsDe = (d: string) => new Date(d + 'T00:00:00').getTime()
