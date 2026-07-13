@@ -25,11 +25,17 @@ export async function criarConta(email: string, senha: string):
   Promise<{ uid?: string; pendenteConfirmacao?: boolean; erro?: string }> {
   if (!emailValido(email)) return { erro: 'Informe um e-mail válido.' }
   if (senha.length < 6) return { erro: 'A senha precisa ter ao menos 6 caracteres.' }
-  const { data, error } = await supabase.auth.signUp({ email, password: senha })
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password: senha,
+    // confirmação de e-mail ligada: o link do e-mail volta para /completar-perfil
+    // (mesmo destino do fluxo sem confirmação), na mesma origem do cadastro
+    options: { emailRedirectTo: `${window.location.origin}/completar-perfil` },
+  })
   if (error) {
     return {
       erro: /rate limit/i.test(error.message)
-        ? 'Limite de e-mails atingido. Desative a confirmação de e-mail no Supabase ou configure SMTP.'
+        ? 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente de novo.'
         : error.message,
     }
   }
