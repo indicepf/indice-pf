@@ -152,8 +152,9 @@ function ModalMeuPrato({ prato, porId, serie, nivel, fator, onRenomeado, onExclu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serie, prato, fator, diasSerie])
 
+  // link PÚBLICO (sem login): o prato viaja na URL, nada da conta é exposto
   const deepLink = typeof window !== 'undefined'
-    ? `${window.location.origin}/calculadora?itens=${prato.itens.map(i => `${i.id}:${i.g}`).join(',')}${nivel !== 'online' ? `&nivel=${nivel}` : ''}`
+    ? `${window.location.origin}/prato-compartilhado?itens=${prato.itens.map(i => `${i.id}:${i.g}`).join(',')}&nome=${encodeURIComponent(prato.nome)}${nivel !== 'online' ? `&nivel=${nivel}` : ''}`
     : ''
 
   async function renomear() {
