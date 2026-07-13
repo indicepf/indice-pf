@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { inputBase } from '@/components/ui'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, limparSessaoLocal, usuarioDoStorage } from '@/lib/supabase'
 import {
   isAdmin, isSuper, getContribuicoes, getIngredientes, moderarContribuicao, aprovarContribuicao, getSaques, marcarSaquePago,
@@ -30,18 +30,29 @@ const SAQUE_ST: Record<string, { txt: string; cls: string }> = {
 }
 
 export default function AdminPage() {
+  // useSearchParams exige Suspense; sem ele o build do App Router falha
+  return (
+    <Suspense fallback={<main className="min-h-screen grid place-items-center text-dim text-sm">Carregando…</main>}>
+      <AdminInner />
+    </Suspense>
+  )
+}
+
+function AdminInner() {
   const router = useRouter()
   const [estado, setEstado] = useState<'carregando' | 'negado' | 'ok'>('carregando')
   type Aba = 'mod' | 'aprovadas' | 'painel' | 'saques' | 'precos' | 'anuncios' | 'auditoria' | 'coleta' | 'dados' | 'super'
   const ABAS_VALIDAS: Aba[] = ['mod', 'aprovadas', 'painel', 'saques', 'precos', 'anuncios', 'auditoria', 'coleta', 'dados', 'super']
   // aba persistida na URL (?aba=): sobrevive a reload e é compartilhável.
+  // Lida via useSearchParams — window.location ainda é a URL antiga durante a
+  // navegação client-side, o que jogava todo mundo no default.
   // Default = 1ª da régua (precos; super troca para coleta ao resolver)
+  const searchParams = useSearchParams()
   const [aba, setAbaState] = useState<Aba>(() => {
-    if (typeof window === 'undefined') return 'precos'
-    const q = new URLSearchParams(window.location.search).get('aba') as Aba | null
+    const q = searchParams.get('aba') as Aba | null
     return q && ABAS_VALIDAS.includes(q) ? q : 'precos'
   })
-  const abaDaUrl = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('aba')
+  const abaDaUrl = searchParams.has('aba')
   const setAba = (a: Aba) => {
     setAbaState(a)
     const url = new URL(window.location.href); url.searchParams.set('aba', a)
