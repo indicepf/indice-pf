@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Índice PF — Scan completo do app e próximos passos</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #1a1a1a;
+    margin: 0;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.6rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 36px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 {
+    font-size: 1.15rem; font-weight: bold; margin-top: 48px;
+    padding-bottom: 4px; border-bottom: 1px solid #ccc;
+  }
+  h3 { font-size: 1rem; font-weight: bold; margin-top: 28px; }
+  p { margin: 12px 0; }
+  code {
+    font-family: "Courier New", monospace;
+    background: #f2f2f2; border: 1px solid #ddd;
+    padding: 1px 5px; font-size: 0.9em;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 8px 0; }
+  .note { border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0; }
+  .note p:first-child { margin-top: 0; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .toc li { margin: 3px 0; }
+  .p0 { color: #b91c1c; font-weight: bold; }
+  .p1 { color: #b45309; font-weight: bold; }
+  .p2 { color: #555; font-weight: bold; }
+  .ok { color: #15803d; }
+  footer { margin-top: 56px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Índice PF — Scan completo do app</h1>
+  <p class="subtitle">Auditoria de 11/07/2026 sobre o código em produção (main). Insumo para a decisão de próximos passos entre os sócios. Complementa e atualiza docs 003 (padrão ouro) e 011 (segurança).
+  <br><strong>Atualizado em 11/07/2026:</strong> itens marcados <span class="ok">RESOLVIDO</span> foram corrigidos nos PRs #128 (CSP × GTM) e #129 (metodologia, footer, OrientPopup, fase de lançamento, favicon, npm audit) no mesmo dia do scan.</p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#resumo">Resumo executivo e prioridades</a></li>
+      <li><a href="#incoerente">Incompleto ou incoerente</a></li>
+      <li><a href="#seguranca">Falhas estruturais e de segurança</a></li>
+      <li><a href="#ux">UX/UI — o caminho para o padrão ouro</a></li>
+      <li><a href="#incluir">O que incluir e o que excluir</a></li>
+      <li><a href="#mover">O que mover do Histórico (admin) para a home</a></li>
+      <li><a href="#visual">Tudo que é visual provisório</a></li>
+      <li><a href="#extras">O que não estava na sua lista</a></li>
+      <li><a href="#sequencia">Sequência sugerida para o debate</a></li>
+    </ol>
+  </div>
+
+  <h2 id="resumo">1. Resumo executivo e prioridades</h2>
+  <p>
+    O produto está funcional de ponta a ponta: coleta semanal, 100 pratos, índice, login, crowdsourcing com
+    recompensa PIX, Premium (grátis no lançamento), anúncios e admin completo. A base técnica é boa —
+    RLS crítico aplicado (migração 34), headers de segurança, webhook idempotente, guarda de XSS nos anúncios,
+    deep-links e PWA. O que separa o app de um "padrão ouro" hoje não é falta de feature: é
+    <strong>credibilidade</strong> (afirmações da metodologia que o código não cumpre), <strong>compliance</strong>
+    (LGPD sem Termos/Privacidade, GA4 sem consentimento) e <strong>acabamento</strong> (marca provisória,
+    popup de orientação, densidade de anúncios).
+  </p>
+  <table>
+    <tr><th>Prioridade</th><th>Item</th><th>Por quê</th></tr>
+    <tr><td class="p0">P0</td><td>Corrigir a página /metodologia (afirmações falsas)</td><td><span class="ok">PARCIALMENTE RESOLVIDO (PR #129)</span> — o card "Aproveitamento" foi corrigido. Seguem abertas as fontes não implementadas (Visitas/Ligações/ABIA) e o ±5% sem base — decisão de produto</td></tr>
+    <tr><td class="p0">P0</td><td>Termos de Uso + Política de Privacidade + consentimento de cookies</td><td>Coletamos CPF, PIX, telefone, geolocalização, fotos e agora GA4 — sem base legal publicada</td></tr>
+    <tr><td class="p0">P0</td><td>Adicionar domínios do GTM/GA4 à CSP</td><td><span class="ok">RESOLVIDO (PR #128)</span></td></tr>
+    <tr><td class="p1">P1</td><td>Sincronizar FASE_LANCAMENTO (front) × envs ASAAS (back)</td><td><span class="ok">RESOLVIDO (PR #129)</span> — a API importa a mesma flag do front; um interruptor só</td></tr>
+    <tr><td class="p1">P1</td><td>Abrir parte do Histórico ao público (seção 6)</td><td>O melhor conteúdo do produto está escondido atrás de is_admin</td></tr>
+    <tr><td class="p1">P1</td><td>Marca definitiva (logo, favicon, cores, OG)</td><td>Tudo hoje é o placeholder "by Infinity" do mockup</td></tr>
+    <tr><td class="p2">P2</td><td>Pendências do doc 011 (CSP bloqueante, 2FA, rate limit, backup, npm audit)</td><td>Risco conhecido e mapeado, esforço distribuído</td></tr>
+    <tr><td class="p2">P2</td><td>Acessibilidade, skeleton loaders, mobile de verdade</td><td>Acabamento padrão ouro</td></tr>
+  </table>
+
+  <h2 id="incoerente">2. Incompleto ou incoerente</h2>
+
+  <h3>2.1 A metodologia promete o que o código não faz (crítico para um índice)</h3>
+  <ul>
+    <li><span class="ok">RESOLVIDO (PR #129)</span> — <strong>"Aproveitamento — preço final calculado sobre o
+      peso do produto já cozido"</strong> (<code>app/(site)/metodologia/page.tsx</code>): era falso. O custo é
+      calculado sobre o peso cru comprado (PB) × preço de varejo — e é assim que deve ser. A frase já tinha
+      sido corrigida no modal do prato (PR #126) e agora também na metodologia, que descreve o peso cozido
+      como exibição ("No prato", peso pronto, custo por 100 g servidos).</li>
+    <li><strong>Fontes anunciadas que não existem no pipeline:</strong> a metodologia lista "Visitas de campo",
+      "Ligações" e "ABIA" como fontes. Hoje as fontes reais são: scraping (Google Shopping via SerpAPI),
+      leituras manuais da equipe no /admin e fotos de usuários. Se as demais são planos, precisam ser
+      apresentadas como planos — um índice não pode listar fontes que não usa.</li>
+    <li><strong>Margem de erro ±5% sem base:</strong> o número aparece na metodologia, no footer e nos modais,
+      mas não é calculado de lugar nenhum. Ou se calcula um intervalo real (a dispersão entre fontes por
+      ingrediente existe no banco), ou se descreve como estimativa qualitativa.</li>
+    <li><strong>"Níveis em calibração":</strong> Mercado −10% e Atacarejo −22% são constantes hardcoded
+      (<code>lib/format.ts</code>). A aba Calibração do Histórico já mede os descontos reais por ingrediente
+      com dados de campo, mas o resultado não realimenta os percentuais. O loop está desenhado e não fechado
+      (era o item 1 do backlog do doc 001).</li>
+  </ul>
+
+  <h3>2.2 Incoerências de produto</h3>
+  <ul>
+    <li><strong>Footer com links mortos:</strong> "Termos", "Privacidade", "Seasoning" e "Ponto Food" são
+      <code>&lt;a&gt;</code> sem href — não levam a lugar nenhum. ("Rede Food Service" ganhou o link real no
+      PR #129.)</li>
+    <li><strong>Premium R$ 99,99/mês:</strong> preço definido em dois lugares (front e API) e nunca validado
+      comercialmente. Para B2C é alto; o plano de produto (doc 005) apontava relatórios B2B como o caminho de
+      receita. Decidir o posicionamento antes de ativar a cobrança.</li>
+    <li><strong>Página /sobre com um parágrafo:</strong> para um índice que quer ser citado, falta quem faz,
+      contato, imprensa e como citar o índice.</li>
+    <li><strong>Nível "Indústria" desabilitado ("em breve")</strong> desde a criação, sem dado nem plano — ou
+      define a fonte, ou remove o botão.</li>
+    <li><span class="ok">RESOLVIDO (PR #130)</span> — <strong>Sitemap com 4 rotas:</strong> os 100 pratos não
+      tinham página própria nem entravam no sitemap. Agora cada prato tem página pública server-rendered
+      (<code>/prato/45-feijoada-completa</code>: custo, composição, metadata própria) e o sitemap tem 104 URLs.
+      Falta: submeter o sitemap atualizado no Search Console e, depois, dados estruturados.</li>
+    <li><strong>Pendência do Supabase Auth (memória do projeto):</strong> Site URL/Redirect URLs ainda apontando
+      para o domínio antigo — e-mails de redefinição de senha podem levar para URL errada.</li>
+  </ul>
+
+  <h2 id="seguranca">3. Falhas estruturais e de segurança</h2>
+
+  <h3>3.1 Novas (não estavam no doc 011)</h3>
+  <ul>
+    <li><span class="ok">RESOLVIDO (PR #128)</span> — <strong>CSP não contemplava o GTM/GA4</strong>
+      (adicionados no PR #127): faltavam <code>googletagmanager.com</code> em <code>script-src</code> e
+      <code>*.google-analytics.com</code>/<code>*.analytics.google.com</code> em <code>connect-src</code>
+      (e <code>img-src</code>). Sem isso, ao tornar a política bloqueante o analytics morreria em silêncio.
+      Com a correção, a validação do modo Report-Only (doc 011) ficou desimpedida.</li>
+    <li><strong>GA4 sem consentimento (LGPD/cookies):</strong> o GTM carrega para todo visitante sem banner de
+      consentimento nem página de privacidade. Combinado com a coleta de CPF/PIX/geolocalização/fotos, é a
+      maior exposição legal do produto hoje.</li>
+    <li><span class="ok">RESOLVIDO (PR #129)</span> — <strong>Dessincronia da fase de lançamento:</strong> o
+      front decidia "Premium grátis" pela flag <code>FASE_LANCAMENTO</code> e a API pela presença das envs
+      <code>ASAAS_*</code> — critérios independentes que podiam gerar cobrança de R$ 99,99 em quem clicou
+      "Ativar Premium gratuito". Agora a API importa a mesma flag <code>FASE_LANCAMENTO</code>: um
+      interruptor só (com a flag desligada, a API exige as envs e responde 503 se faltarem).</li>
+    <li><strong>Sem rate limiting em /api/assinatura:</strong> com o gateway ativo, a rota cria clientes e
+      assinaturas no Asaas — spam de requisições autenticadas cria lixo no gateway. (O doc 011 já pedia rate
+      limit genérico; esta rota é o caso mais sensível.)</li>
+    <li><strong>CPF em texto puro</strong> em <code>profiles</code> — decisão consciente ("por ora", doc 001),
+      mas agora há CPF + chave PIX + telefone + geolocalização na mesma base. Criptografia de coluna ou
+      vault é upgrade barato de postura.</li>
+  </ul>
+
+  <h3>3.2 Pendências conhecidas (doc 011, seguem abertas)</h3>
+  <table>
+    <tr><th>Item</th><th>Severidade</th><th>Onde resolve</th></tr>
+    <tr><td>CSP de Report-Only para bloqueante (após incluir GTM)</td><td>Alta</td><td>next.config.ts</td></tr>
+    <tr><td>Buckets de Storage sem limite de tamanho/tipo</td><td>Média</td><td>Painel Supabase</td></tr>
+    <tr><td>2FA nas contas admin/super</td><td>Média</td><td>Painel Supabase (Auth/MFA)</td></tr>
+    <tr><td>Backup externo do histórico (snapshots/precos/custos)</td><td>Média</td><td>Job no GitHub Actions</td></tr>
+    <tr><td>Token forte no webhook Asaas (ao ativar cobrança)</td><td>Média</td><td>Env + painel Asaas</td></tr>
+    <tr><td>npm audit: eram 14 vulnerabilidades; <code>npm audit fix</code> no PR #129 reduziu para 8 (6 high + 2 moderate). As restantes exigem major ou troca de dependência (<code>xlsx</code> sem fix disponível)</td><td>Média</td><td>Decisão de dependências (ex.: trocar xlsx por exceljs)</td></tr>
+    <tr><td>Chave SerpAPI exposta em chat</td><td>—</td><td>Risco aceito pelo responsável</td></tr>
+  </table>
+
+  <h3>3.3 Estrutura de código</h3>
+  <ul>
+    <li><code>app/(site)/page.tsx</code> (home) tem ~870 linhas num único client component, e
+      <code>/admin</code> concentra 10 abas — funcionam, mas o custo de manutenção cresce a cada feature.</li>
+    <li><strong>Zero testes automatizados</strong> no repositório (front e pipeline). O pipeline Python tem
+      verificações internas boas (conservação de massa, cobertura), mas nada roda em CI.</li>
+    <li>A home carrega no load a composição de todos os 100 pratos + todas as fontes brutas do snapshot
+      (<code>getAllDetalhes</code> + <code>getAllFontes</code> + região). A UX de clique instantâneo é boa,
+      mas em 3G/4G o custo é alto — medir e considerar carregar fontes sob demanda.</li>
+  </ul>
+
+  <h2 id="ux">4. UX/UI — o caminho para o padrão ouro</h2>
+
+  <h3>O que já está bom</h3>
+  <ul class="ok">
+    <li>Deep-links de filtro/prato na URL (compartilhamento real de estado)</li>
+    <li>Empty states pensados ("gráfico a partir da 2ª coleta", "nenhum prato encontrado")</li>
+    <li>Contexto explícito nos KPIs (última coleta / média do período / recorte)</li>
+    <li>Origem do preço visível por ingrediente (online/manual/misto/fixo) com fontes abertas — transparência rara</li>
+    <li>Retry visível em falhas de carga; sem tela branca</li>
+  </ul>
+
+  <h3>O que impede o padrão ouro</h3>
+  <ul>
+    <li><strong>OrientPopup ("melhor na horizontal"):</strong> <span class="ok">mitigado no PR #129</span> —
+      aparecia para todo mundo, em qualquer tela, inclusive desktop; agora só em tela estreita na vertical.
+      A recomendação de fundo permanece: excluir de vez e investir num corte mobile real (cards no lugar de
+      tabelas largas, filtros em bottom-sheet) — quem se adapta é o layout, não o usuário.</li>
+    <li><strong>Densidade de publicidade:</strong> a home tem 8 pontos de anúncio (popup de entrada, lado do
+      hero, hero, lateral, billboard, leaderboard, nativo na tabela e 2 gates com blur sobre gráfico e
+      tabela). O AdGate cobre com blur o gráfico principal — o produto esconde seu próprio conteúdo-chave.
+      Para um índice que quer autoridade, sugestão: máximo 2–3 slots discretos e nunca sobre o índice em si.</li>
+    <li><strong>KPIs triplicados:</strong> os 3 cards (Online/Mercado/Atacarejo) mostram o mesmo número
+      escalado por −10%/−22% e a mesma variação %. É um card de informação real repetido três vezes.
+      Alternativa: um número grande + seletor de nível, liberando a primeira dobra.</li>
+    <li><strong>Primeira dobra não responde "quanto custa o PF hoje":</strong> hero + anúncio + painel de
+      filtros vêm antes do número. Quem chega pela primeira vez deveria ver o valor do índice em 1 segundo.</li>
+    <li><strong>Acessibilidade:</strong> ordenação por <code>th onClick</code> sem <code>aria-sort</code> ou
+      botão; modais sem focus-trap/<code>role="dialog"</code>; setas ▲▼/× como texto; contraste do
+      <code>--dim</code> (#6b7a93) sobre superfícies claras fica abaixo de AA em fontes pequenas.</li>
+    <li><strong>Loading sem skeleton:</strong> "Carregando o Índice PF…" em texto; skeletons dos painéis
+      dariam percepção de velocidade.</li>
+    <li><strong>confirm() nativo</strong> no cancelamento da assinatura — destoa do design system.</li>
+    <li><strong>Sem dark mode</strong> — não é obrigatório, mas é o tipo de acabamento de padrão ouro.</li>
+  </ul>
+
+  <h2 id="incluir">5. O que incluir e o que excluir</h2>
+
+  <h3>Incluir</h3>
+  <ul>
+    <li><strong>Termos de Uso e Política de Privacidade</strong> (P0, destrava os links do footer) + banner de
+      consentimento de cookies condicionando o GTM.</li>
+    <li><span class="ok">RESOLVIDO (PR #130)</span> — <strong>Página por prato</strong>
+      (<code>/prato/45-feijoada-completa</code>): custo, composição e metadata própria, com link interno no
+      modal e as 100 no sitemap. Evoluções futuras: og:image por prato, série de preço na própria página e
+      dados estruturados.</li>
+    <li><strong>Comparativo com referências externas</strong> (IPCA alimentos, cesta básica DIEESE) — uma linha
+      de contexto que transforma o índice em notícia.</li>
+    <li><strong>"Como citar o índice"</strong> + changelog público de metodologia (governança estatística:
+      toda revisão de cálculo documentada e datada).</li>
+    <li><strong>Dados estruturados</strong> (schema.org <code>Dataset</code>). O <code>favicon.ico</code>
+      foi criado no PR #129.</li>
+    <li><strong>Monitoramento:</strong> Sentry (ou similar) no front e alerta quando uma coleta falha ou vem
+      incompleta (hoje a detecção é manual no /admin).</li>
+    <li><strong>Assinatura de e-mail transacional</strong> (Resend) antes de escalar cadastros — o SMTP default
+      do Supabase tem limite baixo e cai em spam.</li>
+  </ul>
+
+  <h3>Excluir (ou desativar)</h3>
+  <ul>
+    <li><strong>OrientPopup</strong> — ver seção 4.</li>
+    <li><strong>Links mortos do footer</strong> (Rede Food Service, Seasoning, Ponto Food) até existirem URLs —
+      link morto no footer é sinal clássico de site inacabado.</li>
+    <li><strong>AdGate sobre o gráfico principal do índice</strong> — manter gates apenas em conteúdo
+      secundário, se mantidos.</li>
+    <li><strong>Botão "Indústria"</strong> até haver fonte de dado.</li>
+    <li><strong>Fontes não implementadas da metodologia</strong> (Visitas, Ligações, ABIA) — mover para uma
+      seção "roadmap de fontes".</li>
+  </ul>
+
+  <h2 id="mover">6. O que mover do Histórico (admin) para a home</h2>
+  <p>
+    Hoje o "Histórico" (<code>/evolucao</code>, 5 abas) e o "Ranking" (<code>/contribuidores</code>) são
+    visíveis só para admin. É o conteúdo mais rico do produto trancado no fundo. Sugestão de destino, aba a aba:
+  </p>
+  <table>
+    <tr><th>Aba do Histórico</th><th>O que tem</th><th>Destino sugerido</th></tr>
+    <tr><td>Índice</td><td>Série mediana/média/mín/máx + distribuição por fonte + export</td><td>Home (público). A home já tem a série mediana; levar a faixa mín–máx e a abertura por fonte (online × manual × campo) — é argumento de transparência. Export fica Premium.</td></tr>
+    <tr><td>Variação</td><td>Variação % por prato desde a base do período</td><td>Home (público), como aba do gráfico principal — responde "o que subiu desde que comecei a acompanhar" melhor que os movers atuais.</td></tr>
+    <tr><td>Ingredientes</td><td>Tabela completa de preços por ingrediente</td><td>Já existe parcialmente na home (TabelaProdutosRegiao, Premium). Unificar: uma tabela só, teaser público + completa no Premium.</td></tr>
+    <tr><td>Mapa</td><td>Mapa das contribuições de campo com filtros e export</td><td>Home ou /contribuir (público, sem dados pessoais): é prova social — mostra que gente de verdade manda preço e alimenta o CTA de contribuir.</td></tr>
+    <tr><td>Calibração</td><td>Descontos medidos campo × online</td><td>Permanece admin (é ferramenta interna); o resultado dela é que deve virar os % públicos (seção 2.1).</td></tr>
+    <tr><td>Ranking (/contribuidores)</td><td>Ranking de contribuintes</td><td>Público com opt-in de exibição do nome — gamificação só funciona se os participantes veem o pódio.</td></tr>
+  </table>
+  <p>
+    Critério geral: o que constrói <strong>confiança e hábito</strong> (série, variação, mapa, ranking) vai
+    para o público; o que é <strong>operação</strong> (calibração, moderação, coleta) fica no admin; o que é
+    <strong>profundidade de análise</strong> (export, série por ingrediente, tabela completa) é o Premium.
+  </p>
+
+  <h2 id="visual">7. Tudo que é visual provisório</h2>
+  <table>
+    <tr><th>Item</th><th>Estado atual</th><th>Onde está</th></tr>
+    <tr><td>Logo</td><td>Símbolo do infinito branco em quadrado com gradiente + "Índice PF by Infinity" — herdado do mockup (doc 008)</td><td><code>components/site/Logo.tsx</code> (INF_PATH), usado no header, footer, sidebar do painel e marca d'água do hero</td></tr>
+    <tr><td>Favicon</td><td>Mesmo quadrado gradiente + infinito</td><td><code>app/icon.svg</code>; PNGs <code>icon-192/512.png</code>, <code>apple-touch-icon.png</code> e <code>favicon.ico</code> (PR #129) em <code>public/</code> — ao trocar a marca, regenerar todos do novo ícone</td></tr>
+    <tr><td>Imagem OG (compartilhamento)</td><td>Quadrado gradiente com o texto "PF" (não usa nem o infinito)</td><td><code>app/opengraph-image.tsx</code></td></tr>
+    <tr><td>Cores</td><td>Gradiente magenta→roxo→azul→ciano→verde do mockup "by Infinity"; acento azul #0069D4; superfícies frias (#f4f6fb)</td><td><code>app/globals.css</code> (:root) espelhado em <code>lib/theme.ts</code> — trocar a marca = editar esses 2 arquivos</td></tr>
+    <tr><td>Cor por nível de preço</td><td>Online = vermelho (#ef4444) — colide semanticamente com "alta de preço", que também é vermelho nos deltas e movers</td><td><code>lib/theme.ts</code> (NIVEL_HEX)</td></tr>
+    <tr><td>Theme color / manifest</td><td>#0069D4 e nome "Índice PF — custo do prato feito" (ícones = favicon provisório)</td><td><code>app/manifest.ts</code>, <code>app/layout.tsx</code></td></tr>
+    <tr><td>Assinatura corporativa</td><td>"© 2026 Infinity Inc" + coluna "Infinity" com 3 produtos sem link</td><td><code>components/site/Footer.tsx</code></td></tr>
+    <tr><td>Tipografia</td><td>Inter única (a identidade "Lora + Inter" do v1 foi abandonada na migração ao mockup)</td><td><code>app/layout.tsx</code></td></tr>
+  </table>
+  <p>
+    Quando a marca definitiva existir, a troca é localizada: <code>Logo.tsx</code>, <code>icon.svg</code> +
+    3 PNGs, <code>opengraph-image.tsx</code>, tokens do <code>globals.css</code>/<code>theme.ts</code> e
+    manifest. Nenhuma página precisa ser reescrita.
+  </p>
+
+  <h2 id="extras">8. O que não estava na sua lista</h2>
+  <ul>
+    <li><strong>Governança do índice:</strong> índice público precisa de metodologia versionada, changelog de
+      revisões e política de correção de dados ("nunca reescrever histórico em silêncio"). É o que separa
+      um dashboard de um índice citável.</li>
+    <li><strong>Estatística honesta:</strong> calcular intervalo de confiança real (a base tem dispersão por
+      ingrediente e por fonte) em vez do ±5% fixo; publicar cobertura por coleta (quantos ingredientes
+      vieram frescos × estimados — o dado já existe em <code>custos_pratos</code>).</li>
+    <li><strong>Testes e CI:</strong> nenhum teste roda hoje. Mínimo de padrão ouro: build + tsc + um smoke de
+      cálculo do índice no CI antes do merge.</li>
+    <li><strong>Observabilidade:</strong> sem Sentry, sem alerta de coleta falha, sem uptime monitor. A
+      primeira notícia de um problema hoje é um usuário (ou o sócio) reclamando.</li>
+    <li><strong>E-mail:</strong> confirmação/reset dependem do SMTP default do Supabase (limite baixo, cai em
+      spam) e da pendência de Site URL/Redirect no Auth.</li>
+    <li><strong>SEO técnico:</strong> as páginas por prato e o sitemap de 104 URLs entraram no PR #130; faltam
+      dados estruturados (schema.org) e submeter/acompanhar o sitemap no Search Console (configurado no
+      PR #127).</li>
+    <li><strong>Estratégia de preço do Premium:</strong> R$ 99,99/mês sem validação; o gate atual (tabela por
+      região + export) pode ser fraco para esse ticket. Alternativa já apontada no doc 005: Premium B2C
+      barato (ou só sem anúncios) e relatórios B2B como receita principal.</li>
+    <li><strong>PWA incompleto como produto:</strong> instala e cacheia, mas não há push de "índice atualizou"
+      — que é exatamente o gancho de retenção semanal que uma coleta toda segunda-feira permite.</li>
+  </ul>
+
+  <h2 id="sequencia">9. Sequência sugerida para o debate</h2>
+  <ol>
+    <li><strong>Semana 1 — credibilidade e legal (P0):</strong> <span class="ok">feito em 11/07:</span>
+      card falso da /metodologia, CSP com GTM, link da Rede Food Service, fase de lançamento unificada.
+      <strong>Falta:</strong> Termos + Privacidade + consentimento de cookies; decidir as fontes
+      aspiracionais da metodologia (Visitas/Ligações/ABIA) e o ±5%; demais links do footer; Site URL do
+      Supabase Auth.</li>
+    <li><strong>Semanas 2–3 — produto (P1):</strong> abrir Variação, faixa do índice, mapa de contribuições e
+      ranking ao público; reduzir anúncios na home e tirar o gate do gráfico; decidir marca definitiva e
+      aplicar (arquivos mapeados na seção 7); unificar a flag da fase de lançamento.</li>
+    <li><strong>Semanas 3–4 — endurecimento (P2):</strong> pendências do doc 011 (2FA, buckets, backup, rate
+      limit, npm audit, CSP bloqueante); Sentry + alerta de coleta; Resend.</li>
+    <li><strong>Mês 2 — crescimento:</strong> página por prato <span class="ok">(feita no PR #130)</span> —
+      seguem dados estruturados e og:image por prato; fechar o loop de calibração (descontos reais por
+      região); comparativo IPCA/cesta básica; decisão de preço do Premium e, só então, ativação do gateway.</li>
+  </ol>
+
+  <div class="note">
+    <p><strong>Nota de método:</strong> este documento vem de leitura direta do código em produção
+    (branch main de 11/07/2026), da planilha e das migrações, cruzada com os docs 001–012 e o estado externo
+    conhecido (migrações aplicadas, domínio no ar, GTM/GA4 ativos). Itens de estado externo (painel Supabase,
+    Vercel, Asaas) estão marcados com onde se resolvem, pois não são verificáveis pelo repositório.</p>
+  </div>
+
+  <footer>Índice PF — doc 013 · gerado em 11/07/2026 a partir do scan completo do repositório.</footer>
+</div>
+</body>
+</html>
