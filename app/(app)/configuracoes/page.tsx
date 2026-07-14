@@ -223,14 +223,14 @@ export default function ConfiguracoesPage() {
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-dim">Sexo</label>
               <Select value={sexo} onChange={e => setSexo(e.target.value)}>
                 <option value="">Selecione…</option>
                 {SEXOS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </Select>
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-dim">Nascimento{idade(dataNasc) != null ? ` · ${idade(dataNasc)} anos` : ''}</label>
               <Input type="date" value={dataNasc} onChange={e => setDataNasc(e.target.value)} />
             </div>

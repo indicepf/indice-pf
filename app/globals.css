@@ -108,6 +108,10 @@
   --font-serif: var(--font-serif);
 }
 
+/* nenhum elemento pode alargar a janela (side-scroll no mobile); clip — e não
+   hidden — para não quebrar position:sticky (topbar/sidebar) */
+html, body { overflow-x: clip; }
+
 body {
   background: var(--bg);
   color: var(--ink);
@@ -175,7 +179,7 @@ body {
 .panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap}
 .panel-head h2{font-size:16px;font-weight:750;display:flex;align-items:center;gap:9px;letter-spacing:-.01em}
 .panel-head .sub{font-size:12.5px;color:var(--dim);margin-top:2px;font-weight:400}
-.panel-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.panel-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;max-width:100%}
 .panel-body{padding:20px}
 
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:17px 18px;box-shadow:var(--shadow-xs);cursor:pointer;transition:.15s;position:relative;overflow:hidden;text-align:left}
@@ -192,7 +196,9 @@ body {
 .kpi .kctx{font-size:11px;color:var(--faint);margin-top:6px}
 
 .segbar{display:inline-flex;background:var(--surface-3);border-radius:99px;padding:4px;gap:2px}
-.segbar button{padding:7px 15px;border-radius:99px;font-size:12.5px;font-weight:650;color:var(--dim);transition:.14s;cursor:pointer}
+.segbar button{padding:7px 15px;border-radius:99px;font-size:12.5px;font-weight:650;color:var(--dim);transition:.14s;cursor:pointer;white-space:nowrap}
+/* mobile: a segbar nunca alarga a página — encolhe o padding e rola por dentro */
+@media (max-width:640px){.segbar{max-width:100%;overflow-x:auto;scrollbar-width:none}.segbar button{padding:7px 11px}}
 .segbar button.on{background:#fff;color:var(--azul);box-shadow:var(--shadow-xs)}
 .segbar button:disabled{opacity:.45;cursor:not-allowed}
 
