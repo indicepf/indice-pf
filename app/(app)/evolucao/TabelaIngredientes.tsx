@@ -120,8 +120,8 @@ export default function TabelaIngredientes() {
       </div>
 
       {loading ? <p className="text-sm text-dim py-6">Carregando…</p> : (
-        <div className="border border-border rounded-lg bg-surface">
-          <table className="w-full text-xs">
+        <div className="border border-border rounded-lg bg-surface overflow-x-auto">
+          <table className="w-full text-xs min-w-[44rem]">
             <thead>
               <tr className="text-left text-[0.62rem] uppercase tracking-wide text-dim border-b border-border">
                 {COLS.map(c => (

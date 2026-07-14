@@ -76,7 +76,7 @@ export default function MeusPratosPage() {
       )}
 
       {!!salvos?.length && (
-        <div className="border border-border rounded-[var(--r)] bg-surface mt-5 overflow-hidden">
+        <div className="border border-border rounded-[var(--r)] bg-surface mt-5 overflow-x-auto">
           <table className="tbl-mk compact">
             <thead>
               <tr>
@@ -193,6 +193,7 @@ function ModalMeuPrato({ prato, porId, serie, nivel, fator, onRenomeado, onExclu
         </div>
 
         <div className="modal-body">
+          <div className="overflow-x-auto">
           <table className="tbl-mk compact">
             <thead>
               <tr>
@@ -215,6 +216,7 @@ function ModalMeuPrato({ prato, porId, serie, nivel, fator, onRenomeado, onExclu
               ))}
             </tbody>
           </table>
+          </div>
           <p className="text-xs text-dim tnum mt-2">
             Peso servido: ~{Math.round(servido)} g · custo por 100 g servidos: {servido > 0 ? brl(total / servido * 100) : '—'}
           </p>

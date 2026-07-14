@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import {
@@ -173,6 +173,32 @@ export default function Calculadora() {
   if (itens === null) return <p className="text-sm text-dim">Carregando ingredientes…</p>
   if (!itens.length) return <p className="text-sm text-dim">Sem preços disponíveis no momento.</p>
 
+  // painel do grupo aberto (subcategorias → chips); renderizado em dois
+  // pontos: logo abaixo do card clicado (mobile) ou abaixo do grid (sm+)
+  const painelGrupo = aberto && arvore[aberto] ? (
+    <div className="border border-border rounded-[var(--r)] bg-surface p-4 space-y-3">
+      {Object.entries(arvore[aberto]).sort(([a], [b]) => a.localeCompare(b)).map(([sub, lista]) => (
+        <div key={sub}>
+          <p className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-dim mb-1.5">{sub}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {lista.map(i => {
+              const on = usados.has(i.id)
+              return (
+                <button key={i.id} onClick={() => toggle(i)} aria-pressed={on}
+                  title={`${brl(i.preco_g * 1000 * fator)}/kg cru`}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition cursor-pointer ${
+                    on ? 'bg-accent text-white border-accent'
+                       : 'bg-surface text-ink-2 border-border-2 hover:border-accent/60 hover:text-ink'}`}>
+                  {on ? '✓ ' : ''}{i.nome}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : null
+
   return (
     <section>
       <p className="text-sm text-dim leading-relaxed">
@@ -193,53 +219,36 @@ export default function Calculadora() {
         </div>
       </div>
 
-      {/* montador: cards por grupo (expande) → subcategorias → chips */}
+      {/* montador: cards por grupo (expande) → subcategorias → chips.
+          No mobile o painel abre logo abaixo do card clicado; no desktop
+          (sm+) segue abaixo do grid inteiro, como antes */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mt-4">
         {GRUPOS_CAT.map(g => {
           const subs = arvore[g]
           const n = subs ? Object.values(subs).reduce((s, l) => s + l.length, 0) : 0
           const sel = linhas.filter(l => porId.get(l.id)?.grupo === g).length
           return (
-            <button key={g} disabled={!n} onClick={() => setAberto(a => a === g ? null : g)}
-              className={`text-left border rounded-[var(--r)] p-3 transition cursor-pointer disabled:opacity-40 ${
-                aberto === g ? 'border-accent bg-accent/5' : 'border-border bg-surface hover:border-border-strong'}`}>
-              <span className="flex items-center gap-2 text-sm font-semibold">
-                <span style={{ background: CORES_GRUPO[g], width: 10, height: 10, borderRadius: 3, display: 'inline-block' }} />
-                {g}
-              </span>
-              <span className="text-xs text-dim mt-0.5 block">{n} itens{sel ? ` · ${sel} no prato` : ''}</span>
-            </button>
+            <Fragment key={g}>
+              <button disabled={!n} onClick={() => setAberto(a => a === g ? null : g)}
+                className={`text-left border rounded-[var(--r)] p-3 transition cursor-pointer disabled:opacity-40 ${
+                  aberto === g ? 'border-accent bg-accent/5' : 'border-border bg-surface hover:border-border-strong'}`}>
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <span style={{ background: CORES_GRUPO[g], width: 10, height: 10, borderRadius: 3, display: 'inline-block' }} />
+                  {g}
+                </span>
+                <span className="text-xs text-dim mt-0.5 block">{n} itens{sel ? ` · ${sel} no prato` : ''}</span>
+              </button>
+              {aberto === g && painelGrupo && <div className="sm:hidden">{painelGrupo}</div>}
+            </Fragment>
           )
         })}
       </div>
-
-      {aberto && arvore[aberto] && (
-        <div className="border border-border rounded-[var(--r)] bg-surface p-4 mt-2.5 space-y-3">
-          {Object.entries(arvore[aberto]).sort(([a], [b]) => a.localeCompare(b)).map(([sub, lista]) => (
-            <div key={sub}>
-              <p className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-dim mb-1.5">{sub}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {lista.map(i => {
-                  const on = usados.has(i.id)
-                  return (
-                    <button key={i.id} onClick={() => toggle(i)} aria-pressed={on}
-                      title={`${brl(i.preco_g * 1000 * fator)}/kg cru`}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition cursor-pointer ${
-                        on ? 'bg-accent text-white border-accent'
-                           : 'bg-surface text-ink-2 border-border-2 hover:border-accent/60 hover:text-ink'}`}>
-                      {on ? '✓ ' : ''}{i.nome}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {painelGrupo && <div className="max-sm:hidden mt-2.5">{painelGrupo}</div>}
 
       {calc.length > 0 ? (
         <>
           <h3 className="text-[13px] font-bold mt-6 mb-2">Seu prato ({calc.length} ingrediente{calc.length === 1 ? '' : 's'})</h3>
+          <div className="overflow-x-auto">
           <table className="tbl-mk compact">
             <thead>
               <tr>
@@ -276,6 +285,7 @@ export default function Calculadora() {
               ))}
             </tbody>
           </table>
+          </div>
 
           <div className="grid sm:grid-cols-3 gap-3 mt-4">
             <div className="stat-mini"><span className="k">Custo do seu prato</span><b className="tnum">{brl(total)}</b></div>

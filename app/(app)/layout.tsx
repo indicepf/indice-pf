@@ -77,7 +77,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!logado) return null
 
   const secoes = SECOES.filter(s => !s.admin || profile?.is_admin)
-  const links = secoes.flatMap(s => s.itens)
+  // nav mobile: dois blocos (usuário × admin) — decisão de 13/07
+  const gruposMobile = [
+    { titulo: 'Minha área', itens: secoes.filter(s => !s.admin).flatMap(s => s.itens), admin: false },
+    ...(profile?.is_admin ? [{ titulo: 'Administração', itens: secoes.find(s => s.admin)?.itens ?? [], admin: true }] : []),
+  ]
   const titulo = TITULOS[pathname] ?? ''
   const inicial = ((profile?.nome || user?.email || '?').trim().charAt(0) || '?').toUpperCase()
 
@@ -139,18 +143,43 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Link href="/contribuir" className="btn-mk sm max-sm:hidden">Enviar preço</Link>
           </div>
         </header>
-        {/* nav mobile: quebra em linhas (chips) — sem side-scroll mesmo com os
-            itens de admin; o rótulo usa a versão curta para caber mais por linha */}
-        <nav className="lg:hidden px-4 py-2 border-b border-border bg-surface flex items-center gap-1.5 flex-wrap">
-          {links.map(([href, label]) => (
-            <Link key={href} href={href}
-              className={`text-[13px] whitespace-nowrap px-2.5 py-1 rounded-full border transition ${
-                pathname === href
-                  ? 'text-accent font-medium border-accent/40 bg-accent/10'
-                  : 'text-dim border-transparent hover:text-ink'}`}>
-              {label.replace('Plano & assinatura', 'Plano').replace('Calculadora de PF', 'Calculadora')}
-            </Link>
+        {/* nav mobile: chips agrupados por seção — usuário e admin separados
+            (admin em roxo); "Ver site" e "Configurações" fecham o menu, como
+            na sidebar desktop. Rótulos curtos para caber mais por linha */}
+        <nav className="lg:hidden px-4 py-2.5 border-b border-border bg-surface space-y-2">
+          {gruposMobile.map(g => (
+            <div key={g.titulo}>
+              <p className="text-[10px] uppercase tracking-[0.08em] font-bold text-faint mb-1">{g.titulo}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {g.itens.map(([href, label]) => (
+                  <Link key={href} href={href}
+                    className={`text-[13px] whitespace-nowrap px-2.5 py-1 rounded-full border transition ${
+                      pathname === href
+                        ? g.admin
+                          ? 'text-brand-roxo font-medium border-brand-roxo/40 bg-brand-roxo/10'
+                          : 'text-accent font-medium border-accent/40 bg-accent/10'
+                        : g.admin
+                          ? 'text-dim border-border hover:text-brand-roxo'
+                          : 'text-dim border-transparent hover:text-ink'}`}>
+                    {label.replace('Plano & assinatura', 'Plano').replace('Calculadora de PF', 'Calculadora').replace('Painel administrativo', 'Painel admin')}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
+          <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-2">
+            <Link href="/"
+              className="flex items-center gap-1.5 text-[13px] whitespace-nowrap px-2.5 py-1 rounded-full border border-border-2 text-ink-2 hover:text-ink transition [&_.ico]:w-3.5 [&_.ico]:h-3.5">
+              {ICONES['/']}Ver site público
+            </Link>
+            <Link href="/configuracoes"
+              className={`flex items-center gap-1.5 text-[13px] whitespace-nowrap px-2.5 py-1 rounded-full border transition [&_.ico]:w-3.5 [&_.ico]:h-3.5 ${
+                pathname === '/configuracoes'
+                  ? 'text-accent font-medium border-accent/40 bg-accent/10'
+                  : 'border-border-2 text-ink-2 hover:text-ink'}`}>
+              {ICONES['/configuracoes']}Configurações
+            </Link>
+          </div>
         </nav>
 
         {children}

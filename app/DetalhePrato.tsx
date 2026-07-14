@@ -103,6 +103,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
           {!itens ? (
             <p className="text-sm text-dim">Carregando composição…</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="tbl-mk compact">
               <thead>
                 <tr>
@@ -139,6 +140,7 @@ export default function DetalhePrato({ dish, itens, fontesPorIngrediente, manuai
                 ))}
               </tbody>
             </table>
+            </div>
           )}
 
           {itens && pesoServido > 0 && (

@@ -441,7 +441,8 @@ export default function StatusColeta() {
               className={`${inputCls} mb-3 max-w-xs`} />
             {msg && <p className="text-xs text-danger mb-3">{msg}</p>}
             {!encontrados.length ? <p className="text-sm text-dim">Carregando…</p> : (
-              <table className="w-full text-xs">
+              <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[34rem]">
                 <thead>
                   <tr className="text-left text-dim select-none">
                     {COLUNAS_ENC.map(([col, rotulo, alin]) => (
@@ -518,6 +519,7 @@ export default function StatusColeta() {
                     })}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>
