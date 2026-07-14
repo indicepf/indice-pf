@@ -49,7 +49,9 @@ export default function AuthControls() {
                 : <span className="w-7 h-7 rounded-full bg-surface-3 border border-border grid place-items-center text-xs text-dim">
                     {((profile?.nome || user.email || '?').trim().charAt(0) || '?').toUpperCase()}
                   </span>}
-              {profile?.nome ? profile.nome.split(' ')[0] : (user.email ?? 'Conta')} ▾
+              <span className="max-w-[9rem] truncate">
+                {profile?.nome ? profile.nome.split(' ')[0] : (user.email ?? 'Conta')}
+              </span> ▾
             </button>
             {menu && (
               <div className="absolute right-0 mt-1 w-44 bg-surface border border-border rounded-[var(--r-sm)] shadow-[var(--shadow-md)] text-sm py-1 z-50">
