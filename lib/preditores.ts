@@ -4,35 +4,41 @@
 // tabela fatores_preditores.
 
 export type FormatoPreditor = 'moeda' | 'percentual' | 'numero'
+export type Granularidade = 'diario' | 'mensal'
 
 export type SeriePreditor = {
   key: string
   label: string       // rótulo curto para o menu e a legenda
   unidade: string     // sufixo no eixo/tooltip
   formato: FormatoPreditor
+  granularidade: Granularidade
 }
 
 export const PREDITORES: readonly SeriePreditor[] = [
-  { key: 'dolar',            label: 'Dólar',                 unidade: 'R$',  formato: 'moeda' },
-  { key: 'euro',             label: 'Euro',                  unidade: 'R$',  formato: 'moeda' },
-  { key: 'selic',            label: 'SELIC (% a.a.)',        unidade: '%',   formato: 'percentual' },
-  { key: 'ipca',             label: 'IPCA (% mês)',          unidade: '%',   formato: 'percentual' },
-  { key: 'ipca_alimentacao', label: 'IPCA Alimentação',      unidade: '%',   formato: 'percentual' },
-  { key: 'ipca_alim_fora',   label: 'IPCA Alim. fora casa',  unidade: '%',   formato: 'percentual' },
-  { key: 'salario_minimo',   label: 'Salário mínimo',        unidade: 'R$',  formato: 'moeda' },
-  { key: 'bitcoin',          label: 'Bitcoin',               unidade: 'R$',  formato: 'moeda' },
-  { key: 'ibovespa',         label: 'Ibovespa',              unidade: 'pts', formato: 'numero' },
-  // itens do IPCA (variação % mensal, SIDRA) — combustível e cesta do prato
-  { key: 'ipca_7659',        label: 'Diesel (% mês)',        unidade: '%',   formato: 'percentual' },
-  { key: 'ipca_7657',        label: 'Gasolina (% mês)',      unidade: '%',   formato: 'percentual' },
-  { key: 'ipca_7482',        label: 'Gás de botijão (% mês)', unidade: '%',  formato: 'percentual' },
-  { key: 'ipca_7283',        label: 'Carnes (% mês)',        unidade: '%',   formato: 'percentual' },
-  { key: 'ipca_7349',        label: 'Aves e ovos (% mês)',   unidade: '%',   formato: 'percentual' },
-  { key: 'ipca_7173',        label: 'Arroz (% mês)',         unidade: '%',   formato: 'percentual' },
-  { key: 'ipca_12222',       label: 'Feijão carioca (% mês)', unidade: '%',  formato: 'percentual' },
-  { key: 'ipca_7385',        label: 'Óleo de soja (% mês)',  unidade: '%',   formato: 'percentual' },
-  { key: 'ipca_7219',        label: 'Açúcares (% mês)',      unidade: '%',   formato: 'percentual' },
+  // diárias — casam com a coleta ~semanal do índice (gráfico principal)
+  { key: 'dolar',            label: 'Dólar',                 unidade: 'R$',  formato: 'moeda',      granularidade: 'diario' },
+  { key: 'euro',             label: 'Euro',                  unidade: 'R$',  formato: 'moeda',      granularidade: 'diario' },
+  { key: 'bitcoin',          label: 'Bitcoin',               unidade: 'R$',  formato: 'moeda',      granularidade: 'diario' },
+  { key: 'ibovespa',         label: 'Ibovespa',              unidade: 'pts', formato: 'numero',     granularidade: 'diario' },
+  // mensais — vão para o gráfico mensal (variação % do IPCA, juros, salário)
+  { key: 'selic',            label: 'SELIC (% a.a.)',        unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca',             label: 'IPCA (% mês)',          unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_alimentacao', label: 'IPCA Alimentação',      unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_alim_fora',   label: 'IPCA Alim. fora casa',  unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'salario_minimo',   label: 'Salário mínimo',        unidade: 'R$',  formato: 'moeda',      granularidade: 'mensal' },
+  { key: 'ipca_7659',        label: 'Diesel (% mês)',        unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_7657',        label: 'Gasolina (% mês)',      unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_7482',        label: 'Gás de botijão (% mês)', unidade: '%',  formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_7283',        label: 'Carnes (% mês)',        unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_7349',        label: 'Aves e ovos (% mês)',   unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_7173',        label: 'Arroz (% mês)',         unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_12222',       label: 'Feijão carioca (% mês)', unidade: '%',  formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_7385',        label: 'Óleo de soja (% mês)',  unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
+  { key: 'ipca_7219',        label: 'Açúcares (% mês)',      unidade: '%',   formato: 'percentual', granularidade: 'mensal' },
 ] as const
+
+export const PREDITORES_DIARIOS = PREDITORES.filter(p => p.granularidade === 'diario')
+export const PREDITORES_MENSAIS = PREDITORES.filter(p => p.granularidade === 'mensal')
 
 export const PREDITOR_POR_KEY: Record<string, SeriePreditor> =
   Object.fromEntries(PREDITORES.map(p => [p.key, p]))

@@ -10,7 +10,7 @@ import { mediana } from '@/lib/stats'
 import { ACCENT, BRAND, CORES_GRUPO, DIM, INK } from '@/lib/theme'
 import type { ItemDetalhe } from '@/lib/types'
 import { inputBase, Modal } from '@/components/ui'
-import { PREDITORES, PREDITOR_POR_KEY, fmtValorPreditor } from '@/lib/preditores'
+import { PREDITORES_DIARIOS, PREDITORES_MENSAIS, PREDITOR_POR_KEY, fmtValorPreditor } from '@/lib/preditores'
 import { regressaoLinear, type ResultadoRegressao } from '@/lib/regressao'
 import SeletorPrato from './SeletorPrato'
 import BotaoExportar from './BotaoExportar'
@@ -49,10 +49,14 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]>>({})
   const [off, setOff] = useState<Set<number>>(new Set())   // ingredientes desmarcados no "e se"
   const [dataDetalhes, setDataDetalhes] = useState('')   // coleta usada no "Simular"
-  // overlay (eixo direito) e regressão — só admin
+  // overlay (eixo direito) e regressão — só admin. Gráfico principal usa séries
+  // DIÁRIAS (casam com a coleta semanal); o painel mensal usa as MENSAIS.
   const [overlayVar, setOverlayVar] = useState('')
   const [overlaySerie, setOverlaySerie] = useState<{ data: string; valor: number }[]>([])
   const [regVars, setRegVars] = useState<Set<string>>(new Set())
+  const [overlayVarM, setOverlayVarM] = useState('')
+  const [overlaySerieM, setOverlaySerieM] = useState<{ data: string; valor: number }[]>([])
+  const [regVarsM, setRegVarsM] = useState<Set<string>>(new Set())
   const [modelo, setModelo] = useState<ResultadoRegressao | { erro: string } | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
   const [calculando, setCalculando] = useState(false)
@@ -89,7 +93,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapsNovos, ini, fim])
   useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
-  // série do preditor sobreposto (eixo direito)
+  // séries dos preditores sobrepostos (eixo direito): diário e mensal
   useEffect(() => {
     if (!admin || !overlayVar) { setOverlaySerie([]); return }
     let vivo = true
@@ -98,6 +102,14 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       .catch(() => { if (vivo) setOverlaySerie([]) })
     return () => { vivo = false }
   }, [admin, overlayVar])
+  useEffect(() => {
+    if (!admin || !overlayVarM) { setOverlaySerieM([]); return }
+    let vivo = true
+    fetch(`/api/preditores?vars=${overlayVarM}`).then(r => r.json())
+      .then(j => { if (vivo) setOverlaySerieM(j[overlayVarM] || []) })
+      .catch(() => { if (vivo) setOverlaySerieM([]) })
+    return () => { vivo = false }
+  }, [admin, overlayVarM])
 
   const nacional = pratoId === 0
   const dados = useMemo(() => {
@@ -136,20 +148,38 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   const dadosChart = overlayAtivo
     ? dadosP.map((d, i) => ({ ...d, preditor: cf(overlaySerie, datasColeta[i]) }))
     : dadosP
+  const pontosDiarios = dadosP.map((d: any, i) => ({ data: datasColeta[i], y: nacional ? d.mediana : d.blend }))
 
-  async function gerarModelo() {
-    const keys = [...regVars]
+  // índice agregado por mês (média da mediana/blend das coletas do mês)
+  const pontosMensais = useMemo(() => {
+    const byMes = new Map<string, number[]>()
+    dadosP.forEach((d: any) => {
+      const ym = new Date(d.ts).toISOString().slice(0, 7)
+      const y = nacional ? d.mediana : d.blend
+      if (y != null) { const arr = byMes.get(ym) ?? []; arr.push(y); byMes.set(ym, arr) }
+    })
+    return [...byMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([ym, ys]) => ({
+      ym, data: `${ym}-01`, ts: new Date(`${ym}-01T00:00:00Z`).getTime(),
+      indice: r2(ys.reduce((s, v) => s + v, 0) / ys.length),
+    }))
+  }, [dadosP, nacional])
+  const overlayInfoM = overlayVarM ? PREDITOR_POR_KEY[overlayVarM] : null
+  const overlayAtivoM = admin && !!overlayVarM && overlaySerieM.length > 0
+  const dadosMes = overlayAtivoM
+    ? pontosMensais.map(p => ({ ...p, preditor: cf(overlaySerieM, p.data) }))
+    : pontosMensais
+
+  async function gerarModelo(keys: string[], pontos: { data: string; y: number }[]) {
     if (!keys.length) return
     setCalculando(true)
     try {
       const j = await fetch(`/api/preditores?vars=${keys.join(',')}`).then(r => r.json())
       const y: number[] = []
       const cols: number[][] = keys.map(() => [])
-      dadosP.forEach((d: any, i) => {
-        const yi = nacional ? d.mediana : d.blend
-        const xs = keys.map(k => cf(j[k] || [], datasColeta[i]))
-        if (yi != null && xs.every(v => v != null)) {
-          y.push(yi); keys.forEach((k, ki) => cols[ki].push(xs[ki] as number))
+      pontos.forEach(pt => {
+        const xs = keys.map(k => cf(j[k] || [], pt.data))
+        if (pt.y != null && xs.every(v => v != null)) {
+          y.push(pt.y); keys.forEach((k, ki) => cols[ki].push(xs[ki] as number))
         }
       })
       setModelo(regressaoLinear(y, keys.map((k, ki) => ({ nome: PREDITOR_POR_KEY[k].label, valores: cols[ki] }))))
@@ -227,17 +257,17 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
 
         {admin && (
           <div className="border border-brand-roxo/30 bg-brand-roxo/5 rounded-lg p-4 space-y-3">
-            <p className="text-xs font-semibold text-brand-roxo uppercase tracking-wide">Análise (admin)</p>
+            <p className="text-xs font-semibold text-brand-roxo uppercase tracking-wide">Análise (admin) · séries diárias</p>
             <label className="text-xs text-dim block">Sobrepor no eixo direito
               <select value={overlayVar} onChange={e => setOverlayVar(e.target.value)} className={inputBase}>
                 <option value="">nenhum</option>
-                {PREDITORES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                {PREDITORES_DIARIOS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
               </select>
             </label>
             <div>
-              <p className="text-xs text-dim mb-1.5">Regressão: índice {nacional ? '(mediana nacional)' : '(blend do prato)'} ~ preditores</p>
+              <p className="text-xs text-dim mb-1.5">Regressão: índice {nacional ? '(mediana nacional)' : '(blend do prato)'} ~ preditores diários</p>
               <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
-                {PREDITORES.map(p => (
+                {PREDITORES_DIARIOS.map(p => (
                   <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-xs">
                     <input type="checkbox" checked={regVars.has(p.key)}
                       onChange={() => setRegVars(s => { const n = new Set(s); n.has(p.key) ? n.delete(p.key) : n.add(p.key); return n })} />
@@ -245,7 +275,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                   </label>
                 ))}
               </div>
-              <button onClick={gerarModelo} disabled={!regVars.size || calculando} className="btn-mk sm mt-2">
+              <button onClick={() => gerarModelo([...regVars], pontosDiarios)} disabled={!regVars.size || calculando} className="btn-mk sm mt-2">
                 {calculando ? 'Calculando…' : 'Gerar modelo'}
               </button>
             </div>
@@ -270,7 +300,13 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
           <div style={{ width: '100%', height: 360 }}>
             <ResponsiveContainer>
               <ComposedChart data={dadosChart} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
+                <defs>
+                  <linearGradient id="grad-ind" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={COR.paprika} stopOpacity={0.22} />
+                    <stop offset="100%" stopColor={COR.paprika} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                   ticks={ticks} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
                   tick={{ fontSize: 13, fill: COR.muted }} />
@@ -290,14 +326,14 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                 {nacional ? (
                   <>
                     {banda && <Area yAxisId="left" type="monotone" dataKey="faixa" name="faixa mín–máx" fill={COR.paprika} fillOpacity={0.1} stroke="none" />}
-                    {metricas.mediana && <Line yAxisId="left" type="monotone" dataKey="mediana" name="Mediana" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />}
+                    {metricas.mediana && <Area yAxisId="left" type="monotone" dataKey="mediana" name="Mediana" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill="url(#grad-ind)" />}
                     {metricas.media && <Line yAxisId="left" type="monotone" dataKey="media" name="Média" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />}
                     {metricas.min && <Line yAxisId="left" type="monotone" dataKey="min" name="Mínimo" stroke={COR.muted} strokeWidth={1.5} dot={{ r: 2 }} />}
                     {metricas.max && <Line yAxisId="left" type="monotone" dataKey="max" name="Máximo" stroke={COR.ink} strokeWidth={1.5} dot={{ r: 2 }} />}
                   </>
                 ) : (
                   <>
-                    <Line yAxisId="left" type="monotone" dataKey="blend" name="Blend" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
+                    <Area yAxisId="left" type="monotone" dataKey="blend" name="Blend" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill="url(#grad-ind)" />
                     <Line yAxisId="left" type="monotone" dataKey="online" name="Online" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />
                     <Line yAxisId="left" type="monotone" dataKey="manual" name="Manual" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
                   </>
@@ -310,6 +346,68 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
             </ResponsiveContainer>
           </div>
         </div>
+
+        {admin && (
+          <div className="border border-border rounded-lg bg-surface p-4 space-y-3">
+            <p className="text-sm font-medium">Índice mensal × preditores mensais (admin)
+              <InfoTip texto="Índice agregado por mês (média das coletas do mês) para casar com as variáveis mensais do IPCA/juros/salário. Sobreponha uma variável no eixo direito ou rode a regressão mensal." /></p>
+            <div className="border border-brand-roxo/30 bg-brand-roxo/5 rounded-lg p-3 space-y-3">
+              <label className="text-xs text-dim block">Sobrepor no eixo direito (mensal)
+                <select value={overlayVarM} onChange={e => setOverlayVarM(e.target.value)} className={inputBase}>
+                  <option value="">nenhum</option>
+                  {PREDITORES_MENSAIS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                </select>
+              </label>
+              <div>
+                <p className="text-xs text-dim mb-1.5">Regressão: índice mensal ~ preditores mensais</p>
+                <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
+                  {PREDITORES_MENSAIS.map(p => (
+                    <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                      <input type="checkbox" checked={regVarsM.has(p.key)}
+                        onChange={() => setRegVarsM(s => { const n = new Set(s); n.has(p.key) ? n.delete(p.key) : n.add(p.key); return n })} />
+                      {p.label}
+                    </label>
+                  ))}
+                </div>
+                <button onClick={() => gerarModelo([...regVarsM], pontosMensais.map(p => ({ data: p.data, y: p.indice })))}
+                  disabled={!regVarsM.size || calculando} className="btn-mk sm mt-2">
+                  {calculando ? 'Calculando…' : 'Gerar modelo mensal'}
+                </button>
+              </div>
+            </div>
+            <div style={{ width: '100%', height: 320 }}>
+              <ResponsiveContainer>
+                <ComposedChart data={dadosMes} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+                  <defs>
+                    <linearGradient id="grad-mes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={COR.paprika} stopOpacity={0.22} />
+                      <stop offset="100%" stopColor={COR.paprika} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                    ticks={dadosMes.map(p => p.ts)} tickFormatter={(t: number) => new Date(t).toISOString().slice(0, 7).split('-').reverse().join('/')}
+                    tick={{ fontSize: 12, fill: COR.muted }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 12, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
+                  {overlayAtivoM && (
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: COR.azul }} width={64}
+                      tickFormatter={v => overlayInfoM?.unidade === 'R$' ? `R$${v}` : overlayInfoM?.unidade === '%' ? `${v}%` : `${v}`} />
+                  )}
+                  <Tooltip formatter={(v: any, _n: any, p: any) => {
+                    if (p?.dataKey === 'preditor') return overlayInfoM ? fmtValorPreditor(Number(v), overlayInfoM.formato) : String(v)
+                    return `R$ ${Number(v).toFixed(2)}`
+                  }} labelFormatter={(t: any) => new Date(t).toISOString().slice(0, 7).split('-').reverse().join('/')} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Area yAxisId="left" type="monotone" dataKey="indice" name="Índice (mês)" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill="url(#grad-mes)" />
+                  {overlayAtivoM && (
+                    <Line yAxisId="right" type="monotone" dataKey="preditor" name={overlayInfoM?.label || 'preditor'}
+                      stroke={COR.azul} strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls />
+                  )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* composição por grupo (total quando nacional; do prato quando selecionado) */}
         <div className="border border-border rounded-lg bg-surface p-4">
@@ -329,7 +427,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
           <div style={{ width: '100%', height: 340 }}>
             <ResponsiveContainer>
               <BarChart data={compData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="data" tick={{ fontSize: 13, fill: COR.muted }} />
                 <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={52} allowDataOverflow
                   domain={percentual ? [0, 100] : ['auto', 'auto']} ticks={percentual ? [0, 25, 50, 75, 100] : undefined}
@@ -429,7 +527,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
               <div style={{ width: '100%', height: 240 }}>
                 <ResponsiveContainer>
                   <ComposedChart data={modelo.observado.map((o, i) => ({ i: i + 1, obs: o, prev: modelo.previsto[i] }))} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="i" tick={{ fontSize: 12, fill: COR.muted }} />
                     <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
                     <Tooltip formatter={(v: any) => `R$ ${Number(v).toFixed(2)}`} />
