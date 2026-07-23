@@ -51,7 +51,7 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
   const [series, setSeries] = useState<Record<string, { data: string; valor: number }[]>>({})
   const [carregando, setCarregando] = useState(true)
   const [vistaDieese, setVistaDieese] = useState<Set<string>>(new Set(['dieese_cesta']))
-  const [porIng, setPorIng] = useState<{ serie: { ym: string; indice: number; pratos: number }[]; cobertura: { por_item_pct: number }; ancora: { ym: string } } | null>(null)
+  const [porIng, setPorIng] = useState<{ serie: { ym: string; indice: number; pratos: number }[]; cobertura: { por_item_pct: number }; ancora: { ym: string }; periodo: { pedido: string; efetivo: string; deflatorDesde: string } } | null>(null)
   const [erroIng, setErroIng] = useState('')
   const [conf, setConf] = useState<ItemConf[] | null>(null)
   const [itemConf, setItemConf] = useState<number | null>(null)
@@ -204,6 +204,12 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
           : def.nota}
         {ehPorIngrediente && porIng && <> · <strong className="text-ink">{porIng.cobertura.por_item_pct}%</strong> do custo deflacionado por item próprio (o resto cai no grupo).</>}
       </p>
+      {ehPorIngrediente && porIng && porIng.periodo.efetivo > porIng.periodo.pedido && (
+        <p className="text-xs text-accent -mt-4">
+          Série começa em {porIng.periodo.efetivo.split('-').reverse().join('/')}, não em {porIng.periodo.pedido.split('-').reverse().join('/')}:
+          os itens do IPCA só existem a partir de {porIng.periodo.deflatorDesde.split('-').reverse().join('/')}. Para ir mais atrás, use um método agregado.
+        </p>
+      )}
       {erroIng && <p className="text-xs text-accent -mt-4">Falha ao calcular por ingrediente: {erroIng}</p>}
 
       {/* reconstrução */}

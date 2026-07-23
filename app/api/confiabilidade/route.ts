@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { todasLinhas } from '@/lib/server/paginar'
 import { mediana } from '@/lib/stats'
 import { MAPA_INGREDIENTE_DIEESE } from '@/lib/mapa-ingredientes'
 
@@ -14,19 +15,6 @@ import { MAPA_INGREDIENTE_DIEESE } from '@/lib/mapa-ingredientes'
 
 export const maxDuration = 60
 
-async function todasLinhas<T>(
-  monta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<T[]> {
-  const passo = 1000
-  const out: T[] = []
-  for (let de = 0; ; de += passo) {
-    const { data, error } = await monta(de, de + passo - 1)
-    if (error) throw new Error(error.message)
-    const lote = data ?? []
-    out.push(...lote)
-    if (lote.length < passo) return out
-  }
-}
 
 export async function GET() {
   const db = supabaseAdmin()

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { todasLinhas } from '@/lib/server/paginar'
 import { PREDITOR_POR_KEY } from '@/lib/preditores'
 
 // Leitura das séries preditoras para o overlay/regressão (área admin).
@@ -14,15 +15,24 @@ export async function GET(req: NextRequest) {
   const series = vars.filter(v => PREDITOR_POR_KEY[v])   // só chaves conhecidas
   if (!series.length) return NextResponse.json({})
 
-  let q = supabaseAdmin().from('fatores_preditores')
-    .select('serie, data, valor').in('serie', series).order('data', { ascending: true })
-  if (de) q = q.gte('data', de)
-  if (ate) q = q.lte('data', ate)
-  const { data, error } = await q
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // pagina: várias séries × muitos meses passa fácil de 1000 linhas, e a
+  // resposta truncada já cortou o gráfico do laboratório em 2000
+  let data: { serie: string; data: string; valor: number }[]
+  try {
+    data = await todasLinhas<{ serie: string; data: string; valor: number }>((ini, fim) => {
+      let q = supabaseAdmin().from('fatores_preditores')
+        .select('serie, data, valor').in('serie', series)
+        .order('serie', { ascending: true }).order('data', { ascending: true })
+      if (de) q = q.gte('data', de)
+      if (ate) q = q.lte('data', ate)
+      return q.range(ini, fim)
+    })
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 
   const out: Record<string, { data: string; valor: number }[]> = {}
   for (const s of series) out[s] = []
-  for (const row of data ?? []) out[row.serie]?.push({ data: row.data, valor: Number(row.valor) })
+  for (const row of data) out[row.serie]?.push({ data: row.data, valor: Number(row.valor) })
   return NextResponse.json(out)
 }
