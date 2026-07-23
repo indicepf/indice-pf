@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { todasLinhas } from '@/lib/server/paginar'
 import { mediana } from '@/lib/stats'
 import { MAPA_INGREDIENTE_IPCA, type Confianca } from '@/lib/mapa-ingredientes'
 
@@ -24,20 +25,6 @@ export const maxDuration = 60
 
 const GRUPO_FALLBACK = 'ipca_7171'   // Alimentação no domicílio
 
-// PostgREST corta em 1000 linhas: pagina até acabar.
-async function todasLinhas<T>(
-  monta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<T[]> {
-  const passo = 1000
-  const out: T[] = []
-  for (let de = 0; ; de += passo) {
-    const { data, error } = await monta(de, de + passo - 1)
-    if (error) throw new Error(error.message)
-    const lote = data ?? []
-    out.push(...lote)
-    if (lote.length < passo) return out
-  }
-}
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
@@ -101,9 +88,16 @@ export async function GET(req: NextRequest) {
     varPorSerie.set(l.serie, m)
   }
 
-  // meses de `desde` até a âncora
+  // Só dá para desinflacionar até onde existe deflator. As séries de item do
+  // IPCA (SIDRA 7060) começam em 2020-01: pedir 1994 sem checar produziria uma
+  // linha reta inventada para trás. Corta no 1º mês com dado do grupo.
+  const mesesGrupo = [...(varPorSerie.get(GRUPO_FALLBACK)?.keys() ?? [])].sort()
+  const inicioDado = mesesGrupo[0]
+  if (!inicioDado) return NextResponse.json({ error: 'sem dados do deflator' }, { status: 400 })
+  const inicioEfetivo = desde > inicioDado ? desde : inicioDado
+
   const meses: string[] = []
-  for (let d = new Date(`${desde}-01T00:00:00Z`); d.toISOString().slice(0, 7) <= ymAncora; d.setUTCMonth(d.getUTCMonth() + 1))
+  for (let d = new Date(`${inicioEfetivo}-01T00:00:00Z`); d.toISOString().slice(0, 7) <= ymAncora; d.setUTCMonth(d.getUTCMonth() + 1))
     meses.push(d.toISOString().slice(0, 7))
   if (!meses.length) return NextResponse.json({ error: 'período vazio' }, { status: 400 })
 
@@ -117,6 +111,8 @@ export async function GET(req: NextRequest) {
     const anterior = meses[i - 1]
     for (const [ing, preco] of atual) {
       const serie = deflatorDe.get(ing) ?? GRUPO_FALLBACK
+      // sem variação do item, usa a do grupo; se nem o grupo tem, mantém o
+      // preço (não inventa variação) — mas o corte acima garante que o grupo tem
       const v = varPorSerie.get(serie)?.get(mes) ?? varPorSerie.get(GRUPO_FALLBACK)?.get(mes) ?? 0
       atual.set(ing, preco / (1 + v / 100))
     }
@@ -161,6 +157,9 @@ export async function GET(req: NextRequest) {
     ancora: { ym: ymAncora, data: ancora.data },
     confianca: [...conf],
     cobertura: { por_item_pct: total > 0 ? Math.round(comItem / total * 1000) / 10 : 0 },
+    // pedido x possível: o deflator começa em inicioDado; se o pedido for antes,
+    // a série é cortada em vez de extrapolada
+    periodo: { pedido: desde, efetivo: inicioEfetivo, deflatorDesde: inicioDado },
     serie,
   })
 }
