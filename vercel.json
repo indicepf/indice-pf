@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/importar-preditores", "schedule": "0 6 * * *" }
+    { "path": "/api/cron/importar-preditores", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/importar-dieese", "schedule": "0 8 12 * *" }
   ]
 }
