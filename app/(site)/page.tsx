@@ -407,6 +407,26 @@ export default function Dashboard() {
               <span className="clr" onClick={() => { setRegioes(new Set()); setBusca(''); setFiltroIng(null); setPratoSel(null); setComparar(false); setLegendOff(new Set()); setPendIni(''); setPendFim(''); setIni(''); setFim('') }}>Limpar</span>
             </div>
             <div className="f-group">
+              <div className="f-label">{ICO.cal} Período</div>
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {([['7d', 7], ['15d', 15], ['30d', 30], ['3m', 90], ['Tudo', 0]] as const).map(([label, d]) => (
+                    <button key={label} onClick={() => presetHome(d)}
+                      className="region-bar-btn px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-3 text-ink-2 hover:text-ink transition cursor-pointer">{label}</button>
+                  ))}
+                </div>
+                <input type="date" className="f-search" value={pendIni} onChange={e => setPendIni(e.target.value)} />
+                <input type="date" className="f-search" value={pendFim} onChange={e => setPendFim(e.target.value)} />
+                <button className={`btn-mk sm ${periodoPendente ? 'primary' : ''}`} onClick={aplicarPeriodo} disabled={!periodoPendente}>
+                  {periodoPendente ? 'Aplicar período' : nColetasHome > 1 ? `${nColetasHome} coletas no período ✓` : 'Período aplicado ✓'}
+                </button>
+                <div className="cmp-toggle" onClick={() => setComparar(c => !c)}>
+                  <div className={`switch ${comparar ? 'on' : ''}`} />
+                  <span>Comparar com período anterior</span>
+                </div>
+              </div>
+            </div>
+            <div className="f-group">
               <div className="f-label">{ICO.search} Busca</div>
               <input className="f-search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Prato ou produto..." />
             </div>
@@ -429,26 +449,6 @@ export default function Dashboard() {
                 {REGIOES.map(r => (
                   <button key={r} className={regioes.has(r) ? 'on' : ''} onClick={() => toggleRegiao(r)}>{r}</button>
                 ))}
-              </div>
-            </div>
-            <div className="f-group">
-              <div className="f-label">{ICO.cal} Período</div>
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap gap-1.5">
-                  {([['7d', 7], ['15d', 15], ['30d', 30], ['3m', 90], ['Tudo', 0]] as const).map(([label, d]) => (
-                    <button key={label} onClick={() => presetHome(d)}
-                      className="region-bar-btn px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-3 text-ink-2 hover:text-ink transition cursor-pointer">{label}</button>
-                  ))}
-                </div>
-                <input type="date" className="f-search" value={pendIni} onChange={e => setPendIni(e.target.value)} />
-                <input type="date" className="f-search" value={pendFim} onChange={e => setPendFim(e.target.value)} />
-                <button className={`btn-mk sm ${periodoPendente ? 'primary' : ''}`} onClick={aplicarPeriodo} disabled={!periodoPendente}>
-                  {periodoPendente ? 'Aplicar período' : nColetasHome > 1 ? `${nColetasHome} coletas no período ✓` : 'Período aplicado ✓'}
-                </button>
-                <div className="cmp-toggle" onClick={() => setComparar(c => !c)}>
-                  <div className={`switch ${comparar ? 'on' : ''}`} />
-                  <span>Comparar com período anterior</span>
-                </div>
               </div>
             </div>
             <div className="f-group">
