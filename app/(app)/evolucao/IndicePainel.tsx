@@ -1,0 +1,448 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import {
+  ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+} from 'recharts'
+import { getAllDetalhes, GRUPOS_CAT, type Evolucao, type FonteKey } from '@/lib/queries'
+import { brl } from '@/lib/format'
+import { mediana } from '@/lib/stats'
+import { ACCENT, BRAND, CORES_GRUPO, DIM, INK } from '@/lib/theme'
+import type { ItemDetalhe } from '@/lib/types'
+import { inputBase, Modal } from '@/components/ui'
+import { PREDITORES, PREDITOR_POR_KEY, fmtValorPreditor } from '@/lib/preditores'
+import { regressaoLinear, type ResultadoRegressao } from '@/lib/regressao'
+import SeletorPrato from './SeletorPrato'
+import BotaoExportar from './BotaoExportar'
+import InfoTip from '../../InfoTip'
+
+const COR = { paprika: ACCENT, olive: BRAND.verde, ink: INK, muted: DIM, azul: BRAND.ciano }
+const FONTES: [FonteKey, string][] = [['blend', 'Blend'], ['online', 'Online'], ['manual', 'Manual']]
+const fmt = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
+const ts = (d: string) => new Date(d + 'T00:00:00Z').getTime()
+const r2 = (n: number) => Math.round(n * 100) / 100
+const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
+
+// carry-forward: último valor da série (asc) com data <= d
+const cf = (serie: { data: string; valor: number }[], d: string): number | null => {
+  let v: number | null = null
+  for (const p of serie) { if (p.data <= d) v = p.valor; else break }
+  return v
+}
+
+// Aba "Índice" do histórico, extraída de /evolucao para ser reusada na área do
+// usuário. Autossuficiente: recebe os dados já carregados e mantém o próprio
+// estado de UI (fonte, prato, região, métricas, período, "e se").
+export default function IndicePainel({ ev, snapsNovos, admin = false }: {
+  ev: Evolucao
+  snapsNovos: { id: number; data: string }[]
+  admin?: boolean
+}) {
+  const [fonte, setFonte] = useState<FonteKey>('blend')
+  const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
+  const [regiao, setRegiao] = useState('')           // '' = todas as regiões
+  const [metricas, setMetricas] = useState({ mediana: true, media: false, min: false, max: false })
+  const [banda, setBanda] = useState(true)
+  const [percentual, setPercentual] = useState(false)
+  const [ini, setIni] = useState('')   // período: início (YYYY-MM-DD, '' = desde o começo)
+  const [fim, setFim] = useState('')   // período: fim ('' = até a última coleta)
+  const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]>>({})
+  const [off, setOff] = useState<Set<number>>(new Set())   // ingredientes desmarcados no "e se"
+  const [dataDetalhes, setDataDetalhes] = useState('')   // coleta usada no "Simular"
+  // overlay (eixo direito) e regressão — só admin
+  const [overlayVar, setOverlayVar] = useState('')
+  const [overlaySerie, setOverlaySerie] = useState<{ data: string; valor: number }[]>([])
+  const [regVars, setRegVars] = useState<Set<string>>(new Set())
+  const [modelo, setModelo] = useState<ResultadoRegressao | { erro: string } | null>(null)
+  const [modalAberto, setModalAberto] = useState(false)
+  const [calculando, setCalculando] = useState(false)
+
+  const noPeriodo = (d: string) => (!ini || d >= ini) && (!fim || d <= fim)
+  const compData = useMemo(() => {
+    let src: any[]
+    if (pratoId !== 0) src = ev.porPratoComp[pratoId] || []
+    else if (!regiao) src = ev.composicao
+    else {
+      // composição média dos pratos da região, por coleta
+      const ids = ev.pratos.filter(pr => pr.regiao === regiao).map(pr => pr.id)
+      const n = ids.length || 1
+      src = ev.composicao.map((cp, i) => {
+        const row: any = { data: cp.data }
+        for (const g of GRUPOS_CAT) { let s = 0; for (const id of ids) s += ev.porPratoComp[id]?.[i]?.[g] || 0; row[g] = s / n }
+        return row
+      })
+    }
+    return src.filter(p => noPeriodo(p.data)).map(p => {
+      const tot = GRUPOS_CAT.reduce((s, g) => s + (p[g] || 0), 0) || 1
+      const row: any = { data: fmt(p.data) }
+      for (const g of GRUPOS_CAT) row[g] = percentual ? (p[g] || 0) / tot * 100 : r2(p[g] || 0)   // % sem arredondar → soma exata 100
+      return row
+    })
+  }, [ev, percentual, pratoId, regiao, ini, fim])
+
+  // detalhe do "Simular" segue o período: usa a coleta mais recente dentro do intervalo
+  useEffect(() => {
+    if (!snapsNovos.length) return
+    const ref = snapsNovos.filter(s => noPeriodo(s.data))[0] || snapsNovos[0]
+    setDataDetalhes(ref.data)
+    getAllDetalhes(ref.id, ref.data).then(setDetalhes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapsNovos, ini, fim])
+  useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
+  // série do preditor sobreposto (eixo direito)
+  useEffect(() => {
+    if (!admin || !overlayVar) { setOverlaySerie([]); return }
+    let vivo = true
+    fetch(`/api/preditores?vars=${overlayVar}`).then(r => r.json())
+      .then(j => { if (vivo) setOverlaySerie(j[overlayVar] || []) })
+      .catch(() => { if (vivo) setOverlaySerie([]) })
+    return () => { vivo = false }
+  }, [admin, overlayVar])
+
+  const nacional = pratoId === 0
+  const dados = useMemo(() => {
+    if (!nacional) return (ev.porPrato[pratoId] || []).map(p => ({ ts: ts(p.data), blend: r2(p.blend), online: r2(p.online), manual: r2(p.manual) }))
+    if (!regiao) return ev.serie.map(p => {
+      const f = p[fonte]
+      return { ts: ts(p.data), mediana: r2(f.mediana), media: r2(f.media), min: r2(f.min), max: r2(f.max), faixa: [r2(f.min), r2(f.max)] as [number, number] }
+    })
+    // distribuição recomputada só com os pratos da região, a partir de porPrato
+    const ids = ev.pratos.filter(p => p.regiao === regiao).map(p => p.id)
+    return ev.serie.map((p, i) => {
+      const vals = ids.map(id => ev.porPrato[id]?.[i]?.[fonte]).filter((v): v is number => v != null && v > 0).map(r2)
+      const s = [...vals].sort((a, b) => a - b)
+      const media = vals.length ? r2(vals.reduce((a, b) => a + b, 0) / vals.length) : 0
+      const min = s[0] ?? 0, max = s[s.length - 1] ?? 0
+      return { ts: ts(p.data), mediana: r2(mediana(vals)), media, min, max, faixa: [min, max] as [number, number] }
+    })
+  }, [ev, fonte, pratoId, nacional, regiao])
+
+  const poucos = ev.serie.length < 2
+  const dadosP = dados.filter(d => noPeriodo(new Date(d.ts).toISOString().slice(0, 10)))
+  const ticks = dadosP.map(d => d.ts)
+  const mediaIndice = nacional && dadosP.length ? dadosP.reduce((s, d) => s + ((d as any).mediana || 0), 0) / dadosP.length : null
+  const regioes = [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b))
+  function preset(dias: number) {
+    if (!ev.serie.length) return
+    const ultima = ev.serie[ev.serie.length - 1].data
+    setFim(ultima)
+    if (dias === 0) { setIni(''); setFim('') } else { const d = new Date(ultima + 'T00:00:00Z'); d.setDate(d.getDate() - dias); setIni(d.toISOString().slice(0, 10)) }
+  }
+
+  // ── admin: overlay + regressão ──
+  const datasColeta = dadosP.map(d => new Date(d.ts).toISOString().slice(0, 10))
+  const overlayInfo = overlayVar ? PREDITOR_POR_KEY[overlayVar] : null
+  const overlayAtivo = admin && !!overlayVar && overlaySerie.length > 0
+  const dadosChart = overlayAtivo
+    ? dadosP.map((d, i) => ({ ...d, preditor: cf(overlaySerie, datasColeta[i]) }))
+    : dadosP
+
+  async function gerarModelo() {
+    const keys = [...regVars]
+    if (!keys.length) return
+    setCalculando(true)
+    try {
+      const j = await fetch(`/api/preditores?vars=${keys.join(',')}`).then(r => r.json())
+      const y: number[] = []
+      const cols: number[][] = keys.map(() => [])
+      dadosP.forEach((d: any, i) => {
+        const yi = nacional ? d.mediana : d.blend
+        const xs = keys.map(k => cf(j[k] || [], datasColeta[i]))
+        if (yi != null && xs.every(v => v != null)) {
+          y.push(yi); keys.forEach((k, ki) => cols[ki].push(xs[ki] as number))
+        }
+      })
+      setModelo(regressaoLinear(y, keys.map((k, ki) => ({ nome: PREDITOR_POR_KEY[k].label, valores: cols[ki] }))))
+    } catch (err) {
+      setModelo({ erro: `Falha ao buscar preditores: ${String(err)}` })
+    } finally {
+      setModalAberto(true); setCalculando(false)
+    }
+  }
+
+  return (
+   <>
+
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+        {/* controles */}
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
+          <div className="text-xs text-dim">Prato
+            <SeletorPrato pratos={ev.pratos} value={pratoId} onChange={setPratoId} />
+          </div>
+          <div className="text-xs text-dim">Fonte do preço
+            <div className="flex w-fit border border-border rounded-md overflow-hidden bg-surface text-sm mt-1">
+              {FONTES.map(([k, label]) => (
+                <button key={k} onClick={() => setFonte(k)}
+                  className={`px-3 py-1.5 transition-colors ${fonte === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}
+                  disabled={!nacional}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-dim">Período:</span>
+          <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface">
+            {([['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
+              <button key={label} onClick={() => preset(d)} className="px-3 py-1.5 text-dim hover:text-ink transition-colors">{label}</button>
+            ))}
+          </div>
+          <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-surface-2 border border-border rounded px-2 py-1 focus:outline-none focus:border-accent" />
+          <span className="text-dim">até</span>
+          <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-surface-2 border border-border rounded px-2 py-1 focus:outline-none focus:border-accent" />
+          {mediaIndice != null && <span className="ml-1 text-dim">Média do índice: <strong className="text-accent tnum">{brl(mediaIndice)}</strong> · {dadosP.length} coleta{dadosP.length === 1 ? '' : 's'}</span>}
+        </div>
+
+        {nacional && (
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            <span className="text-dim">Região:</span>
+            <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface">
+              <button onClick={() => setRegiao('')}
+                className={`px-3 py-1.5 transition-colors ${regiao === '' ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>Todas</button>
+              {regioes.map(r => (
+                <button key={r} onClick={() => setRegiao(r)}
+                  className={`px-3 py-1.5 transition-colors border-l border-border ${regiao === r ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>{r}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {nacional && (
+          <div className="flex items-center gap-4 flex-wrap text-xs">
+            <span className="text-dim">Métrica:</span>
+            {([['mediana', 'Mediana'], ['media', 'Média'], ['min', 'Mínimo'], ['max', 'Máximo']] as const).map(([k, label]) => (
+              <label key={k} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={metricas[k]} onChange={e => setMetricas(m => ({ ...m, [k]: e.target.checked }))} />
+                {label}
+              </label>
+            ))}
+            <label className="flex items-center gap-1.5 cursor-pointer ml-2">
+              <input type="checkbox" checked={banda} onChange={e => setBanda(e.target.checked)} />
+              Faixa mín–máx
+            </label>
+          </div>
+        )}
+
+        {admin && (
+          <div className="border border-brand-roxo/30 bg-brand-roxo/5 rounded-lg p-4 space-y-3">
+            <p className="text-xs font-semibold text-brand-roxo uppercase tracking-wide">Análise (admin)</p>
+            <label className="text-xs text-dim block">Sobrepor no eixo direito
+              <select value={overlayVar} onChange={e => setOverlayVar(e.target.value)} className={inputBase}>
+                <option value="">nenhum</option>
+                {PREDITORES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+            </label>
+            <div>
+              <p className="text-xs text-dim mb-1.5">Regressão: índice {nacional ? '(mediana nacional)' : '(blend do prato)'} ~ preditores</p>
+              <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
+                {PREDITORES.map(p => (
+                  <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                    <input type="checkbox" checked={regVars.has(p.key)}
+                      onChange={() => setRegVars(s => { const n = new Set(s); n.has(p.key) ? n.delete(p.key) : n.add(p.key); return n })} />
+                    {p.label}
+                  </label>
+                ))}
+              </div>
+              <button onClick={gerarModelo} disabled={!regVars.size || calculando} className="btn-mk sm mt-2">
+                {calculando ? 'Calculando…' : 'Gerar modelo'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* gráfico */}
+        <div className="border border-border rounded-lg bg-surface p-4">
+          <div className="flex items-start justify-between gap-3">
+          <p className="text-sm font-medium mb-1">
+            {nacional ? 'Custo do prato feito (R$) — distribuição dos 100 pratos' : 'Custo do prato (R$) — por fonte'}
+            <InfoTip texto={nacional
+              ? 'Cada coleta reúne o custo dos 100 pratos. A mediana é o índice nacional; a faixa mostra o prato mais barato e o mais caro. Escolha a fonte (blend/online/manual), a região e o período.'
+              : 'Custo deste prato ao longo do tempo, em cada fonte: blend (o índice real), online (só cotação online) e manual (só leituras manuais).'} />
+          </p>
+          <BotaoExportar nome="indice-pf-serie" abas={() => [{ nome: 'Série', linhas: dadosP.map((d: any) => ({ Data: new Date(d.ts).toISOString().slice(0, 10), ...(nacional ? { Mediana: d.mediana, Média: d.media, Minimo: d.min, Maximo: d.max } : { Blend: d.blend, Online: d.online, Manual: d.manual }) })) }]} />
+          </div>
+          <p className="text-xs text-dim mb-4">
+            {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}` : 'blend × online × manual'}
+            {poucos && ' · série curta (poucas coletas) — cresce a cada coleta.'}
+          </p>
+          <div style={{ width: '100%', height: 360 }}>
+            <ResponsiveContainer>
+              <ComposedChart data={dadosChart} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
+                <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                  ticks={ticks} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
+                  tick={{ fontSize: 13, fill: COR.muted }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
+                {overlayAtivo && (
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 13, fill: COR.azul }} width={64}
+                    tickFormatter={v => overlayInfo?.unidade === 'R$' ? `R$${v}` : overlayInfo?.unidade === '%' ? `${v}%` : `${v}`} />
+                )}
+                <Tooltip formatter={(v: any, _n: any, p: any) => {
+                  if (p?.dataKey === 'preditor') return overlayInfo ? fmtValorPreditor(Number(v), overlayInfo.formato) : String(v)
+                  return Array.isArray(v)
+                    ? `R$ ${Number(v[0]).toFixed(2)} – R$ ${Number(v[1]).toFixed(2)}`
+                    : `R$ ${Number(v).toFixed(2)}`
+                }}
+                  labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
+                <Legend wrapperStyle={{ fontSize: 13 }} />
+                {nacional ? (
+                  <>
+                    {banda && <Area yAxisId="left" type="monotone" dataKey="faixa" name="faixa mín–máx" fill={COR.paprika} fillOpacity={0.1} stroke="none" />}
+                    {metricas.mediana && <Line yAxisId="left" type="monotone" dataKey="mediana" name="Mediana" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />}
+                    {metricas.media && <Line yAxisId="left" type="monotone" dataKey="media" name="Média" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />}
+                    {metricas.min && <Line yAxisId="left" type="monotone" dataKey="min" name="Mínimo" stroke={COR.muted} strokeWidth={1.5} dot={{ r: 2 }} />}
+                    {metricas.max && <Line yAxisId="left" type="monotone" dataKey="max" name="Máximo" stroke={COR.ink} strokeWidth={1.5} dot={{ r: 2 }} />}
+                  </>
+                ) : (
+                  <>
+                    <Line yAxisId="left" type="monotone" dataKey="blend" name="Blend" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
+                    <Line yAxisId="left" type="monotone" dataKey="online" name="Online" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />
+                    <Line yAxisId="left" type="monotone" dataKey="manual" name="Manual" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
+                  </>
+                )}
+                {overlayAtivo && (
+                  <Line yAxisId="right" type="monotone" dataKey="preditor" name={overlayInfo?.label || 'preditor'}
+                    stroke={COR.azul} strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls />
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* composição por grupo (total quando nacional; do prato quando selecionado) */}
+        <div className="border border-border rounded-lg bg-surface p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+            <div>
+              <p className="text-sm font-medium">{nacional ? 'Composição do custo por grupo de alimento' : 'Composição do prato por grupo'}
+                <InfoTip texto="Quanto cada grupo de alimento pesa no custo (blend). Média por prato quando é o índice; do prato quando um está selecionado. As 17 categorias viram 7 grupos. Alterne R$ e % do total." /></p>
+              <p className="text-xs text-dim">{nacional ? (regiao ? `Média por prato · ${regiao} · blend` : 'Média por prato · blend') : 'blend'}{poucos && ' · série curta, cresce a cada coleta.'}</p>
+            </div>
+            <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface text-sm">
+              {([['abs', 'R$'], ['pct', '% do total']] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setPercentual(k === 'pct')}
+                  className={`px-3 py-1.5 transition-colors ${(percentual ? 'pct' : 'abs') === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>{label}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ width: '100%', height: 340 }}>
+            <ResponsiveContainer>
+              <BarChart data={compData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" vertical={false} />
+                <XAxis dataKey="data" tick={{ fontSize: 13, fill: COR.muted }} />
+                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={52} allowDataOverflow
+                  domain={percentual ? [0, 100] : ['auto', 'auto']} ticks={percentual ? [0, 25, 50, 75, 100] : undefined}
+                  tickFormatter={v => percentual ? `${Math.round(v)}%` : `R$${v}`} />
+                <Tooltip formatter={(v: any, n: any) => [percentual ? `${Number(v).toFixed(1)}%` : `R$ ${Number(v).toFixed(2)}`, n]} />
+                <Legend wrapperStyle={{ fontSize: 13 }} />
+                {GRUPOS_CAT.map(g => <Bar key={g} dataKey={g} stackId="a" fill={CORES_GRUPO[g]} stroke="#fff" strokeWidth={1} />)}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {!nacional && (detalhes[pratoId]?.length ? (() => {
+          const its = detalhes[pratoId]
+          const cheio = its.reduce((s, it) => s + it.custo, 0)
+          const atual = its.reduce((s, it) => s + (off.has(it.ingrediente_id) ? 0 : it.custo), 0)
+          return (
+            <div className="border border-border rounded-lg bg-surface p-4">
+              <p className="text-sm font-medium mb-1">Simular sem ingredientes
+                <InfoTip texto="Desmarque ingredientes para ver o custo do prato sem eles (última coleta, blend). O R$ de cada item é o custo da quantidade da receita (em gramas)." /></p>
+              <p className="text-xs text-dim mb-3">
+                Custo do prato = soma dos ingredientes marcados ({dataDetalhes ? `coleta de ${fmt(dataDetalhes)}` : 'última coleta'} · blend). O R$ ao lado de cada
+                item é o custo da <strong>quantidade da receita</strong> (em gramas). Desmarque para ver o prato sem ele.
+              </p>
+              <div className="flex items-baseline gap-2 mb-4">
+                <span className="font-bold tracking-tight text-2xl text-accent tnum">{brl(atual)}</span>
+                {off.size > 0 && <span className="text-xs text-dim">de {brl(cheio)} · −{brl(cheio - atual)}</span>}
+              </div>
+              <div className="space-y-3">
+                {(() => {
+                  const grupos: Record<string, ItemDetalhe[]> = {}
+                  its.forEach(it => (grupos[it.categoria || 'Outro'] ||= []).push(it))
+                  const soma = (arr: ItemDetalhe[]) => arr.reduce((s, x) => s + (off.has(x.ingrediente_id) ? 0 : x.custo), 0)
+                  const cats = Object.keys(grupos).sort((a, b) => grupos[b].reduce((s, x) => s + x.custo, 0) - grupos[a].reduce((s, x) => s + x.custo, 0))
+                  return cats.map(cat => (
+                    <div key={cat}>
+                      <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-wide text-dim border-b border-border/60 pb-1">
+                        <span>{cat}</span><span className="tnum">{brl(soma(grupos[cat]))}</span>
+                      </div>
+                      {grupos[cat].map(it => (
+                        <label key={it.ingrediente_id} className="flex items-center justify-between gap-3 text-sm py-1.5 border-b border-border/40 cursor-pointer">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <input type="checkbox" checked={!off.has(it.ingrediente_id)}
+                              onChange={() => setOff(s => { const n = new Set(s); n.has(it.ingrediente_id) ? n.delete(it.ingrediente_id) : n.add(it.ingrediente_id); return n })} />
+                            <span className={off.has(it.ingrediente_id) ? 'line-through text-dim' : ''}>{it.nome}</span>
+                            <span className="text-xs text-dim shrink-0">{it.qtd_g} g</span>
+                          </span>
+                          <span className="tnum text-dim">{brl(it.custo)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ))
+                })()}
+              </div>
+            </div>
+          )
+        })() : null)}
+      </div>
+
+      {admin && modalAberto && modelo && (
+        <Modal title="Modelo de regressão temporal" onClose={() => setModalAberto(false)}>
+          {'erro' in modelo ? (
+            <p className="text-sm text-accent w-[min(90vw,32rem)]">{modelo.erro}</p>
+          ) : (
+            <div className="space-y-4 w-[min(90vw,44rem)]">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <span className="text-dim">R² <strong className="text-ink tnum">{modelo.r2.toFixed(3)}</strong></span>
+                <span className="text-dim">R² ajust. <strong className="text-ink tnum">{modelo.r2Ajustado.toFixed(3)}</strong></span>
+                <span className="text-dim">F <strong className="text-ink tnum">{modelo.f.toFixed(2)}</strong> (p {modelo.fP < 0.001 ? '<0,001' : modelo.fP.toFixed(3)})</span>
+                <span className="text-dim">n <strong className="text-ink tnum">{modelo.n}</strong> · gl {modelo.gl}</span>
+              </div>
+              <div className="overflow-x-auto border border-border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[0.65rem] uppercase tracking-wide text-dim border-b border-border">
+                      <th className="px-3 py-2">Variável</th>
+                      <th className="px-3 py-2 text-right">Coef.</th>
+                      <th className="px-3 py-2 text-right">Erro-padrão</th>
+                      <th className="px-3 py-2 text-right">t</th>
+                      <th className="px-3 py-2 text-right">p-valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelo.coeficientes.map(c => (
+                      <tr key={c.nome} className="border-t border-border/60">
+                        <td className="px-3 py-1.5">{c.nome}</td>
+                        <td className="px-3 py-1.5 text-right tnum">{c.coef.toFixed(4)}</td>
+                        <td className="px-3 py-1.5 text-right tnum text-dim">{c.erroPadrao.toFixed(4)}</td>
+                        <td className="px-3 py-1.5 text-right tnum">{isNaN(c.t) ? '—' : c.t.toFixed(2)}</td>
+                        <td className={`px-3 py-1.5 text-right tnum ${c.p < 0.05 ? 'text-ok font-medium' : 'text-dim'}`}>{isNaN(c.p) ? '—' : c.p < 0.001 ? '<0,001' : c.p.toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-dim">p-valor &lt; 0,05 (verde) = preditor significativo. Preditores alinhados por carry-forward à data de cada coleta.</p>
+              <div style={{ width: '100%', height: 240 }}>
+                <ResponsiveContainer>
+                  <ComposedChart data={modelo.observado.map((o, i) => ({ i: i + 1, obs: o, prev: modelo.previsto[i] }))} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
+                    <XAxis dataKey="i" tick={{ fontSize: 12, fill: COR.muted }} />
+                    <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
+                    <Tooltip formatter={(v: any) => `R$ ${Number(v).toFixed(2)}`} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line type="monotone" dataKey="obs" name="Observado" stroke={COR.paprika} strokeWidth={2} dot={{ r: 2 }} />
+                    <Line type="monotone" dataKey="prev" name="Previsto" stroke={COR.azul} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+   </>
+  )
+}

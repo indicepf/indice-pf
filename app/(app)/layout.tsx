@@ -13,6 +13,7 @@ const TITULOS: Record<string, string> = {
   '/meus-pratos': 'Meus pratos',
   '/contribuir': 'Enviar preços',
   '/meus-envios': 'Meus envios',
+  '/indice': 'Índice',
   '/configuracoes': 'Configurações',
   '/plano': 'Plano & assinatura',
   '/evolucao': 'Histórico',
@@ -32,6 +33,7 @@ const ICONES: Record<string, React.ReactNode> = {
   '/meus-pratos': ico('M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm0-3a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM2 12h2m16 0h2'),
   '/contribuir': ico('M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zm8 8.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z'),
   '/meus-envios': ico('M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z'),
+  '/indice': ico('M3 17l6-6 4 4 8-8m0 0h-5m5 0v5'),
   '/plano': ico('M12 3l2.7 5.6 6.3.9-4.5 4.3 1 6.2-5.5-3-5.5 3 1-6.2L3 9.5l6.3-.9L12 3z'),
   '/configuracoes': ico('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.4 7.4 0 0 0-2-1.2L14.5 3h-5l-.4 2.6a7.4 7.4 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a7.4 7.4 0 0 0 2 1.2l.4 2.6h5l.4-2.6a7.4 7.4 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z'),
   '/admin': ico('M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z'),
@@ -44,7 +46,7 @@ const ICONES: Record<string, React.ReactNode> = {
 // menu por papel: área do usuário / assinatura / administração; Configurações
 // vive no rodapé, junto do cartão do usuário (pedido de 09/07)
 const SECOES: { titulo: string; itens: readonly (readonly [string, string])[]; admin?: boolean }[] = [
-  { titulo: 'Minha área', itens: [['/painel', 'Meu painel'], ['/calculadora', 'Calculadora de PF'], ['/meus-pratos', 'Meus pratos'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios']] },
+  { titulo: 'Minha área', itens: [['/painel', 'Meu painel'], ['/calculadora', 'Calculadora de PF'], ['/meus-pratos', 'Meus pratos'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios'], ['/indice', 'Índice']] },
   { titulo: 'Assinatura', itens: [['/plano', 'Plano & assinatura']] },
   { titulo: 'Administração', admin: true, itens: [['/painel-administrativo', 'Painel administrativo'], ['/admin', 'Administração'], ['/evolucao', 'Histórico'], ['/contribuidores', 'Ranking']] },
 ]

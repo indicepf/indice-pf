@@ -2,17 +2,19 @@
 
 import { useEffect, useMemo, useState, Fragment } from 'react'
 import {
-  ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
+  ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import dynamic from 'next/dynamic'
-import { getEvolucao, getAllDetalhes, getSnapshotsNovos, getContribuicoesMapa, getCalibracao, getAllFontes, GRUPOS_CAT, type Evolucao, type FonteKey, type PontoContrib, type Calibracao } from '@/lib/queries'
+import { getEvolucao, getSnapshotsNovos, getContribuicoesMapa, getCalibracao, getAllFontes, type Evolucao, type FonteKey, type PontoContrib, type Calibracao } from '@/lib/queries'
 import { brl } from '@/lib/format'
 import { mediana } from '@/lib/stats'
-import { ACCENT, BRAND, CHART_SERIES, CORES_GRUPO, CORES_REGIAO, DIM, INK } from '@/lib/theme'
+import { ACCENT, BRAND, CHART_SERIES, CORES_REGIAO, DIM, INK } from '@/lib/theme'
 import { inputBase } from '@/components/ui'
-import type { ItemDetalhe, Fonte } from '@/lib/types'
+import type { Fonte } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
 import BotaoExportar from './BotaoExportar'
+import IndicePainel from './IndicePainel'
+import SeletorPrato from './SeletorPrato'
 import BotaoInicio from '../../BotaoInicio'
 import InfoTip from '../../InfoTip'
 import AuthControls from '../../Auth'
@@ -23,11 +25,9 @@ const MapaLocal = dynamic(() => import('../../MapaLocal'), { ssr: false, loading
 // keys herdadas da V0 (paprika/olive) mapeadas para a paleta V1 de lib/theme;
 // renomear junto com a reescrita da Fase 5
 const COR = { paprika: ACCENT, olive: BRAND.verde, ink: INK, muted: DIM, azul: BRAND.ciano }
-const FONTES: [FonteKey, string][] = [['blend', 'Blend'], ['online', 'Online'], ['manual', 'Manual']]
 const fmt = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
 const ts = (d: string) => new Date(d + 'T00:00:00Z').getTime()
 const r2 = (n: number) => Math.round(n * 100) / 100
-const numPrato = (nome: string) => parseInt(nome, 10) || 999   // prefixo "12. …"
 const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
 const selCls = inputBase
 
@@ -45,43 +45,14 @@ function EvolucaoInner() {
   const [calibAberto, setCalibAberto] = useState<string | null>(null)
   const [fonte, setFonte] = useState<FonteKey>('blend')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
-  const [regiao, setRegiao] = useState('')           // '' = todas as regiões
-  const [metricas, setMetricas] = useState({ mediana: true, media: false, min: false, max: false })
-  const [banda, setBanda] = useState(true)
-  const [percentual, setPercentual] = useState(false)
   const [ini, setIni] = useState('')   // período: início (YYYY-MM-DD, '' = desde o começo)
   const [fim, setFim] = useState('')   // período: fim ('' = até a última coleta)
-  const [detalhes, setDetalhes] = useState<Record<number, ItemDetalhe[]>>({})
-  const [off, setOff] = useState<Set<number>>(new Set())   // ingredientes desmarcados no "e se"
   const [ativos, setAtivos] = useState<Set<string>>(new Set(['nacional']))   // séries ativas na Variação
   const [pontos, setPontos] = useState<PontoContrib[]>([])
   const [fRegs, setFRegs] = useState<Set<string>>(new Set()); const [fTipo, setFTipo] = useState(''); const [fIng, setFIng] = useState(0)
   const [snapsNovos, setSnapsNovos] = useState<{ id: number; data: string }[]>([])
-  const [dataDetalhes, setDataDetalhes] = useState('')   // coleta usada no "Simular"
 
   const noPeriodo = (d: string) => (!ini || d >= ini) && (!fim || d <= fim)
-  const compData = useMemo(() => {
-    if (!ev) return []
-    let src: any[]
-    if (pratoId !== 0) src = ev.porPratoComp[pratoId] || []
-    else if (!regiao) src = ev.composicao
-    else {
-      // composição média dos pratos da região, por coleta
-      const ids = ev.pratos.filter(pr => pr.regiao === regiao).map(pr => pr.id)
-      const n = ids.length || 1
-      src = ev.composicao.map((cp, i) => {
-        const row: any = { data: cp.data }
-        for (const g of GRUPOS_CAT) { let s = 0; for (const id of ids) s += ev.porPratoComp[id]?.[i]?.[g] || 0; row[g] = s / n }
-        return row
-      })
-    }
-    return src.filter(p => noPeriodo(p.data)).map(p => {
-      const tot = GRUPOS_CAT.reduce((s, g) => s + (p[g] || 0), 0) || 1
-      const row: any = { data: fmt(p.data) }
-      for (const g of GRUPOS_CAT) row[g] = percentual ? (p[g] || 0) / tot * 100 : r2(p[g] || 0)   // % sem arredondar → soma exata 100
-      return row
-    })
-  }, [ev, percentual, pratoId, regiao, ini, fim])
 
   useEffect(() => {
     getEvolucao().then(setEv)
@@ -104,34 +75,7 @@ function EvolucaoInner() {
     const f = snapsNovos[0].data; setCalibFim(f)
     const d = new Date(f + 'T00:00:00Z'); d.setDate(d.getDate() - dias); setCalibIni(d.toISOString().slice(0, 10))
   }
-  // detalhe do "Simular" segue o período: usa a coleta mais recente dentro do intervalo
-  useEffect(() => {
-    if (!snapsNovos.length) return
-    const ref = snapsNovos.filter(s => noPeriodo(s.data))[0] || snapsNovos[0]
-    setDataDetalhes(ref.data)
-    getAllDetalhes(ref.id, ref.data).then(setDetalhes)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapsNovos, ini, fim])
-  useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
-
   const nacional = pratoId === 0
-  const dados = useMemo(() => {
-    if (!ev) return []
-    if (!nacional) return (ev.porPrato[pratoId] || []).map(p => ({ ts: ts(p.data), blend: r2(p.blend), online: r2(p.online), manual: r2(p.manual) }))
-    if (!regiao) return ev.serie.map(p => {
-      const f = p[fonte]
-      return { ts: ts(p.data), mediana: r2(f.mediana), media: r2(f.media), min: r2(f.min), max: r2(f.max), faixa: [r2(f.min), r2(f.max)] as [number, number] }
-    })
-    // distribuição recomputada só com os pratos da região, a partir de porPrato
-    const ids = ev.pratos.filter(p => p.regiao === regiao).map(p => p.id)
-    return ev.serie.map((p, i) => {
-      const vals = ids.map(id => ev.porPrato[id]?.[i]?.[fonte]).filter((v): v is number => v != null && v > 0).map(r2)
-      const s = [...vals].sort((a, b) => a - b)
-      const media = vals.length ? r2(vals.reduce((a, b) => a + b, 0) / vals.length) : 0
-      const min = s[0] ?? 0, max = s[s.length - 1] ?? 0
-      return { ts: ts(p.data), mediana: r2(mediana(vals)), media, min, max, faixa: [min, max] as [number, number] }
-    })
-  }, [ev, fonte, pratoId, nacional, regiao])
 
   // Variação ACUMULADA em relação à 1ª coleta do período (base = 0%).
   // Δ% da coleta i = (custo_i − custo_base) / custo_base × 100. Linha subindo = mais caro.
@@ -157,10 +101,6 @@ function EvolucaoInner() {
   }, [ev, pratoId, fonte, ini, fim])
 
   const poucos = !ev || ev.serie.length < 2
-  const dadosP = dados.filter(d => noPeriodo(new Date(d.ts).toISOString().slice(0, 10)))
-  const ticks = dadosP.map(d => d.ts)
-  const mediaIndice = nacional && dadosP.length ? dadosP.reduce((s, d) => s + ((d as any).mediana || 0), 0) / dadosP.length : null
-  const regioes = ev ? [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b)) : []
   // opções e filtro do mapa
   const regContrib = [...new Set(pontos.map(p => p.regiao).filter(Boolean))] as string[]
   const tiposContrib = [...new Set(pontos.map(p => p.tipo_loja).filter(Boolean))] as string[]
@@ -531,250 +471,8 @@ function EvolucaoInner() {
         </div>
       </div>
       ) : (
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        {/* controles */}
-        <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
-          <div className="text-xs text-dim">Prato
-            <SeletorPrato pratos={ev.pratos} value={pratoId} onChange={setPratoId} />
-          </div>
-          <div className="text-xs text-dim">Fonte do preço
-            <div className="flex w-fit border border-border rounded-md overflow-hidden bg-surface text-sm mt-1">
-              {FONTES.map(([k, label]) => (
-                <button key={k} onClick={() => setFonte(k)}
-                  className={`px-3 py-1.5 transition-colors ${fonte === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}
-                  disabled={!nacional}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          <span className="text-dim">Período:</span>
-          <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface">
-            {([['30d', 30], ['3m', 90], ['6m', 180], ['Tudo', 0]] as const).map(([label, d]) => (
-              <button key={label} onClick={() => preset(d)} className="px-3 py-1.5 text-dim hover:text-ink transition-colors">{label}</button>
-            ))}
-          </div>
-          <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-surface-2 border border-border rounded px-2 py-1 focus:outline-none focus:border-accent" />
-          <span className="text-dim">até</span>
-          <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-surface-2 border border-border rounded px-2 py-1 focus:outline-none focus:border-accent" />
-          {mediaIndice != null && <span className="ml-1 text-dim">Média do índice: <strong className="text-accent tnum">{brl(mediaIndice)}</strong> · {dadosP.length} coleta{dadosP.length === 1 ? '' : 's'}</span>}
-        </div>
-
-        {nacional && (
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-dim">Região:</span>
-            <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface">
-              <button onClick={() => setRegiao('')}
-                className={`px-3 py-1.5 transition-colors ${regiao === '' ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>Todas</button>
-              {regioes.map(r => (
-                <button key={r} onClick={() => setRegiao(r)}
-                  className={`px-3 py-1.5 transition-colors border-l border-border ${regiao === r ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>{r}</button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {nacional && (
-          <div className="flex items-center gap-4 flex-wrap text-xs">
-            <span className="text-dim">Métrica:</span>
-            {([['mediana', 'Mediana'], ['media', 'Média'], ['min', 'Mínimo'], ['max', 'Máximo']] as const).map(([k, label]) => (
-              <label key={k} className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={metricas[k]} onChange={e => setMetricas(m => ({ ...m, [k]: e.target.checked }))} />
-                {label}
-              </label>
-            ))}
-            <label className="flex items-center gap-1.5 cursor-pointer ml-2">
-              <input type="checkbox" checked={banda} onChange={e => setBanda(e.target.checked)} />
-              Faixa mín–máx
-            </label>
-          </div>
-        )}
-
-        {/* gráfico */}
-        <div className="border border-border rounded-lg bg-surface p-4">
-          <div className="flex items-start justify-between gap-3">
-          <p className="text-sm font-medium mb-1">
-            {nacional ? 'Custo do prato feito (R$) — distribuição dos 100 pratos' : 'Custo do prato (R$) — por fonte'}
-            <InfoTip texto={nacional
-              ? 'Cada coleta reúne o custo dos 100 pratos. A mediana é o índice nacional; a faixa mostra o prato mais barato e o mais caro. Escolha a fonte (blend/online/manual), a região e o período.'
-              : 'Custo deste prato ao longo do tempo, em cada fonte: blend (o índice real), online (só cotação online) e manual (só leituras manuais).'} />
-          </p>
-          <BotaoExportar nome="indice-pf-serie" abas={() => [{ nome: 'Série', linhas: dadosP.map((d: any) => ({ Data: new Date(d.ts).toISOString().slice(0, 10), ...(nacional ? { Mediana: d.mediana, Média: d.media, Minimo: d.min, Maximo: d.max } : { Blend: d.blend, Online: d.online, Manual: d.manual }) })) }]} />
-          </div>
-          <p className="text-xs text-dim mb-4">
-            {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}` : 'blend × online × manual'}
-            {poucos && ' · série curta (poucas coletas) — cresce a cada coleta.'}
-          </p>
-          <div style={{ width: '100%', height: 360 }}>
-            <ResponsiveContainer>
-              <ComposedChart data={dadosP} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" />
-                <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
-                  ticks={ticks} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
-                  tick={{ fontSize: 13, fill: COR.muted }} />
-                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
-                <Tooltip formatter={(v: any) => Array.isArray(v)
-                  ? `R$ ${Number(v[0]).toFixed(2)} – R$ ${Number(v[1]).toFixed(2)}`
-                  : `R$ ${Number(v).toFixed(2)}`}
-                  labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
-                <Legend wrapperStyle={{ fontSize: 13 }} />
-                {nacional ? (
-                  <>
-                    {banda && <Area type="monotone" dataKey="faixa" name="faixa mín–máx" fill={COR.paprika} fillOpacity={0.1} stroke="none" />}
-                    {metricas.mediana && <Line type="monotone" dataKey="mediana" name="Mediana" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />}
-                    {metricas.media && <Line type="monotone" dataKey="media" name="Média" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />}
-                    {metricas.min && <Line type="monotone" dataKey="min" name="Mínimo" stroke={COR.muted} strokeWidth={1.5} dot={{ r: 2 }} />}
-                    {metricas.max && <Line type="monotone" dataKey="max" name="Máximo" stroke={COR.ink} strokeWidth={1.5} dot={{ r: 2 }} />}
-                  </>
-                ) : (
-                  <>
-                    <Line type="monotone" dataKey="blend" name="Blend" stroke={COR.paprika} strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="online" name="Online" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="manual" name="Manual" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
-                  </>
-                )}
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* composição por grupo (total quando nacional; do prato quando selecionado) */}
-        <div className="border border-border rounded-lg bg-surface p-4">
-          <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-            <div>
-              <p className="text-sm font-medium">{nacional ? 'Composição do custo por grupo de alimento' : 'Composição do prato por grupo'}
-                <InfoTip texto="Quanto cada grupo de alimento pesa no custo (blend). Média por prato quando é o índice; do prato quando um está selecionado. As 17 categorias viram 7 grupos. Alterne R$ e % do total." /></p>
-              <p className="text-xs text-dim">{nacional ? (regiao ? `Média por prato · ${regiao} · blend` : 'Média por prato · blend') : 'blend'}{poucos && ' · série curta, cresce a cada coleta.'}</p>
-            </div>
-            <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface text-sm">
-              {([['abs', 'R$'], ['pct', '% do total']] as const).map(([k, label]) => (
-                <button key={k} onClick={() => setPercentual(k === 'pct')}
-                  className={`px-3 py-1.5 transition-colors ${(percentual ? 'pct' : 'abs') === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>{label}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ width: '100%', height: 340 }}>
-            <ResponsiveContainer>
-              <BarChart data={compData} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6e0d6" vertical={false} />
-                <XAxis dataKey="data" tick={{ fontSize: 13, fill: COR.muted }} />
-                <YAxis tick={{ fontSize: 13, fill: COR.muted }} width={52} allowDataOverflow
-                  domain={percentual ? [0, 100] : ['auto', 'auto']} ticks={percentual ? [0, 25, 50, 75, 100] : undefined}
-                  tickFormatter={v => percentual ? `${Math.round(v)}%` : `R$${v}`} />
-                <Tooltip formatter={(v: any, n: any) => [percentual ? `${Number(v).toFixed(1)}%` : `R$ ${Number(v).toFixed(2)}`, n]} />
-                <Legend wrapperStyle={{ fontSize: 13 }} />
-                {GRUPOS_CAT.map(g => <Bar key={g} dataKey={g} stackId="a" fill={CORES_GRUPO[g]} stroke="#fff" strokeWidth={1} />)}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {!nacional && (detalhes[pratoId]?.length ? (() => {
-          const its = detalhes[pratoId]
-          const cheio = its.reduce((s, it) => s + it.custo, 0)
-          const atual = its.reduce((s, it) => s + (off.has(it.ingrediente_id) ? 0 : it.custo), 0)
-          return (
-            <div className="border border-border rounded-lg bg-surface p-4">
-              <p className="text-sm font-medium mb-1">Simular sem ingredientes
-                <InfoTip texto="Desmarque ingredientes para ver o custo do prato sem eles (última coleta, blend). O R$ de cada item é o custo da quantidade da receita (em gramas)." /></p>
-              <p className="text-xs text-dim mb-3">
-                Custo do prato = soma dos ingredientes marcados ({dataDetalhes ? `coleta de ${fmt(dataDetalhes)}` : 'última coleta'} · blend). O R$ ao lado de cada
-                item é o custo da <strong>quantidade da receita</strong> (em gramas). Desmarque para ver o prato sem ele.
-              </p>
-              <div className="flex items-baseline gap-2 mb-4">
-                <span className="font-bold tracking-tight text-2xl text-accent tnum">{brl(atual)}</span>
-                {off.size > 0 && <span className="text-xs text-dim">de {brl(cheio)} · −{brl(cheio - atual)}</span>}
-              </div>
-              <div className="space-y-3">
-                {(() => {
-                  const grupos: Record<string, ItemDetalhe[]> = {}
-                  its.forEach(it => (grupos[it.categoria || 'Outro'] ||= []).push(it))
-                  const soma = (arr: ItemDetalhe[]) => arr.reduce((s, x) => s + (off.has(x.ingrediente_id) ? 0 : x.custo), 0)
-                  const cats = Object.keys(grupos).sort((a, b) => grupos[b].reduce((s, x) => s + x.custo, 0) - grupos[a].reduce((s, x) => s + x.custo, 0))
-                  return cats.map(cat => (
-                    <div key={cat}>
-                      <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-wide text-dim border-b border-border/60 pb-1">
-                        <span>{cat}</span><span className="tnum">{brl(soma(grupos[cat]))}</span>
-                      </div>
-                      {grupos[cat].map(it => (
-                        <label key={it.ingrediente_id} className="flex items-center justify-between gap-3 text-sm py-1.5 border-b border-border/40 cursor-pointer">
-                          <span className="flex items-center gap-2 min-w-0">
-                            <input type="checkbox" checked={!off.has(it.ingrediente_id)}
-                              onChange={() => setOff(s => { const n = new Set(s); n.has(it.ingrediente_id) ? n.delete(it.ingrediente_id) : n.add(it.ingrediente_id); return n })} />
-                            <span className={off.has(it.ingrediente_id) ? 'line-through text-dim' : ''}>{it.nome}</span>
-                            <span className="text-xs text-dim shrink-0">{it.qtd_g} g</span>
-                          </span>
-                          <span className="tnum text-dim">{brl(it.custo)}</span>
-                        </label>
-                      ))}
-                    </div>
-                  ))
-                })()}
-              </div>
-            </div>
-          )
-        })() : null)}
-      </div>
+        <IndicePainel ev={ev} snapsNovos={snapsNovos} admin />
       )}
     </main>
-  )
-}
-
-// seletor de prato com busca, agrupado por região
-function SeletorPrato({ pratos, value, onChange }: {
-  pratos: { id: number; nome: string; regiao: string }[]; value: number; onChange: (id: number) => void
-}) {
-  const [aberto, setAberto] = useState(false)
-  const [busca, setBusca] = useState('')
-  const sel = value === 0 ? 'Todos os pratos'
-    : (() => { const p = pratos.find(x => x.id === value); return p ? `${p.nome} · ${p.regiao}` : '—' })()
-
-  const b = busca.trim().toLowerCase()
-  const filtrados = pratos
-    .filter(p => !b || p.nome.toLowerCase().includes(b) || p.regiao.toLowerCase().includes(b))
-    .sort((a, c) => a.regiao.localeCompare(c.regiao) || numPrato(a.nome) - numPrato(c.nome))
-  const porRegiao: Record<string, typeof pratos> = {}
-  filtrados.forEach(p => { (porRegiao[p.regiao] ||= []).push(p) })
-
-  function escolher(id: number) { onChange(id); setAberto(false); setBusca('') }
-
-  return (
-    <div className="relative mt-1">
-      <button onClick={() => setAberto(a => !a)}
-        className="flex items-center justify-between gap-2 bg-surface-2 border border-border rounded-md px-2.5 py-2 text-sm text-ink w-full sm:w-[22rem] hover:border-accent transition">
-        <span className="truncate">{sel}</span>
-        <span className="text-dim shrink-0">▾</span>
-      </button>
-      {aberto && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setAberto(false)} />
-          <div className="absolute z-40 mt-1 w-full sm:w-[22rem] bg-surface-2 border border-border rounded-md shadow-lg max-h-[22rem] overflow-auto">
-            <div className="sticky top-0 bg-surface-2 p-2 border-b border-border">
-              <input autoFocus value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar prato ou região…"
-                className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm focus:outline-none focus:border-accent" />
-            </div>
-            <button onClick={() => escolher(0)}
-              className={`block w-full text-left px-3 py-2 text-sm hover:bg-surface ${value === 0 ? 'text-accent font-medium' : 'text-ink'}`}>
-              Todos os pratos
-            </button>
-            {Object.keys(porRegiao).map(reg => (
-              <div key={reg}>
-                <div className="px-3 py-1 text-[0.65rem] uppercase tracking-wide text-dim bg-surface/60 sticky top-[3.25rem]">{reg}</div>
-                {porRegiao[reg].map(p => (
-                  <button key={p.id} onClick={() => escolher(p.id)}
-                    className={`block w-full text-left px-3 py-1.5 text-sm hover:bg-surface ${value === p.id ? 'text-accent font-medium' : 'text-ink'}`}>
-                    {p.nome}
-                  </button>
-                ))}
-              </div>
-            ))}
-            {!filtrados.length && <p className="px-3 py-3 text-sm text-dim">Nenhum prato para “{busca}”.</p>}
-          </div>
-        </>
-      )}
-    </div>
   )
 }
