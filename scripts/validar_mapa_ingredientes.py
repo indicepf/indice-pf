@@ -66,9 +66,10 @@ def parse_mapa():
                 bloco('MAPA_INGREDIENTE_IPCA'))]
     nao = [{'id': int(a), 'nome': b} for a, b in re.findall(
         r"\{\s*id:\s*(\d+),\s*nome:\s*'((?:[^'\\]|\\.)*)',\s*motivo:", bloco('NAO_MAPEADOS'))]
-    dieese = [{'id': int(a), 'nome': b, 'serie': c} for a, b, c in re.findall(
-        r"\{\s*id:\s*(\d+),\s*nome:\s*'((?:[^'\\]|\\.)*)',\s*serie:\s*'(dieese_[^']+)'",
-        bloco('MAPA_INGREDIENTE_DIEESE'))]
+    dieese = [{'id': int(a), 'nome': b, 'serie': c, 'comparabilidade': d}
+              for a, b, c, d in re.findall(
+        r"\{\s*id:\s*(\d+),\s*nome:\s*'((?:[^'\\]|\\.)*)',\s*serie:\s*'(dieese_[^']+)',"
+        r"\s*comparabilidade:\s*'(\w+)'", bloco('MAPA_INGREDIENTE_DIEESE'))]
     return mapa, nao, dieese
 
 

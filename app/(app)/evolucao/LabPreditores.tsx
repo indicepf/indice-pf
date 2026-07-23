@@ -31,6 +31,13 @@ const DEFLATORES: { key: string; label: string; tipo: 'nivel' | 'variacao'; nota
 
 const SERIES_DIEESE = PREDITORES.filter(p => p.key.startsWith('dieese_'))
 
+type PontoConf = { ym: string; nosso: number | null; dieese: number | null; razao: number | null }
+type ItemConf = {
+  id: number; nome: string; unidade: string | null
+  comparabilidade: 'direta' | 'aproximada'; nota: string | null
+  razaoMediana: number | null; nMeses: number; pontos: PontoConf[]
+}
+
 const CONFIANCAS: [string, string][] = [
   ['alta', 'só correspondência exata'],
   ['alta,media', 'exata + próxima (recomendado)'],
@@ -46,6 +53,8 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
   const [vistaDieese, setVistaDieese] = useState<Set<string>>(new Set(['dieese_cesta']))
   const [porIng, setPorIng] = useState<{ serie: { ym: string; indice: number; pratos: number }[]; cobertura: { por_item_pct: number }; ancora: { ym: string } } | null>(null)
   const [erroIng, setErroIng] = useState('')
+  const [conf, setConf] = useState<ItemConf[] | null>(null)
+  const [itemConf, setItemConf] = useState<number | null>(null)
 
   const ehPorIngrediente = metodo === 'ingrediente'
   const deflator = ehPorIngrediente ? 'dieese_cesta' : metodo
@@ -58,6 +67,15 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
       .then(r => r.json()).then(j => setSeries(j || {}))
       .catch(() => setSeries({}))
       .finally(() => setCarregando(false))
+  }, [])
+
+  // confiabilidade: nosso preço × preço do DIEESE
+  useEffect(() => {
+    let vivo = true
+    fetch('/api/confiabilidade').then(r => r.json())
+      .then(j => { if (vivo && Array.isArray(j.itens)) setConf(j.itens) })
+      .catch(() => { if (vivo) setConf([]) })
+    return () => { vivo = false }
   }, [])
 
   // reconstrução por ingrediente (cálculo no servidor)
@@ -269,6 +287,87 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* confiabilidade: nossa medição × DIEESE */}
+      <div className="border border-border rounded-lg bg-surface p-4">
+        <p className="text-sm font-medium mb-1">Confiabilidade — nosso preço × preço do DIEESE
+          <InfoTip texto="Duas medições independentes do mesmo produto. Razão = nosso preço ÷ preço do DIEESE. Perto de 1,00 significa que as duas fontes concordam; divergência grande em item de comparação direta é sinal para investigar nossa coleta." />
+        </p>
+        <p className="text-xs text-dim mb-3">
+          Razão = nosso ÷ DIEESE · mediana dos meses com as duas medições · comparação <strong>direta</strong> = mesmo
+          produto e unidade; <strong>aproximada</strong> = produto ou ponto de venda diferem, divergência esperada.
+        </p>
+        {!conf ? <p className="text-sm text-dim py-4">Carregando…</p> : !conf.length ? (
+          <p className="text-sm text-dim py-4">Sem pares comparáveis.</p>
+        ) : (
+          <>
+            <div className="overflow-x-auto border border-border rounded-lg">
+              <table className="w-full text-sm min-w-[40rem]">
+                <thead>
+                  <tr className="text-left text-[0.65rem] uppercase tracking-wide text-dim border-b border-border">
+                    <th className="px-3 py-2">Item</th>
+                    <th className="px-3 py-2">Un.</th>
+                    <th className="px-3 py-2 text-right">Nosso</th>
+                    <th className="px-3 py-2 text-right">DIEESE</th>
+                    <th className="px-3 py-2 text-right">Razão</th>
+                    <th className="px-3 py-2 text-right">Meses</th>
+                    <th className="px-3 py-2">Comparação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...conf].sort((a, b) => (a.razaoMediana ?? 9) - (b.razaoMediana ?? 9)).map(it => {
+                    const ult = [...it.pontos].reverse().find(p => p.razao != null)
+                    const r = it.razaoMediana
+                    const ok = r != null && r >= 0.85 && r <= 1.15
+                    return (
+                      <tr key={`${it.id}-${it.nome}`} className={`border-t border-border/60 cursor-pointer hover:bg-surface-2 ${itemConf === it.id ? 'bg-surface-2' : ''}`}
+                        onClick={() => setItemConf(itemConf === it.id ? null : it.id)}>
+                        <td className="px-3 py-1.5">{it.nome}
+                          {it.nota && <span className="block text-[0.65rem] text-dim">{it.nota}</span>}
+                        </td>
+                        <td className="px-3 py-1.5 text-dim">{it.unidade ?? '—'}</td>
+                        <td className="px-3 py-1.5 text-right tnum">{ult?.nosso != null ? brl(ult.nosso) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right tnum text-dim">{ult?.dieese != null ? brl(ult.dieese) : '—'}</td>
+                        <td className={`px-3 py-1.5 text-right tnum font-medium ${r == null ? 'text-dim' : ok ? 'text-ok' : 'text-accent'}`}>
+                          {r != null ? r.toFixed(2) : '—'}
+                        </td>
+                        <td className="px-3 py-1.5 text-right tnum text-dim">{it.nMeses}</td>
+                        <td className="px-3 py-1.5 text-xs text-dim">{it.comparabilidade}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-dim mt-2">Clique numa linha para ver as duas séries lado a lado.</p>
+            {itemConf != null && (() => {
+              const it = conf.find(x => x.id === itemConf)
+              if (!it) return null
+              const dados = it.pontos.filter(p => p.nosso != null || p.dieese != null)
+                .map(p => ({ ...p, ts: tsYM(p.ym) }))
+              return (
+                <div className="mt-4">
+                  <p className="text-sm font-medium mb-2">{it.nome} — nossa medição × DIEESE</p>
+                  <div style={{ width: '100%', height: 260 }}>
+                    <ResponsiveContainer>
+                      <ComposedChart data={dados} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                          tickFormatter={fmtYM} tick={{ fontSize: 12, fill: COR.muted }} />
+                        <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={56} tickFormatter={v => `R$${v}`} />
+                        <Tooltip formatter={(v: any, n: any) => [`R$ ${Number(v).toFixed(2)}`, n]} labelFormatter={(t: any) => fmtYM(Number(t))} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Line type="monotone" dataKey="nosso" name="Índice PF" stroke={COR.ind} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+                        <Line type="monotone" dataKey="dieese" name="DIEESE" stroke={COR.est} strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} connectNulls />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )
+            })()}
+          </>
+        )}
       </div>
     </div>
   )
