@@ -46,7 +46,7 @@ const ICONES: Record<string, React.ReactNode> = {
 // menu por papel: área do usuário / assinatura / administração; Configurações
 // vive no rodapé, junto do cartão do usuário (pedido de 09/07)
 const SECOES: { titulo: string; itens: readonly (readonly [string, string])[]; admin?: boolean }[] = [
-  { titulo: 'Minha área', itens: [['/painel', 'Meu painel'], ['/calculadora', 'Calculadora de PF'], ['/meus-pratos', 'Meus pratos'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios'], ['/indice', 'Índice']] },
+  { titulo: 'Minha área', itens: [['/painel', 'Meu painel'], ['/calculadora', 'Calculadora de PF'], ['/meus-pratos', 'Meus pratos'], ['/contribuir', 'Enviar preços'], ['/meus-envios', 'Meus envios'], ['/indice', 'Gráficos personalizados']] },
   { titulo: 'Assinatura', itens: [['/plano', 'Plano & assinatura']] },
   { titulo: 'Administração', admin: true, itens: [['/painel-administrativo', 'Painel administrativo'], ['/admin', 'Administração'], ['/evolucao', 'Histórico'], ['/contribuidores', 'Ranking']] },
 ]
@@ -163,7 +163,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         : g.admin
                           ? 'text-dim border-border hover:text-brand-roxo'
                           : 'text-dim border-transparent hover:text-ink'}`}>
-                    {label.replace('Plano & assinatura', 'Plano').replace('Calculadora de PF', 'Calculadora').replace('Painel administrativo', 'Painel admin')}
+                    {label.replace('Plano & assinatura', 'Plano').replace('Calculadora de PF', 'Calculadora').replace('Painel administrativo', 'Painel admin').replace('Gráficos personalizados', 'Gráficos')}
                   </Link>
                 ))}
               </div>
