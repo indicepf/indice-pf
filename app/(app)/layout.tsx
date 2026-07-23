@@ -13,7 +13,7 @@ const TITULOS: Record<string, string> = {
   '/meus-pratos': 'Meus pratos',
   '/contribuir': 'Enviar preços',
   '/meus-envios': 'Meus envios',
-  '/indice': 'Índice',
+  '/indice': 'Gráficos personalizados',
   '/configuracoes': 'Configurações',
   '/plano': 'Plano & assinatura',
   '/evolucao': 'Histórico',
