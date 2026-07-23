@@ -194,19 +194,32 @@ export const NAO_MAPEADOS: readonly { id: number; nome: string; motivo: string }
 
 // Itens do índice-pf que também existem na cesta DIEESE (preço R$ medido).
 // Serve para a comparação de confiabilidade: nosso preço × preço do DIEESE.
-export const MAPA_INGREDIENTE_DIEESE: readonly { id: number; nome: string; serie: string }[] = [
-  { id: 7, nome: 'Arroz branco', serie: 'dieese_arroz' },
-  { id: 42, nome: 'Feijão carioca', serie: 'dieese_feijao' },
-  { id: 95, nome: 'Tomate', serie: 'dieese_tomate' },
-  { id: 16, nome: 'Batata inglesa', serie: 'dieese_batata' },
-  { id: 67, nome: 'Manteiga', serie: 'dieese_manteiga' },
-  { id: 99, nome: 'Óleo de soja', serie: 'dieese_oleo' },
-  { id: 39, nome: 'Farinha de mandioca', serie: 'dieese_farinha' },
-  { id: 86, nome: 'Pão francês', serie: 'dieese_pao' },
-  { id: 13, nome: 'Banana da terra', serie: 'dieese_banana' },
-  { id: 56, nome: 'Leite', serie: 'dieese_leite' },
-  { id: 3, nome: 'Alcatra bovina', serie: 'dieese_carne' },
-  { id: 846, nome: 'Coxão mole bovino', serie: 'dieese_carne' },
+//
+// `comparabilidade` diz o quanto a comparação é justa:
+//   direta     — mesmo produto e mesma unidade; divergência aponta para a coleta
+//   aproximada — produto ou ponto de venda diferem; divergência é esperada
+//
+// Não entram aqui (verificado em 23/07/2026, jun/2026):
+//   Banana da terra × dieese_banana — produtos diferentes (banana-da-terra é
+//     mais cara que a banana comum da cesta) e a metodologia do DIEESE mede
+//     banana em dúzias em parte das capitais. Razão observada 1,45.
+//   Café e Açúcar — o índice-pf não tem esses ingredientes.
+export type Comparabilidade = 'direta' | 'aproximada'
+
+export const MAPA_INGREDIENTE_DIEESE: readonly {
+  id: number; nome: string; serie: string; comparabilidade: Comparabilidade; nota?: string
+}[] = [
+  { id: 7, nome: 'Arroz branco', serie: 'dieese_arroz', comparabilidade: 'direta' },
+  { id: 42, nome: 'Feijão carioca', serie: 'dieese_feijao', comparabilidade: 'direta', nota: 'DIEESE usa o tipo mais consumido em cada capital' },
+  { id: 95, nome: 'Tomate', serie: 'dieese_tomate', comparabilidade: 'direta' },
+  { id: 16, nome: 'Batata inglesa', serie: 'dieese_batata', comparabilidade: 'direta' },
+  { id: 99, nome: 'Óleo de soja', serie: 'dieese_oleo', comparabilidade: 'direta' },
+  { id: 39, nome: 'Farinha de mandioca', serie: 'dieese_farinha', comparabilidade: 'aproximada', nota: 'DIEESE alterna farinha de trigo/mandioca conforme a região' },
+  { id: 56, nome: 'Leite', serie: 'dieese_leite', comparabilidade: 'direta' },
+  { id: 67, nome: 'Manteiga', serie: 'dieese_manteiga', comparabilidade: 'aproximada', nota: 'conferir unidade: a cesta especifica 750 g' },
+  { id: 86, nome: 'Pão francês', serie: 'dieese_pao', comparabilidade: 'aproximada', nota: 'DIEESE pesquisa padaria; nossa coleta é majoritariamente online' },
+  { id: 3, nome: 'Alcatra bovina', serie: 'dieese_carne', comparabilidade: 'aproximada', nota: 'o corte da cesta varia por capital (carne de primeira)' },
+  { id: 846, nome: 'Coxão mole bovino', serie: 'dieese_carne', comparabilidade: 'aproximada', nota: 'idem: corte varia por capital' },
 ] as const
 
 export const IPCA_POR_INGREDIENTE: Record<number, MapaItem> =
