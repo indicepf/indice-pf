@@ -31,12 +31,24 @@ const DEFLATORES: { key: string; label: string; tipo: 'nivel' | 'variacao'; nota
 
 const SERIES_DIEESE = PREDITORES.filter(p => p.key.startsWith('dieese_'))
 
+const CONFIANCAS: [string, string][] = [
+  ['alta', 'só correspondência exata'],
+  ['alta,media', 'exata + próxima (recomendado)'],
+  ['alta,media,baixa', 'tudo, inclusive fallback de grupo'],
+]
+
 export default function LabPreditores({ ev }: { ev: Evolucao }) {
-  const [deflator, setDeflator] = useState('dieese_cesta')
+  const [metodo, setMetodo] = useState('ingrediente')   // 'ingrediente' ou chave de DEFLATORES
+  const [confianca, setConfianca] = useState('alta,media')
   const [desde, setDesde] = useState('2015-01')
   const [series, setSeries] = useState<Record<string, { data: string; valor: number }[]>>({})
   const [carregando, setCarregando] = useState(true)
   const [vistaDieese, setVistaDieese] = useState<Set<string>>(new Set(['dieese_cesta']))
+  const [porIng, setPorIng] = useState<{ serie: { ym: string; indice: number; pratos: number }[]; cobertura: { por_item_pct: number }; ancora: { ym: string } } | null>(null)
+  const [erroIng, setErroIng] = useState('')
+
+  const ehPorIngrediente = metodo === 'ingrediente'
+  const deflator = ehPorIngrediente ? 'dieese_cesta' : metodo
 
   // busca os deflatores e as séries do DIEESE (histórico longo)
   useEffect(() => {
@@ -47,6 +59,18 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
       .catch(() => setSeries({}))
       .finally(() => setCarregando(false))
   }, [])
+
+  // reconstrução por ingrediente (cálculo no servidor)
+  useEffect(() => {
+    if (!ehPorIngrediente) return
+    let vivo = true
+    setErroIng('')
+    fetch(`/api/indice-retropolado?desde=${desde}&confianca=${confianca}`)
+      .then(r => r.json())
+      .then(j => { if (vivo) { if (j.error) setErroIng(j.error); else setPorIng(j) } })
+      .catch(e => { if (vivo) setErroIng(String(e)) })
+    return () => { vivo = false }
+  }, [ehPorIngrediente, desde, confianca])
 
   // índice medido, agregado por mês (média das coletas do mês)
   const medidoPorMes = useMemo(() => {
@@ -64,6 +88,17 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
   // Retropolação: converte o deflator num índice de NÍVEL e projeta o índice
   // medido para trás pela razão nivel(t)/nivel(t0), ancorando no 1º mês medido.
   const reconstrucao = useMemo(() => {
+    // por ingrediente: a série já vem pronta do servidor, ancorada no custo real
+    if (ehPorIngrediente) {
+      if (!porIng?.serie?.length) return []
+      const medido = new Map(medidoPorMes.map(p => [p.ym, p.valor]))
+      const ymAncora = porIng.ancora.ym
+      return porIng.serie.map(p => ({
+        ym: p.ym, ts: tsYM(p.ym),
+        estimado: p.ym < ymAncora ? p.indice : null,
+        real: medido.get(p.ym) != null ? Math.round(medido.get(p.ym)! * 100) / 100 : null,
+      }))
+    }
     const bruto = series[deflator] || []
     if (!bruto.length || !medidoPorMes.length) return []
 
@@ -91,7 +126,7 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
       const est = ym < ancora.ym ? Math.round((ancora.valor * (n / nAncora)) * 100) / 100 : null
       return { ym, ts: tsYM(ym), estimado: est, real: real != null ? Math.round(real * 100) / 100 : null }
     })
-  }, [series, deflator, medidoPorMes, desde, def])
+  }, [series, deflator, medidoPorMes, desde, def, ehPorIngrediente, porIng])
 
   const primeiroReal = medidoPorMes[0]
   const maisAntigo = reconstrucao.find(p => p.estimado != null)
@@ -121,12 +156,21 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
       </div>
 
       <div className="flex items-end gap-4 flex-wrap text-xs">
-        <label className="text-dim">Deflator
-          <select value={deflator} onChange={e => setDeflator(e.target.value)}
-            className="block mt-1 bg-surface-2 border border-border rounded-md px-2.5 py-2 text-sm text-ink w-full sm:w-[22rem] focus:outline-none focus:border-accent">
-            {DEFLATORES.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+        <label className="text-dim">Método
+          <select value={metodo} onChange={e => setMetodo(e.target.value)}
+            className="block mt-1 bg-surface-2 border border-border rounded-md px-2.5 py-2 text-sm text-ink w-full sm:w-[24rem] focus:outline-none focus:border-accent">
+            <option value="ingrediente">Por ingrediente — item do IPCA de cada um (recomendado)</option>
+            {DEFLATORES.map(d => <option key={d.key} value={d.key}>Agregado — {d.label}</option>)}
           </select>
         </label>
+        {ehPorIngrediente && (
+          <label className="text-dim">Confiança do mapeamento
+            <select value={confianca} onChange={e => setConfianca(e.target.value)}
+              className="block mt-1 bg-surface-2 border border-border rounded-md px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-accent">
+              {CONFIANCAS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+        )}
         <label className="text-dim">Desde
           <select value={desde} onChange={e => setDesde(e.target.value)}
             className="block mt-1 bg-surface-2 border border-border rounded-md px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-accent">
@@ -136,7 +180,13 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
           </select>
         </label>
       </div>
-      <p className="text-xs text-dim -mt-4">{def.nota}</p>
+      <p className="text-xs text-dim -mt-4">
+        {ehPorIngrediente
+          ? 'Cada ingrediente é deflacionado pelo seu próprio item do IPCA e o custo de cada prato é recomposto pelos pesos da receita. Ancorado no custo real da última coleta — no mês da âncora o resultado reproduz o índice medido.'
+          : def.nota}
+        {ehPorIngrediente && porIng && <> · <strong className="text-ink">{porIng.cobertura.por_item_pct}%</strong> do custo deflacionado por item próprio (o resto cai no grupo).</>}
+      </p>
+      {erroIng && <p className="text-xs text-accent -mt-4">Falha ao calcular por ingrediente: {erroIng}</p>}
 
       {/* reconstrução */}
       <div className="border border-border rounded-lg bg-surface p-4">
@@ -156,7 +206,7 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
             <>
               Âncora: {primeiroReal ? `${primeiroReal.ym.split('-').reverse().join('/')} = ${brl(primeiroReal.valor)}` : '—'}
               {maisAntigo && <> · estimativa mais antiga: {maisAntigo.ym.split('-').reverse().join('/')} = <strong className="text-ink">{brl(maisAntigo.estimado!)}</strong></>}
-              {' '}· deflator: {def.label}
+              {' '}· método: {ehPorIngrediente ? 'por ingrediente (IPCA item a item)' : `agregado por ${def.label}`}
             </>
           )}
         </p>
