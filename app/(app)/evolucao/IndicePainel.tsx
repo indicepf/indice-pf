@@ -19,6 +19,7 @@ import InfoTip from '../../InfoTip'
 const COR = { paprika: ACCENT, olive: BRAND.verde, ink: INK, muted: DIM, azul: BRAND.ciano }
 const FONTES: [FonteKey, string][] = [['blend', 'Blend'], ['online', 'Online'], ['manual', 'Manual']]
 const fmt = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
+const fmtDia = (d: string) => d.split('-').reverse().join('/')   // DD/MM/AAAA
 const ts = (d: string) => new Date(d + 'T00:00:00Z').getTime()
 const r2 = (n: number) => Math.round(n * 100) / 100
 const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
@@ -93,23 +94,6 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapsNovos, ini, fim])
   useEffect(() => { setOff(new Set()) }, [pratoId])   // troca de prato reseta o "e se"
-  // séries dos preditores sobrepostos (eixo direito): diário e mensal
-  useEffect(() => {
-    if (!admin || !overlayVar) { setOverlaySerie([]); return }
-    let vivo = true
-    fetch(`/api/preditores?vars=${overlayVar}`).then(r => r.json())
-      .then(j => { if (vivo) setOverlaySerie(j[overlayVar] || []) })
-      .catch(() => { if (vivo) setOverlaySerie([]) })
-    return () => { vivo = false }
-  }, [admin, overlayVar])
-  useEffect(() => {
-    if (!admin || !overlayVarM) { setOverlaySerieM([]); return }
-    let vivo = true
-    fetch(`/api/preditores?vars=${overlayVarM}`).then(r => r.json())
-      .then(j => { if (vivo) setOverlaySerieM(j[overlayVarM] || []) })
-      .catch(() => { if (vivo) setOverlaySerieM([]) })
-    return () => { vivo = false }
-  }, [admin, overlayVarM])
 
   const nacional = pratoId === 0
   const dados = useMemo(() => {
@@ -143,6 +127,14 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
 
   // ── admin: overlay + regressão ──
   const datasColeta = dadosP.map(d => new Date(d.ts).toISOString().slice(0, 10))
+  // janela da consulta = coletas ±buffer. Sem isto o Supabase corta em 1000
+  // linhas (traz as mais antigas, 2010-2013, e a carry-forward pega valor velho).
+  const rangeQS = datasColeta.length
+    ? (() => {
+        const de = new Date(datasColeta[0] + 'T00:00:00Z'); de.setDate(de.getDate() - 60)
+        return `&de=${de.toISOString().slice(0, 10)}&ate=${datasColeta[datasColeta.length - 1]}`
+      })()
+    : ''
   const overlayInfo = overlayVar ? PREDITOR_POR_KEY[overlayVar] : null
   const overlayAtivo = admin && !!overlayVar && overlaySerie.length > 0
   const dadosChart = overlayAtivo
@@ -169,11 +161,29 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     ? pontosMensais.map(p => ({ ...p, preditor: cf(overlaySerieM, p.data) }))
     : pontosMensais
 
+  // séries dos preditores sobrepostos (eixo direito), limitadas à janela das coletas
+  useEffect(() => {
+    if (!admin || !overlayVar) { setOverlaySerie([]); return }
+    let vivo = true
+    fetch(`/api/preditores?vars=${overlayVar}${rangeQS}`).then(r => r.json())
+      .then(j => { if (vivo) setOverlaySerie(j[overlayVar] || []) })
+      .catch(() => { if (vivo) setOverlaySerie([]) })
+    return () => { vivo = false }
+  }, [admin, overlayVar, rangeQS])
+  useEffect(() => {
+    if (!admin || !overlayVarM) { setOverlaySerieM([]); return }
+    let vivo = true
+    fetch(`/api/preditores?vars=${overlayVarM}${rangeQS}`).then(r => r.json())
+      .then(j => { if (vivo) setOverlaySerieM(j[overlayVarM] || []) })
+      .catch(() => { if (vivo) setOverlaySerieM([]) })
+    return () => { vivo = false }
+  }, [admin, overlayVarM, rangeQS])
+
   async function gerarModelo(keys: string[], pontos: { data: string; y: number }[]) {
     if (!keys.length) return
     setCalculando(true)
     try {
-      const j = await fetch(`/api/preditores?vars=${keys.join(',')}`).then(r => r.json())
+      const j = await fetch(`/api/preditores?vars=${keys.join(',')}${rangeQS}`).then(r => r.json())
       const y: number[] = []
       const cols: number[][] = keys.map(() => [])
       pontos.forEach(pt => {
@@ -321,7 +331,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                     ? `R$ ${Number(v[0]).toFixed(2)} – R$ ${Number(v[1]).toFixed(2)}`
                     : `R$ ${Number(v).toFixed(2)}`
                 }}
-                  labelFormatter={(t: any) => fmt(new Date(t).toISOString().slice(0, 10))} />
+                  labelFormatter={(t: any) => fmtDia(new Date(t).toISOString().slice(0, 10))} />
                 <Legend wrapperStyle={{ fontSize: 13 }} />
                 {nacional ? (
                   <>
