@@ -7,15 +7,17 @@ import { MAPA_INGREDIENTE_IPCA, type Confianca } from '@/lib/mapa-ingredientes'
 
 // Reconstrução do índice ingrediente a ingrediente.
 //
-// Em vez de deflacionar o índice agregado por um número só, monta um deflator
-// PRÓPRIO DE CADA PRATO: a média das razões de preço dos seus ingredientes,
-// ponderada pela participação de cada um no custo do prato. Assim o movimento
-// relativo entre ingredientes e os pesos das receitas são preservados.
+// Fase 3 (ADR docs/027, LAB-003/LAB-007): a série parte da decomposição
+// CANÔNICA de cada prato (dish_cost_components, Fase 2) — um valor em R$ por
+// (prato, ingrediente) já com a fonte efetiva resolvida (custo_fixo, blend,
+// manual, online). Cada componente é projetado individualmente:
+//   custo_componente(m) = custo_componente(âncora) × ratio_da_série(m)
+// A soma por prato já é proporcionalmente correta; não há peso a normalizar.
 //
-// O nível vem do custo REAL de custos_pratos (blend, com preços manuais e as
-// correções do pipeline); os preços por ingrediente entram só para formar
-// pesos e razões. Consequência: no mês da âncora o resultado é exatamente o
-// índice medido, e nenhum prato é descartado por faltar um preço.
+// Componente sem deflator (custo_fixo, ou ingrediente sem item no mapa IPCA)
+// fica CONGELADO nominalmente em todos os meses — não é deflacionado nem
+// redistribuído sobre o resto (decisão aprovada, ADR docs/027). A cobertura
+// reportada declara essa parte explicitamente, nunca a esconde.
 //
 // GET /api/indice-retropolado?desde=2015-01&confianca=alta,media
 //
@@ -27,25 +29,29 @@ import { MAPA_INGREDIENTE_IPCA, type Confianca } from '@/lib/mapa-ingredientes'
 // - 503 { code: "NO_VALID_ANCHOR" } quando nenhum snapshot recente passa no
 //   gate de âncora abaixo.
 //
-// A série é ESTIMATIVA, não medição. O uso previsto é leitura gráfica.
+// A série é ESTIMATIVA, não medição. productKind=current_basket_backcast
+// (docs/026): ancora no último ponto medido, projeta a cesta ATUAL para trás.
 
 export const maxDuration = 60
 
 const GRUPO_FALLBACK = 'ipca_7171'   // Alimentação no domicílio
 
 // Gate temporário de âncora (LAB-002): o schema ainda não tem estado
-// 'published', então só ancora em snapshot cujo conjunto de custos bate com os
-// pratos ativos, sem custo não positivo e com mediana reconciliada com o valor
-// persistido. Candidatos são tentados por DATA decrescente (não por id: um
-// backfill com id maior não pode virar âncora). Limiares versionados aqui até
-// existir configuração formal (Fase 1).
+// 'published' formal, então só ancora em snapshot cujo conjunto de custos
+// bate com os pratos ativos, sem custo não positivo, com mediana reconciliada
+// com o valor persistido, E com decomposição canônica publicada (Fase 3:
+// sem isso não há componente para projetar — nunca cai para cálculo legado
+// silenciosamente). Candidatos são tentados por DATA decrescente (não por
+// id). Limiares versionados aqui até existir configuração formal (Fase 1).
 const GATE_ANCORA = {
-  versao: 1,
+  versao: 2,
   maxCandidatos: 5,          // snapshots recentes tentados, do mais novo ao mais antigo
   toleranciaMediana: 0.05,   // R$ aceitos entre mediana recalculada e custo_total_pf
 }
 
 const CONFIANCAS_VALIDAS = new Set(['alta', 'media', 'baixa'])
+
+type Componente = { prato_id: number; ingrediente_id: number; fonte_efetiva: string; custo: number }
 
 export async function GET(req: NextRequest) {
   const auth = await exigirAdmin(req, 'api/indice-retropolado')
@@ -63,7 +69,8 @@ export async function GET(req: NextRequest) {
 
   const db = supabaseAdmin()
 
-  // 1. âncora: snapshot recente que passa no gate
+  // 1. âncora: snapshot recente que passa no gate (custos_pratos legado, só
+  //    para validar a data/reconciliação) E tem decomposição canônica
   const { data: pratosAtivos, error: ePratos } = await db.from('pratos').select('id').eq('ativo', true)
   if (ePratos || !pratosAtivos?.length)
     return NextResponse.json({ error: 'sem pratos ativos', code: 'NO_ACTIVE_DISHES' }, { status: 500, headers: SEM_CACHE })
@@ -75,7 +82,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'sem coletas', code: 'NO_SNAPSHOT' }, { status: 500, headers: SEM_CACHE })
 
   let ancora: { id: number; data: string } | null = null
-  let custoBase = new Map<number, number>()
+  let componentes: Componente[] = []
   const rejeitados: { snapshotId: number; motivo: string }[] = []
   for (const cand of candidatos) {
     const custos = await todasLinhas<{ prato_id: number; custo_total: number }>((de, ate) =>
@@ -96,8 +103,21 @@ export async function GET(req: NextRequest) {
       rejeitados.push({ snapshotId: cand.id, motivo: `mediana ${med.toFixed(4)} não reconcilia com persistido ${cand.custo_total_pf}` })
       continue
     }
+    const { data: versaoRow } = await db.from('shadow_publicacoes')
+      .select('calc_version').eq('snapshot_id', cand.id).order('calc_version', { ascending: false }).limit(1).maybeSingle()
+    if (!versaoRow) {
+      rejeitados.push({ snapshotId: cand.id, motivo: 'sem componentes canônicos publicados (shadow)' })
+      continue
+    }
+    const comps = await todasLinhas<Componente>((de, ate) =>
+      db.from('dish_cost_components').select('prato_id, ingrediente_id, fonte_efetiva, custo')
+        .eq('snapshot_id', cand.id).eq('calc_version', versaoRow.calc_version).range(de, ate))
+    if (!comps.length) {
+      rejeitados.push({ snapshotId: cand.id, motivo: 'sem componentes canônicos publicados (vazio)' })
+      continue
+    }
     ancora = { id: cand.id, data: cand.data }
-    custoBase = porPrato
+    componentes = comps
     break
   }
   if (!ancora)
@@ -106,41 +126,23 @@ export async function GET(req: NextRequest) {
       { status: 503, headers: SEM_CACHE })
   const ymAncora = ancora.data.slice(0, 7)
 
-  const precos = await todasLinhas<{ ingrediente_id: number; mediana_exibicao: number }>((de, ate) =>
-    db.from('precos').select('ingrediente_id, mediana_exibicao')
-      .eq('snapshot_id', ancora!.id).not('ingrediente_id', 'is', null).range(de, ate))
-  const precoBase = new Map<number, number>()
-  for (const p of precos) if (p.mediana_exibicao > 0) precoBase.set(p.ingrediente_id, p.mediana_exibicao)
-
-  // 2. receitas → participação de cada ingrediente no custo do prato (pesos).
-  //    Ingrediente sem preço fica de fora dos pesos; os demais renormalizam.
-  const receitas = await todasLinhas<{ prato_id: number; ingrediente_id: number; qtd_g: number }>((de, ate) =>
-    db.from('receitas').select('prato_id, ingrediente_id, qtd_g').not('ingrediente_id', 'is', null).range(de, ate))
-  const pesosPrato = new Map<number, { ing: number; w: number }[]>()
-  const brutoPrato = new Map<number, { ing: number; v: number }[]>()
-  for (const r of receitas) {
-    const p = precoBase.get(r.ingrediente_id)
-    if (!r.qtd_g || p == null) continue
-    const arr = brutoPrato.get(r.prato_id) ?? []
-    arr.push({ ing: r.ingrediente_id, v: (r.qtd_g / 1000) * p })
-    brutoPrato.set(r.prato_id, arr)
-  }
-  for (const [prato, itens] of brutoPrato) {
-    const soma = itens.reduce((s, x) => s + x.v, 0)
-    if (soma > 0) pesosPrato.set(prato, itens.map(x => ({ ing: x.ing, w: x.v / soma })))
-  }
-
-  // 3. deflator de cada ingrediente. Item fora do nível de confiança pedido cai
-  //    para o grupo POR POLÍTICA (resolution=group_by_policy) — é escolha do
-  //    filtro, não lacuna de dado.
+  // 2. mapa de deflator por ingrediente (só os que aparecem nos componentes).
+  //    Item fora do nível de confiança pedido cai para o grupo POR POLÍTICA
+  //    (group_by_policy) — escolha do filtro, não lacuna de dado. Ingrediente
+  //    sem qualquer entrada no mapa fica sem deflator: residual congelado.
+  const mapaPorIng = new Map(MAPA_INGREDIENTE_IPCA.map(m => [m.id, m]))
+  const ingsComponentes = new Set(componentes.map(c => c.ingrediente_id))
   const deflatorDe = new Map<number, { serie: string; porPolitica: boolean }>()
-  for (const m of MAPA_INGREDIENTE_IPCA)
-    deflatorDe.set(m.id, conf.has(m.confianca)
-      ? { serie: m.serie, porPolitica: false }
-      : { serie: GRUPO_FALLBACK, porPolitica: true })
+  const semMapeamento = new Set<number>()
+  for (const ing of ingsComponentes) {
+    if (ing === null || ing === undefined) continue
+    const m = mapaPorIng.get(ing)
+    if (!m) { semMapeamento.add(ing); continue }
+    deflatorDe.set(ing, conf.has(m.confianca) ? { serie: m.serie, porPolitica: false } : { serie: GRUPO_FALLBACK, porPolitica: true })
+  }
   const usados = new Set([GRUPO_FALLBACK, ...[...deflatorDe.values()].map(d => d.serie)])
 
-  // 4. variações mensais das séries usadas
+  // 3. variações mensais das séries usadas
   const linhas = await todasLinhas<{ serie: string; data: string; valor: number }>((de, ate) =>
     db.from('fatores_preditores').select('serie, data, valor')
       .in('serie', [...usados]).gte('data', `${desde}-01`).order('data', { ascending: true }).range(de, ate))
@@ -164,85 +166,84 @@ export async function GET(req: NextRequest) {
     meses.push(d.toISOString().slice(0, 7))
   if (!meses.length) return NextResponse.json({ error: 'período vazio', code: 'EMPTY_PERIOD' }, { status: 400, headers: SEM_CACHE })
 
-  // 5. desfaz a inflação mês a mês, de trás para frente:
-  //    preco(m-1) = preco(m) / (1 + variação_do_mês_m / 100)
-  //    Item sem variação no mês usa o grupo e registra fallbackUsed; se nem o
-  //    grupo tem, é GAP: a caminhada para ali e nada anterior é produzido.
+  // 4. desfaz a inflação mês a mês, de trás para frente, sobre uma RAZÃO
+  //    (não sobre um preço): razao(m-1) = razao(m) / (1 + variação_do_mês_m/100).
+  //    Só ingredientes com deflator entram nesta caminhada — os congelados
+  //    nunca precisam de razão (fica implícito 1 para sempre).
   const gaps: { series: string; month: string; reason: string }[] = []
-  const fallbackPorSerie = new Map<string, number>()   // série → nº de meses cobertos pelo grupo
-  const precoNoMes = new Map<string, Map<number, number>>()
-  const atual = new Map(precoBase)
-  precoNoMes.set(ymAncora, new Map(atual))
+  const fallbackPorSerie = new Map<string, number>()
+  const razaoNoMes = new Map<string, Map<number, number>>()
+  const atual = new Map([...deflatorDe.keys()].map(ing => [ing, 1]))
+  razaoNoMes.set(ymAncora, new Map(atual))
   for (let i = meses.length - 1; i > 0; i--) {
-    const mes = meses[i]                       // variação observada NESTE mês
+    const mes = meses[i]
     const anterior = meses[i - 1]
     const novos = new Map<number, number>()
     const gapsDoMes = new Set<string>()
     const fallbacksDoMes = new Set<string>()
-    for (const [ing, preco] of atual) {
-      const serieIng = deflatorDe.get(ing)?.serie ?? GRUPO_FALLBACK
+    for (const [ing, razao] of atual) {
+      const serieIng = deflatorDe.get(ing)!.serie
       let v = varPorSerie.get(serieIng)?.get(mes)
       if (v == null && serieIng !== GRUPO_FALLBACK) {
         const g = varPorSerie.get(GRUPO_FALLBACK)?.get(mes)
         if (g != null) { v = g; fallbacksDoMes.add(serieIng) }
       }
       if (v == null) { gapsDoMes.add(serieIng); continue }
-      novos.set(ing, preco / (1 + v / 100))
+      novos.set(ing, razao / (1 + v / 100))
     }
     if (gapsDoMes.size) {
       for (const s of gapsDoMes) gaps.push({ series: s, month: mes, reason: 'sem variação do item nem do grupo no mês' })
       break
     }
     for (const s of fallbacksDoMes) fallbackPorSerie.set(s, (fallbackPorSerie.get(s) ?? 0) + 1)
-    for (const [ing, p] of novos) atual.set(ing, p)
-    precoNoMes.set(anterior, new Map(atual))
+    for (const [ing, r] of novos) atual.set(ing, r)
+    razaoNoMes.set(anterior, new Map(atual))
   }
 
-  // 6. deflator ponderado por prato e mediana dos custos resultantes.
-  //    custo_prato(m) = custo_real(âncora) × Σ_i peso_i × preço_i(m)/preço_i(âncora)
+  // 5. projeta cada componente individualmente e soma por prato — sem peso a
+  //    normalizar. Congelado: contribui o mesmo valor em todo mês.
   const serie = meses.map(ym => {
-    const precosMes = precoNoMes.get(ym)
-    if (!precosMes) return null
-    const custos: number[] = []
-    for (const [prato, custoAncora] of custoBase) {
-      const pesos = pesosPrato.get(prato)
-      if (!pesos?.length) continue
-      let fator = 0, wTotal = 0
-      for (const { ing, w } of pesos) {
-        const pm = precosMes.get(ing), p0 = precoBase.get(ing)
-        if (pm == null || p0 == null || p0 <= 0) continue
-        fator += w * (pm / p0); wTotal += w
-      }
-      if (wTotal <= 0) continue
-      custos.push(custoAncora * (fator / wTotal))   // renormaliza pelos pesos usados
+    const razoes = razaoNoMes.get(ym)
+    if (!razoes) return null
+    const porPrato = new Map<number, number>()
+    for (const c of componentes) {
+      // razaoNoMes só existe com TODOS os ingredientes de deflatorDe presentes
+      // (a caminhada quebra por completo no primeiro gap); defensivo aqui.
+      const razao = deflatorDe.has(c.ingrediente_id) ? (razoes.get(c.ingrediente_id) ?? null) : 1
+      if (razao == null) return null
+      porPrato.set(c.prato_id, (porPrato.get(c.prato_id) ?? 0) + c.custo * razao)
     }
+    const custos = [...porPrato.values()]
     if (!custos.length) return null
     return { ym, indice: Math.round(mediana(custos) * 100) / 100, pratos: custos.length }
-  }).filter(Boolean)
+  }).filter((p): p is { ym: string; indice: number; pratos: number } => p != null)
 
-  // 7. cobertura: quanto do custo atual é deflacionado por item próprio
-  const gramas = new Map<number, number>()
-  for (const r of receitas) gramas.set(r.ingrediente_id, (gramas.get(r.ingrediente_id) ?? 0) + (r.qtd_g || 0))
-  let total = 0, comItem = 0
-  for (const [ing, g] of gramas) {
-    const p = precoBase.get(ing)
-    if (p == null) continue
-    const custo = (g / 1000) * p
-    total += custo
-    if ((deflatorDe.get(ing)?.serie ?? GRUPO_FALLBACK) !== GRUPO_FALLBACK) comItem += custo
+  // 6. cobertura: quanto do custo-âncora é deflacionado por item específico,
+  //    quanto é grupo, e quanto fica CONGELADO (residual não deflacionado,
+  //    declarado — nunca redistribuído sobre o resto).
+  let total = 0, comItem = 0, comGrupo = 0, congeladoCustoFixo = 0, congeladoSemMapa = 0
+  for (const c of componentes) {
+    total += c.custo
+    if (c.fonte_efetiva === 'custo_fixo') { congeladoCustoFixo += c.custo; continue }
+    const d = deflatorDe.get(c.ingrediente_id)
+    if (!d) { congeladoSemMapa += c.custo; continue }
+    if (d.serie === GRUPO_FALLBACK) comGrupo += c.custo; else comItem += c.custo
   }
+  const pct = (v: number) => total > 0 ? Math.round(v / total * 1000) / 10 : 0
 
   const corpo = {
     // Backcast da cesta atual: ancora no ÚLTIMO ponto medido e projeta para
     // trás com a cesta/receitas de hoje. Nunca é "extensão histórica" de uma
     // série medida contínua — decisão padrão da auditoria docs/014 §12.
-    // (productKind=historical_extension não existe: exigiria uma série medida
-    // ancorada no PRIMEIRO ponto do regime canônico, que não é construída aqui.)
     productKind: 'current_basket_backcast' as const,
     ancora: { ym: ymAncora, data: ancora.data, snapshotId: ancora.id },
     gate: { versao: GATE_ANCORA.versao, rejeitados },
     confianca: [...conf],
-    cobertura: { por_item_pct: total > 0 ? Math.round(comItem / total * 1000) / 10 : 0 },
+    cobertura: {
+      por_item_pct: pct(comItem),
+      por_grupo_pct: pct(comGrupo),
+      residual_nao_deflacionado_pct: pct(congeladoCustoFixo + congeladoSemMapa),
+    },
     // pedido x possível: o deflator começa em inicioDado; se o pedido for antes,
     // a série é cortada em vez de extrapolada
     periodo: { pedido: desde, efetivo: inicioEfetivo, deflatorDesde: inicioDado },
@@ -250,6 +251,11 @@ export async function GET(req: NextRequest) {
       fallbackUsed: fallbackPorSerie.size > 0,
       fallbacks: [...fallbackPorSerie].map(([series, mesesN]) => ({ series, meses: mesesN })),
       groupByPolicy: [...deflatorDe].filter(([, d]) => d.porPolitica).map(([id]) => id),
+      residualCongelado: {
+        custoFixoPct: pct(congeladoCustoFixo),
+        semMapeamentoPct: pct(congeladoSemMapa),
+        semMapeamentoIds: [...semMapeamento],
+      },
     },
     serie,
   }

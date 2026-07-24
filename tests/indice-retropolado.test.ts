@@ -1,7 +1,14 @@
-// Testes de contrato da Subfase 0B: /api/indice-retropolado com contrato
-// discriminado (ok/incomplete), gate temporário de âncora e política explícita
-// de fallback. Mês sem variação nunca vira zero; nada é produzido além do
-// primeiro gap; backfill com id maior e data antiga não vira âncora.
+// Testes de contrato de /api/indice-retropolado.
+// Fase 0B: contrato discriminado (ok/incomplete), gate temporário de âncora,
+// política explícita de fallback — mês sem variação nunca vira zero; nada é
+// produzido além do primeiro gap; backfill com id maior e data antiga não
+// vira âncora.
+// Fase 3 (ADR docs/027, LAB-003/LAB-007): a reconstrução agora parte da
+// decomposição canônica (dish_cost_components) — cada componente é projetado
+// individualmente pela sua própria série, sem peso/renormalização. Componente
+// custo_fixo ou ingrediente sem item no mapa IPCA fica CONGELADO (residual
+// nominal, nunca deflacionado nem redistribuído). O gate de âncora exige
+// também uma publicação shadow (dish_cost_components) para o snapshot.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
@@ -41,6 +48,7 @@ vi.mock('@/lib/mapa-ingredientes', () => ({
   MAPA_INGREDIENTE_IPCA: [
     { id: 1, nome: 'Ingrediente A', serie: 'ipca_item_a', confianca: 'alta' },
     { id: 2, nome: 'Ingrediente B', serie: 'ipca_item_b', confianca: 'media' },
+    // ingrediente 3 (custo_fixo) propositalmente FORA do mapa: residual congelado
   ],
 }))
 
@@ -50,6 +58,16 @@ function req(qs: string) {
   return new NextRequest(`http://localhost/api/indice-retropolado?${qs}`, {
     headers: { authorization: 'Bearer t' },
   })
+}
+
+// componentes canônicos de um snapshot: ing1 online, ing2 MANUAL (mapeado —
+// prova que LAB-003 passou a deflacionar manual), ing3 custo_fixo (congelado)
+function componentesPrato(snapshotId: number, custos: [number, number, number]) {
+  return [
+    { snapshot_id: snapshotId, calc_version: 1, prato_id: 10, ingrediente_id: 1, fonte_efetiva: 'online', custo: custos[0] },
+    { snapshot_id: snapshotId, calc_version: 1, prato_id: 10, ingrediente_id: 2, fonte_efetiva: 'manual', custo: custos[1] },
+    { snapshot_id: snapshotId, calc_version: 1, prato_id: 10, ingrediente_id: 3, fonte_efetiva: 'custo_fixo', custo: custos[2] },
+  ]
 }
 
 function fixturesBase(): Record<string, Linha[]> {
@@ -64,13 +82,13 @@ function fixturesBase(): Record<string, Linha[]> {
       { snapshot_id: 2, prato_id: 10, custo_total: 10 },
       { snapshot_id: 1, prato_id: 10, custo_total: 8 },
     ],
-    precos: [
-      { snapshot_id: 2, ingrediente_id: 1, mediana_exibicao: 5 },
-      { snapshot_id: 2, ingrediente_id: 2, mediana_exibicao: 2 },
+    shadow_publicacoes: [
+      { snapshot_id: 2, calc_version: 1 },
+      { snapshot_id: 1, calc_version: 1 },
     ],
-    receitas: [
-      { prato_id: 10, ingrediente_id: 1, qtd_g: 1000 },
-      { prato_id: 10, ingrediente_id: 2, qtd_g: 500 },
+    dish_cost_components: [
+      ...componentesPrato(2, [6, 3, 1]),   // soma 10 = custo_total_pf do snapshot 2
+      ...componentesPrato(1, [5, 2, 1]),   // soma 8 = custo_total_pf do snapshot 1
     ],
     fatores_preditores: [
       { serie: 'ipca_7171', data: '2026-05-01', valor: 1 },
@@ -95,10 +113,25 @@ describe('contrato ok', () => {
     expect(j.productKind).toBe('current_basket_backcast')
     expect(j.ancora).toMatchObject({ ym: '2026-07', snapshotId: 2 })
     expect(j.serie.map((p: { ym: string }) => p.ym)).toEqual(['2026-05', '2026-06', '2026-07'])
-    expect(j.serie[2].indice).toBe(10)   // no mês da âncora reproduz o medido
+    expect(j.serie[2].indice).toBe(10)   // no mês da âncora reproduz exatamente a soma dos componentes
     expect(j.resolucao.fallbackUsed).toBe(false)
     expect(j.resolucao.groupByPolicy).toEqual([])
+    // LAB-003: manual (ing2) agora entra na cobertura por item; custo_fixo
+    // (ing3) fica como residual congelado, declarado — nunca redistribuído
+    expect(j.cobertura).toEqual({ por_item_pct: 90, por_grupo_pct: 0, residual_nao_deflacionado_pct: 10 })
+    expect(j.resolucao.residualCongelado).toEqual({ custoFixoPct: 10, semMapeamentoPct: 0, semMapeamentoIds: [3] })
     expect(res.headers.get('cache-control')).toBe('private, no-store')
+  })
+
+  it('componente congelado (custo_fixo) não muda de mês a mês; só os deflacionados variam', async () => {
+    const res = await GET(req('desde=2026-05&confianca=alta,media'))
+    const j = await res.json()
+    const junho = j.serie.find((p: { ym: string }) => p.ym === '2026-06')
+    const maio = j.serie.find((p: { ym: string }) => p.ym === '2026-05')
+    // ing1(6)+ing2(3) deflacionados por ipca_item_a/b, ing3(1) sempre 1 —
+    // valores derivados da caminhada de razão (não hardcoded às cegas)
+    expect(junho.indice).toBeCloseTo(6 * (1 / 1.02) + 3 * (1 / 1.01) + 1, 2)
+    expect(maio.indice).toBeCloseTo(6 * (1 / 1.02 / 1.01) + 3 * (1 / 1.01 / 1.01) + 1, 2)
   })
 })
 
@@ -158,6 +191,17 @@ describe('gate de âncora', () => {
     const j = await res.json()
     expect(j.ancora.snapshotId).toBe(2)
     expect(j.gate.rejeitados[0].snapshotId).toBe(3)
+  })
+
+  it('snapshot válido no legado mas sem decomposição canônica (shadow) não ancora', async () => {
+    tabelas.dados.snapshots.push({ id: 4, data: '2026-07-28', custo_total_pf: 10 })
+    tabelas.dados.custos_pratos.push({ snapshot_id: 4, prato_id: 10, custo_total: 10 })
+    // propositalmente sem linha em shadow_publicacoes/dish_cost_components para o id 4
+    const res = await GET(req('desde=2026-05&confianca=alta,media'))
+    expect(res.status).toBe(200)
+    const j = await res.json()
+    expect(j.ancora.snapshotId).toBe(2)
+    expect(j.gate.rejeitados[0]).toEqual({ snapshotId: 4, motivo: 'sem componentes canônicos publicados (shadow)' })
   })
 
   it('backfill com id maior e data antiga não vira âncora', async () => {

@@ -60,7 +60,11 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
   const [series, setSeries] = useState<Record<string, { data: string; valor: number }[]>>({})
   const [carregando, setCarregando] = useState(true)
   const [vistaDieese, setVistaDieese] = useState<Set<string>>(new Set(['dieese_cesta']))
-  const [porIng, setPorIng] = useState<{ serie: { ym: string; indice: number; pratos: number }[]; cobertura: { por_item_pct: number }; ancora: { ym: string }; periodo: { pedido: string; efetivo: string; deflatorDesde: string } } | null>(null)
+  const [porIng, setPorIng] = useState<{
+    serie: { ym: string; indice: number; pratos: number }[]
+    cobertura: { por_item_pct: number; por_grupo_pct: number; residual_nao_deflacionado_pct: number }
+    ancora: { ym: string }; periodo: { pedido: string; efetivo: string; deflatorDesde: string }
+  } | null>(null)
   const [erroIng, setErroIng] = useState('')
   const [conf, setConf] = useState<ItemConf[] | null>(null)
   const [itemConf, setItemConf] = useState<number | null>(null)
@@ -278,9 +282,14 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
       </div>
       <p className="text-xs text-dim -mt-4">
         {ehPorIngrediente
-          ? 'Cada ingrediente é deflacionado pelo seu próprio item do IPCA e o custo de cada prato é recomposto pelos pesos da receita. Ancorado no custo real da última coleta — no mês da âncora o resultado reproduz o índice medido.'
+          ? 'Cada componente canônico do prato (Fase 3) é projetado individualmente pela série do seu ingrediente — sem peso a normalizar. Ancorado no custo real da última coleta — no mês da âncora o resultado reproduz o índice medido.'
           : def.nota}
-        {ehPorIngrediente && porIng && <> · <strong className="text-ink">{porIng.cobertura.por_item_pct}%</strong> do custo deflacionado por item próprio (o resto cai no grupo).</>}
+        {ehPorIngrediente && porIng && (
+          <> · <strong className="text-ink">{porIng.cobertura.por_item_pct}%</strong> do custo deflacionado por item próprio
+            {porIng.cobertura.por_grupo_pct > 0 && <>, <strong className="text-ink">{porIng.cobertura.por_grupo_pct}%</strong> pelo grupo</>}
+            {porIng.cobertura.residual_nao_deflacionado_pct > 0 && <>, <strong className="text-ink">{porIng.cobertura.residual_nao_deflacionado_pct}%</strong> congelado (custo fixo ou sem item — nunca deflacionado nem redistribuído)</>}.
+          </>
+        )}
       </p>
       {ehPorIngrediente && porIng && porIng.periodo.efetivo > porIng.periodo.pedido && (
         <p className="text-xs text-accent -mt-4">
