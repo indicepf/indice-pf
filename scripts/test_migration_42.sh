@@ -29,7 +29,7 @@ else
   exit 2
 fi
 
-echo "1/9 stub mínimo do schema de produção (docs/016)"
+echo "1/10 stub mínimo do schema de produção (docs/016)"
 PSQL <<'SQL'
 -- roles do Supabase referenciados pelos revokes da migração
 do $$ begin
@@ -49,6 +49,7 @@ create table precos (id bigint generated always as identity primary key, snapsho
 create table custos_pratos (id bigint generated always as identity primary key, snapshot_id bigint, prato_id bigint, custo_total numeric, ingredientes_cobertos int, ingredientes_estimados int, ingredientes_total int, unique (snapshot_id, prato_id));
 create table audit_log (id bigint generated always as identity primary key, tabela text, registro_id text, acao text, ator uuid, dados_antes jsonb, dados_depois jsonb, criado_em timestamptz default now());
 create table resultados_brutos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, nome_ingrediente text, titulo text, preco_bruto numeric, preco_normalizado numeric, exibicao text, loja text, link text, criado_em timestamptz default now());
+create table precos_manuais_hist (id bigint generated always as identity primary key, ingrediente_id bigint, nome text, preco_manual numeric, custo_fixo numeric, loja text, link text, origem text, contribuicao_id bigint, tipo_local text, criado_em timestamptz default now());
 
 -- fixtures: 2 pratos ativos; online (0.005/g), manual (20 R$/kg), custo fixo (0.50)
 insert into pratos values (1,'P1','sudeste',true),(2,'P2','sul',true);
@@ -67,7 +68,7 @@ insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobe
 values (999,1,42.00,1,0,1);
 SQL
 
-echo "2/9 aplica as migrações 42 (2x: idempotência) e 43"
+echo "2/10 aplica as migrações 42 (2x: idempotência) e 43"
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_43.sql
@@ -75,7 +76,7 @@ PSQL < supabase/migrations/supabase_migration_43.sql
 PSQL -c "create or replace function public.refresh_precos_manuais() returns void language sql as \$\$ select 1 \$\$;"
 PSQL < supabase/migrations/supabase_migration_44.sql
 
-echo "3/9 backfill de status + publicação shadow com paridade zero"
+echo "3/10 backfill de status + publicação shadow com paridade zero"
 PSQL <<'SQL'
 do $$
 declare m jsonb;
@@ -91,7 +92,7 @@ begin
 end $$;
 SQL
 
-echo "4/9 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
+echo "4/10 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
 PSQL <<'SQL'
 update ingredientes set preco_manual = 99 where id = 11;
 do $$
@@ -108,7 +109,7 @@ begin
 end $$;
 SQL
 
-echo "5/9 falha injetada faz rollback total (custo zero e conjunto incompleto)"
+echo "5/10 falha injetada faz rollback total (custo zero e conjunto incompleto)"
 PSQL <<'SQL'
 -- prato ativo cujo único ingrediente não tem preço nenhum → custo 0 → não publica
 insert into pratos values (3,'P3','norte',true);
@@ -156,7 +157,7 @@ begin
 end $$;
 SQL
 
-echo "6/9 append-only: UPDATE/DELETE em fato publicado são bloqueados"
+echo "6/10 append-only: UPDATE/DELETE em fato publicado são bloqueados"
 PSQL <<'SQL'
 do $$
 begin
@@ -177,7 +178,7 @@ begin
 end $$;
 SQL
 
-echo "7/9 integração com shadow no momento certo (migração 44)"
+echo "7/10 integração com shadow no momento certo (migração 44)"
 PSQL <<'SQL'
 update pratos set ativo = false where id = 3;   -- prato sem receita sai do universo esperado
 -- sucesso: integrar publica shadow com paridade zero por construção
@@ -205,7 +206,7 @@ begin
 end $$;
 SQL
 
-echo "8/9 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
+echo "8/10 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
 PSQL <<'SQL'
 -- duplicata no padrão real de produção (33/34): linha original sem mediana +
 -- linha regravada com valor, ANTES da migração 45 existir
@@ -252,7 +253,7 @@ begin
 end $$;
 SQL
 
-echo "9/9 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
+echo "9/10 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
 PSQL <<'SQL'
 insert into resultados_brutos (snapshot_id, ingrediente_id, titulo, preco_bruto, preco_normalizado, loja, exibicao) values
   (1, 10, 'Arroz 5kg', 25.00, 0.005, 'Loja A', 'R$ 5,00/kg'),
@@ -298,4 +299,43 @@ begin
 end $$;
 SQL
 
-echo "PASS: migrações 42/43/44/45/46 — todos os testes passaram"
+echo "10/10 fontes manuais e evidência de descarte (migração 47)"
+PSQL <<'SQL'
+-- duas leituras manuais IGUAIS em datas diferentes = dois fatos; e uma linha
+-- só de custo_fixo, que não é observação de preço
+insert into precos_manuais_hist (ingrediente_id, nome, preco_manual, loja, criado_em) values
+  (11, 'Manual', 20.00, 'Feira X', '2026-06-01T10:00:00Z'),
+  (11, 'Manual', 20.00, 'Feira X', '2026-07-01T10:00:00Z');
+insert into precos_manuais_hist (ingrediente_id, nome, custo_fixo) values (12, 'Fixo', 0.5);
+SQL
+PSQL < supabase/migrations/supabase_migration_47.sql
+PSQL < supabase/migrations/supabase_migration_47.sql
+PSQL <<'SQL'
+do $$
+declare antes int;
+begin
+  -- observações online preexistentes sobreviveram à recriação do hash
+  assert (select count(*) from price_observations where fonte = 'online_scrape') = 3, 'observações online perdidas na migração 47';
+  -- manuais: 2 leituras (datas distintas não colapsam); custo_fixo fica de fora
+  assert (select count(*) from price_observations where fonte = 'manual_hist') = 2, 'backfill manual deveria ter 2 observações';
+  assert (select count(*) from price_observations where fonte = 'manual_hist' and preco_normalizado = 0.020000) = 2, 'normalização R$/kg → R$/g errada';
+  -- replay do backfill (2ª aplicação acima) não duplicou
+  select count(*) into antes from price_observations;
+  -- descarte vira observação rejeitada com motivo; replay não duplica
+  insert into price_observations (fonte, snapshot_id, ingrediente_id, titulo, loja, preco_bruto, status, motivo)
+  values ('online_scrape', 1, 10, 'Arroz gourmet 5kg', 'Loja A', 60.00, 'rejected', 'produto_invalido: palavra proibida: gourmet')
+  on conflict (fonte, dedup_hash) do nothing;
+  insert into price_observations (fonte, snapshot_id, ingrediente_id, titulo, loja, preco_bruto, status, motivo)
+  values ('online_scrape', 1, 10, 'Arroz gourmet 5kg', 'Loja A', 60.00, 'rejected', 'produto_invalido: palavra proibida: gourmet')
+  on conflict (fonte, dedup_hash) do nothing;
+  assert (select count(*) from price_observations) = antes + 1, 'descarte duplicou ou não entrou';
+  assert (select motivo from price_observations where status = 'rejected') like 'produto_invalido%', 'motivo do descarte ausente';
+  -- a mesma oferta pode existir rejeitada E incluída (dois fatos; curadoria vem com price_estimates)
+  insert into price_observations (fonte, snapshot_id, ingrediente_id, titulo, loja, preco_bruto, status)
+  values ('online_scrape', 1, 10, 'Arroz gourmet 5kg', 'Loja A', 60.00, 'included')
+  on conflict (fonte, dedup_hash) do nothing;
+  assert (select count(*) from price_observations where titulo = 'Arroz gourmet 5kg') = 2, 'status deveria distinguir os dois fatos';
+end $$;
+SQL
+
+echo "PASS: migrações 42/43/44/45/46/47 — todos os testes passaram"

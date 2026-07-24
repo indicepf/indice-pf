@@ -294,9 +294,28 @@ def _buscar_serp(query):
     return None
 
 
-def buscar_ingrediente(ingrediente, cache, medianas_ant=None):
+def _registrar_descarte(saida, ingrediente, titulo, loja, link, preco_bruto, preco_normalizado, motivo):
+    """Evidência de descarte (Fase 2, docs/021): oferta rejeitada vira registro
+    com motivo no snapshot, em vez de sumir num print."""
+    if saida is None:
+        return
+    saida.append({
+        "ingrediente_id":    ingrediente["id"],
+        "ingrediente":       ingrediente["nome"],
+        "titulo":            titulo,
+        "loja":              loja,
+        "link":              link,
+        "preco_bruto":       preco_bruto,
+        "preco_normalizado": preco_normalizado,
+        "motivo":            motivo,
+    })
+
+
+def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=None):
     chave = chave_cache(ingrediente)
     if chave in cache:
+        # cache guarda só os aceitos; num rerun do mesmo dia os descartes não
+        # são reavaliados (a coleta original já os registrou)
         print(f"\n💾 {ingrediente['nome']} → cache de hoje")
         return cache[chave]
 
@@ -324,12 +343,16 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None):
         if not valido:
             rejeitados += 1
             motivos.append((titulo, motivo))
+            _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
+                                limpar_preco(preco_txt), None, f"produto_invalido: {motivo}")
             continue
         preco = limpar_preco(preco_txt)
         if not preco:
+            _registrar_descarte(descartados_out, ingrediente, titulo, loja, link, None, None, "preco_ilegivel")
             continue
         norm = normalizar(preco, titulo, ingrediente)
         if not norm:
+            _registrar_descarte(descartados_out, ingrediente, titulo, loja, link, preco, None, "sem_quantidade_no_titulo")
             continue
         preco_norm, exibicao, _label = norm
 
@@ -351,6 +374,10 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None):
     if med_ant:
         teto = med_ant * 1.5
         antes_alta = len(resultados)
+        for r in resultados:
+            if r["preco_normalizado"] > teto:
+                _registrar_descarte(descartados_out, ingrediente, r["titulo"], r["loja"], r["link"],
+                                    r["preco_bruto"], r["preco_normalizado"], f"alta_50pct: teto R${teto * 1000:.2f}/kg")
         resultados = [r for r in resultados if r["preco_normalizado"] <= teto]
         inflados = antes_alta - len(resultados)
         if inflados:
@@ -362,6 +389,10 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None):
     norm = [r["preco_normalizado"] for r in resultados]
     norm = filtrar_sanidade(norm)
     norm = filtrar_outliers(norm)
+    for r in resultados:
+        if r["preco_normalizado"] not in norm:
+            _registrar_descarte(descartados_out, ingrediente, r["titulo"], r["loja"], r["link"],
+                                r["preco_bruto"], r["preco_normalizado"], "sanidade_ou_outlier")
     resultados = [r for r in resultados if r["preco_normalizado"] in norm]
     print(f"  ✅ {len(resultados)} válidos | {rejeitados} produto errado | "
           f"{antes - len(resultados)} descartados (sanidade/outlier)")
@@ -393,9 +424,9 @@ def main():
         medianas_ant = {}
         print(f"⚠️  Filtro anti-alta desativado (falha ao ler a coleta anterior: {e})")
 
-    cache, todos, resumo = carregar_cache(), [], []
+    cache, todos, resumo, descartados = carregar_cache(), [], [], []
     for ing in catalogo:
-        resultados = buscar_ingrediente(ing, cache, medianas_ant)
+        resultados = buscar_ingrediente(ing, cache, medianas_ant, descartados)
         todos.extend(resultados)
 
         norm = [r["preco_normalizado"] for r in resultados if r["preco_normalizado"]]
@@ -422,10 +453,11 @@ def main():
     print(f"  {com_preco}/{len(resumo)} ingredientes com preço")
 
     snapshot = {
-        "data":       datetime.now().strftime("%Y-%m-%d"),
-        "fonte":      "Google Shopping via SerpAPI",
-        "resumo":     resumo,
-        "resultados": todos,
+        "data":        datetime.now().strftime("%Y-%m-%d"),
+        "fonte":       "Google Shopping via SerpAPI",
+        "resumo":      resumo,
+        "resultados":  todos,
+        "descartados": descartados,
     }
     with open(SNAPSHOT_FILE, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, ensure_ascii=False, indent=2)
