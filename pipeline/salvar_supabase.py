@@ -28,6 +28,7 @@ HEADERS = {
 # Melhor esforço: falha ao registrar não derruba o job (o ledger observa o
 # pipeline, não pode virar ponto único de falha), mas é impressa.
 RUN_INFO = {}   # main() preenche snapshot_id/contagens para o registro final
+_RUN_ID = None  # id da execução em pipeline_runs (setado pelo wrapper do __main__)
 
 def _run_start():
     try:
@@ -245,11 +246,43 @@ def _salvar_precos(snapshot_id, resumo, resultados):
         if resp is None:
             falhas += 1
         print(f"  {'✅' if resp else '❌'} Lote {i//LOTE + 1}: {len(lote)} registros")
+
+    falhas += _salvar_observacoes(snapshot_id, resultados)
+    return falhas
+
+
+def _salvar_observacoes(snapshot_id, resultados):
+    """Camada canônica append-only (Fase 2, migração 46): grava cada resultado
+    em price_observations. O dedup_hash é gerado no banco; replay da mesma
+    oferta não duplica (ON CONFLICT DO NOTHING via ignore-duplicates). Falha
+    aqui CONTA como falha do job — o fato bruto precisa ser preservado."""
+    payload = [{
+        "fonte":             "online_scrape",
+        "snapshot_id":       snapshot_id,
+        "ingrediente_id":    r.get("ingrediente_id"),
+        "titulo":            r["titulo"],
+        "loja":              r["loja"],
+        "link":              r.get("link", ""),
+        "preco_bruto":       r["preco_bruto"],
+        "preco_normalizado": r["preco_normalizado"],
+        "exibicao":          r["exibicao"],
+        "run_id":            _RUN_ID,
+    } for r in resultados]
+    headers = {**HEADERS, "Prefer": "return=minimal,resolution=ignore-duplicates"}
+    url = f"{SUPABASE_URL}/rest/v1/price_observations?on_conflict=fonte,dedup_hash"
+    falhas = 0
+    print(f"💾 Salvando {len(payload)} observações imutáveis...")
+    for i in range(0, len(payload), 200):
+        resp = requests.post(url, headers=headers, json=payload[i:i+200], timeout=60)
+        if resp.status_code not in (200, 201):
+            falhas += 1
+            print(f"  ❌ observações lote {i//200 + 1}: {resp.status_code} - {resp.text[:200]}")
     return falhas
 
 
 if __name__ == "__main__":
     _run = _run_start()
+    _RUN_ID = _run
     try:
         main()
     except SystemExit as e:
