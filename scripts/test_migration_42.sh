@@ -29,7 +29,7 @@ else
   exit 2
 fi
 
-echo "1/6 stub mínimo do schema de produção (docs/016)"
+echo "1/7 stub mínimo do schema de produção (docs/016)"
 PSQL <<'SQL'
 -- roles do Supabase referenciados pelos revokes da migração
 do $$ begin
@@ -65,12 +65,15 @@ insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobe
 values (999,1,42.00,1,0,1);
 SQL
 
-echo "2/6 aplica as migrações 42 (2x: idempotência) e 43"
+echo "2/7 aplica as migrações 42 (2x: idempotência) e 43"
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_43.sql
+# a 44 redefine integrar_snapshot (29/31), que depende de refresh_precos_manuais
+PSQL -c "create or replace function public.refresh_precos_manuais() returns void language sql as \$\$ select 1 \$\$;"
+PSQL < supabase/migrations/supabase_migration_44.sql
 
-echo "3/6 backfill de status + publicação shadow com paridade zero"
+echo "3/7 backfill de status + publicação shadow com paridade zero"
 PSQL <<'SQL'
 do $$
 declare m jsonb;
@@ -86,7 +89,7 @@ begin
 end $$;
 SQL
 
-echo "4/6 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
+echo "4/7 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
 PSQL <<'SQL'
 update ingredientes set preco_manual = 99 where id = 11;
 do $$
@@ -103,7 +106,7 @@ begin
 end $$;
 SQL
 
-echo "5/6 falha injetada faz rollback total (custo zero e conjunto incompleto)"
+echo "5/7 falha injetada faz rollback total (custo zero e conjunto incompleto)"
 PSQL <<'SQL'
 -- prato ativo cujo único ingrediente não tem preço nenhum → custo 0 → não publica
 insert into pratos values (3,'P3','norte',true);
@@ -151,7 +154,7 @@ begin
 end $$;
 SQL
 
-echo "6/6 append-only: UPDATE/DELETE em fato publicado são bloqueados"
+echo "6/7 append-only: UPDATE/DELETE em fato publicado são bloqueados"
 PSQL <<'SQL'
 do $$
 begin
@@ -172,4 +175,32 @@ begin
 end $$;
 SQL
 
-echo "PASS: migração 42 — todos os testes passaram"
+echo "7/7 integração com shadow no momento certo (migração 44)"
+PSQL <<'SQL'
+update pratos set ativo = false where id = 3;   -- prato sem receita sai do universo esperado
+-- sucesso: integrar publica shadow com paridade zero por construção
+insert into snapshots (data) values ('2026-08-03');   -- id 4
+insert into precos (snapshot_id, ingrediente_id, mediana_normalizada) values (4,10,0.006);
+select integrar_snapshot(4);
+do $$
+begin
+  assert (select count(*) from custos_pratos where snapshot_id = 4) = 2, 'integração legada não gravou custos';
+  assert (select custo_total_pf from snapshots where id = 4) = 6.95, 'mediana legada != 6.95';
+  assert (select mediana from shadow_publicacoes where snapshot_id = 4) = 6.95, 'mediana shadow != legada na integração';
+  assert (select count(*) from verificar_paridade_shadow(4) where diff <> 0) = 0, 'paridade da integração deveria ser zero';
+  assert (select status from pipeline_runs where kind = 'shadow_publish' and snapshot_id = 4) = 'published', 'run da integração ausente';
+end $$;
+-- falha do shadow não derruba a integração legada e fica no ledger
+insert into snapshots (data) values ('2026-08-10');   -- id 5
+insert into precos (snapshot_id, ingrediente_id, mediana_normalizada) values (5,10,0.005),(5,10,0.007);
+select integrar_snapshot(5);
+do $$
+begin
+  assert (select count(*) from custos_pratos where snapshot_id = 5) = 2, 'integração legada deveria ter gravado mesmo com shadow falhando';
+  assert (select count(*) from dish_cost_components where snapshot_id = 5) = 0, 'shadow com duplicata não deveria publicar';
+  assert (select error from pipeline_runs where snapshot_id = 5 and status = 'failed') like '%duplicate key%',
+    'falha do shadow deveria estar registrada no ledger';
+end $$;
+SQL
+
+echo "PASS: migrações 42/43/44 — todos os testes passaram"
