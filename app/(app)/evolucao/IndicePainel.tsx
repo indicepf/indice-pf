@@ -64,6 +64,11 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   const [overlaySeriesM, setOverlaySeriesM] = useState<Record<string, { data: string; valor: number }[]>>({})
   const [regVarsM, setRegVarsM] = useState<Set<string>>(new Set())
   const [normalizar, setNormalizar] = useState(true)   // z-score quando >1 preditor
+  // no painel mensal, mostrar o índice como variação % do mês (mesma natureza
+  // dos preditores do IPCA) em vez do nível em R$
+  const [mensalEmVariacao, setMensalEmVariacao] = useState(true)
+  // com um prato selecionado, quais fontes mostrar (antes vinham as 3 sempre)
+  const [fontesPrato, setFontesPrato] = useState<Set<FonteKey>>(new Set<FonteKey>(['blend']))
   const [modelo, setModelo] = useState<ResultadoRegressao | { erro: string } | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
   const [calculando, setCalculando] = useState(false)
@@ -125,6 +130,9 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   const ticks = dadosP.map(d => d.ts)
   const mediaIndice = nacional && dadosP.length ? dadosP.reduce((s, d) => s + ((d as any).mediana || 0), 0) / dadosP.length : null
   const regioes = [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b))
+  const pratoSel = nacional ? null : ev.pratos.find(p => p.id === pratoId)
+  const nomePrato = pratoSel?.nome ?? 'Prato'
+  const regiaoPrato = pratoSel?.regiao ?? ''
   function preset(dias: number) {
     if (!ev.serie.length) return
     const ultima = ev.serie[ev.serie.length - 1].data
@@ -191,11 +199,18 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       const y = nacional ? d.mediana : d.blend
       if (y != null) { const arr = byMes.get(ym) ?? []; arr.push(y); byMes.set(ym, arr) }
     })
-    return [...byMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([ym, ys]) => ({
+    const níveis = [...byMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([ym, ys]) => ({
       ym, data: `${ym}-01`, ts: new Date(`${ym}-01T00:00:00Z`).getTime(),
-      indice: r2(ys.reduce((s, v) => s + v, 0) / ys.length),
+      nivel: r2(ys.reduce((s, v) => s + v, 0) / ys.length),
     }))
-  }, [dadosP, nacional])
+    // variação % em relação ao mês anterior — mesma natureza dos itens do IPCA
+    return níveis.map((p, i) => ({
+      ...p,
+      indice: mensalEmVariacao
+        ? (i === 0 || !níveis[i - 1].nivel ? null : r2((p.nivel / níveis[i - 1].nivel - 1) * 100))
+        : p.nivel,
+    }))
+  }, [dadosP, nacional, mensalEmVariacao])
   const overlayKeysM = admin ? [...overlayVarsM].filter(k => (overlaySeriesM[k] || []).length) : []
   const zAtivoM = admin && normalizar && overlayKeysM.length > 0
   const dadosMes = useMemo(() => {
@@ -210,7 +225,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     for (const k of overlayKeysM) brutos[k] = pontosMensais.map(p => cf(overlaySeriesM[k], p.data))
     const zDe: Record<string, (v: number | null) => number | null> = {}
     for (const k of overlayKeysM) zDe[k] = z(brutos[k])
-    const zInd = zAtivoM ? z(pontosMensais.map(p => p.indice)) : null
+    const zInd = zAtivoM ? z(pontosMensais.map(p => p.indice ?? null)) : null
 
     return pontosMensais.map((p, i) => {
       const row: any = { ...p }
@@ -287,15 +302,28 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
             <SeletorPrato pratos={ev.pratos} value={pratoId} onChange={setPratoId} />
           </div>
           <div className="text-xs text-dim">Fonte do preço
-            <div className="flex w-fit border border-border rounded-md overflow-hidden bg-surface text-sm mt-1">
-              {FONTES.map(([k, label]) => (
-                <button key={k} onClick={() => setFonte(k)}
-                  className={`px-3 py-1.5 transition-colors ${fonte === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}
-                  disabled={!nacional}>
-                  {label}
-                </button>
-              ))}
-            </div>
+            {nacional ? (
+              <div className="flex w-fit border border-border rounded-md overflow-hidden bg-surface text-sm mt-1">
+                {FONTES.map(([k, label]) => (
+                  <button key={k} onClick={() => setFonte(k)}
+                    className={`px-3 py-1.5 transition-colors ${fonte === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              // com prato escolhido dá para comparar as fontes entre si — cada
+              // uma é uma linha, e o usuário escolhe quais quer ver
+              <div className="flex items-center gap-3 flex-wrap mt-1.5">
+                {FONTES.map(([k, label]) => (
+                  <label key={k} className="flex items-center gap-1.5 cursor-pointer text-ink">
+                    <input type="checkbox" checked={fontesPrato.has(k)}
+                      onChange={() => setFontesPrato(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -364,10 +392,10 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         )}
 
         {/* gráfico */}
-        <div className="panel p-5">
+        <div className="panel p-5 overflow-visible">
           <div className="flex items-start justify-between gap-3">
           <p className="text-sm font-medium mb-1">
-            {nacional ? 'Custo do prato feito (R$) — distribuição dos 100 pratos' : 'Custo do prato (R$) — por fonte'}
+            {nacional ? 'Índice PF — custo do prato feito (R$), distribuição dos 100 pratos' : `${nomePrato} — custo (R$)`}
             <InfoTip texto={nacional
               ? 'Cada coleta reúne o custo dos 100 pratos. A mediana é o índice nacional; a faixa mostra o prato mais barato e o mais caro. Escolha a fonte (blend/online/manual), a região e o período.'
               : 'Custo deste prato ao longo do tempo, em cada fonte: blend (o índice real), online (só cotação online) e manual (só leituras manuais).'} />
@@ -375,7 +403,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
           <BotaoExportar nome="indice-pf-serie" abas={() => [{ nome: 'Série', linhas: dadosP.map((d: any) => ({ Data: new Date(d.ts).toISOString().slice(0, 10), ...(nacional ? { Mediana: d.mediana, Média: d.media, Minimo: d.min, Maximo: d.max } : { Blend: d.blend, Online: d.online, Manual: d.manual }) })) }]} />
           </div>
           <p className="text-xs text-dim mb-4">
-            {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}` : 'blend × online × manual'}
+            {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}` : `${regiaoPrato ? regiaoPrato + ' · ' : ''}${[...fontesPrato].map(k => FONTES.find(f => f[0] === k)![1]).join(' × ') || 'nenhuma fonte marcada'}`}
             {poucos && ' · série curta (poucas coletas) — cresce a cada coleta.'}
           </p>
           <div style={{ width: '100%', height: 360 }}>
@@ -428,9 +456,9 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                   </>
                 ) : (
                   <>
-                    <Area yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_blend' : 'blend'} name="Blend" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivo ? 'none' : 'url(#grad-ind)'} />
-                    <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_online' : 'online'} name="Online" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />
-                    <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_manual' : 'manual'} name="Manual" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
+                    {fontesPrato.has('blend') && <Area yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_blend' : 'blend'} name="Blend" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivo ? 'none' : 'url(#grad-ind)'} />}
+                    {fontesPrato.has('online') && <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_online' : 'online'} name="Online" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />}
+                    {fontesPrato.has('manual') && <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_manual' : 'manual'} name="Manual" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />}
                   </>
                 )}
                 {overlayKeys.map((k, i) => (
@@ -445,9 +473,17 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         </div>
 
         {admin && (
-          <div className="border border-border rounded-lg bg-surface p-4 space-y-3">
-            <p className="text-sm font-medium">Índice mensal × preditores mensais (admin)
-              <InfoTip texto="Índice agregado por mês (média das coletas do mês) para casar com as variáveis mensais do IPCA/juros/salário. Sobreponha uma variável no eixo direito ou rode a regressão mensal." /></p>
+          <div className="panel p-5 overflow-visible space-y-3">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <p className="text-sm font-medium">Índice mensal × preditores mensais (admin)
+                <InfoTip texto="Índice agregado por mês para casar com as variáveis mensais do IPCA/juros/salário. Em 'variação %' as duas curvas têm a mesma natureza (quanto mudou no mês), que é o que torna a leitura comparável — o nível em R$ não compara com um percentual." /></p>
+              <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface text-sm">
+                {([[true, 'variação %'], [false, 'nível R$']] as const).map(([v, label]) => (
+                  <button key={label} onClick={() => setMensalEmVariacao(v)}
+                    className={`px-3 py-1.5 transition-colors ${mensalEmVariacao === v ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>{label}</button>
+                ))}
+              </div>
+            </div>
             <div className="border border-brand-roxo/30 bg-brand-roxo/5 rounded-lg p-3 space-y-3">
               <SeletorSeries titulo="Sobrepor no gráfico" opcoes={PREDITORES_MENSAIS}
                 selecionadas={overlayVarsM} onToggle={alternar(setOverlayVarsM)}
@@ -456,7 +492,9 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                 <SeletorSeries titulo="Regressão: índice mensal ~ preditores mensais"
                   opcoes={PREDITORES_MENSAIS} selecionadas={regVarsM} onToggle={alternar(setRegVarsM)}
                   cor={() => COR.muted} />
-                <button onClick={() => gerarModelo([...regVarsM], pontosMensais.map(p => ({ data: p.data, y: p.indice })))}
+                <button onClick={() => gerarModelo([...regVarsM], pontosMensais
+                  .filter((p): p is typeof p & { indice: number } => p.indice != null)   // 1º mês não tem variação
+                  .map(p => ({ data: p.data, y: p.indice })))}
                   disabled={!regVarsM.size || calculando} className="btn-mk sm mt-2">
                   {calculando ? 'Calculando…' : 'Gerar modelo mensal'}
                 </button>
@@ -476,7 +514,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                     ticks={dadosMes.map(p => p.ts)} tickFormatter={(t: number) => new Date(t).toISOString().slice(0, 7).split('-').reverse().join('/')}
                     tick={{ fontSize: 12, fill: COR.muted }} />
                   <YAxis yAxisId="left" tick={{ fontSize: 12, fill: COR.muted }} width={zAtivoM ? 46 : 48}
-                    tickFormatter={v => zAtivoM ? `${Number(v).toFixed(1)}σ` : `R$${v}`} />
+                    tickFormatter={v => zAtivoM ? `${Number(v).toFixed(1)}σ` : mensalEmVariacao ? `${Number(v).toFixed(1)}%` : `R$${v}`} />
                   {overlayKeysM.length > 0 && !zAtivoM && (
                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: COR.muted }} width={64}
                       tickFormatter={v => {
@@ -492,11 +530,11 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                       const info = PREDITOR_POR_KEY[k]
                       return raw == null ? '—' : fmtValorPreditor(Number(raw), info?.formato ?? 'numero')
                     }
-                    if (dk === 'z_indice') return `R$ ${Number(p?.payload?.raw_indice).toFixed(2)}`
-                    return `R$ ${Number(v).toFixed(2)}`
+                    const bruto = dk === 'z_indice' ? Number(p?.payload?.raw_indice) : Number(v)
+                    return mensalEmVariacao ? `${bruto > 0 ? '+' : ''}${bruto.toFixed(2)}%` : `R$ ${bruto.toFixed(2)}`
                   }} labelFormatter={(t: any) => new Date(t).toISOString().slice(0, 7).split('-').reverse().join('/')} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Area yAxisId="left" type="monotone" dataKey={zAtivoM ? 'z_indice' : 'indice'} name="Índice (mês)"
+                  <Area yAxisId="left" type="monotone" dataKey={zAtivoM ? 'z_indice' : 'indice'} name={mensalEmVariacao ? 'Índice (var. % mês)' : 'Índice (mês)'}
                     stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivoM ? 'none' : 'url(#grad-mes)'} />
                   {overlayKeysM.map((k, i) => (
                     <Line key={k} yAxisId={zAtivoM ? 'left' : 'right'} type="monotone" dataKey={`p_${k}`}
@@ -511,7 +549,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         )}
 
         {/* composição por grupo (total quando nacional; do prato quando selecionado) */}
-        <div className="panel p-5">
+        <div className="panel p-5 overflow-visible">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div>
               <p className="text-sm font-medium">{nacional ? 'Composição do custo por grupo de alimento' : 'Composição do prato por grupo'}
@@ -546,7 +584,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
           const cheio = its.reduce((s, it) => s + it.custo, 0)
           const atual = its.reduce((s, it) => s + (off.has(it.ingrediente_id) ? 0 : it.custo), 0)
           return (
-            <div className="panel p-5">
+            <div className="panel p-5 overflow-visible">
               <p className="text-sm font-medium mb-1">Simular sem ingredientes
                 <InfoTip texto="Desmarque ingredientes para ver o custo do prato sem eles (última coleta, blend). O R$ de cada item é o custo da quantidade da receita (em gramas)." /></p>
               <p className="text-xs text-dim mb-3">
