@@ -10,11 +10,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@next/third-parties": "^16.2.10",
+    "@next/third-parties": "16.2",
     "@supabase/supabase-js": "^2.98.0",
     "d3-geo": "^3.1.1",
     "leaflet": "^1.9.4",
-    "next": "^16.2.10",
+    "next": "16.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-leaflet": "^5.0.0",
@@ -32,7 +32,7 @@
       "d3-zoom": "^3.0.0",
       "d3-selection": "^3.0.0"
     },
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.18"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
