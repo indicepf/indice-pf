@@ -29,7 +29,7 @@ else
   exit 2
 fi
 
-echo "1/8 stub mínimo do schema de produção (docs/016)"
+echo "1/9 stub mínimo do schema de produção (docs/016)"
 PSQL <<'SQL'
 -- roles do Supabase referenciados pelos revokes da migração
 do $$ begin
@@ -48,6 +48,7 @@ create table receitas (id bigint generated always as identity primary key, prato
 create table precos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, mediana_normalizada numeric);
 create table custos_pratos (id bigint generated always as identity primary key, snapshot_id bigint, prato_id bigint, custo_total numeric, ingredientes_cobertos int, ingredientes_estimados int, ingredientes_total int, unique (snapshot_id, prato_id));
 create table audit_log (id bigint generated always as identity primary key, tabela text, registro_id text, acao text, ator uuid, dados_antes jsonb, dados_depois jsonb, criado_em timestamptz default now());
+create table resultados_brutos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, nome_ingrediente text, titulo text, preco_bruto numeric, preco_normalizado numeric, exibicao text, loja text, link text, criado_em timestamptz default now());
 
 -- fixtures: 2 pratos ativos; online (0.005/g), manual (20 R$/kg), custo fixo (0.50)
 insert into pratos values (1,'P1','sudeste',true),(2,'P2','sul',true);
@@ -66,7 +67,7 @@ insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobe
 values (999,1,42.00,1,0,1);
 SQL
 
-echo "2/8 aplica as migrações 42 (2x: idempotência) e 43"
+echo "2/9 aplica as migrações 42 (2x: idempotência) e 43"
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_43.sql
@@ -74,7 +75,7 @@ PSQL < supabase/migrations/supabase_migration_43.sql
 PSQL -c "create or replace function public.refresh_precos_manuais() returns void language sql as \$\$ select 1 \$\$;"
 PSQL < supabase/migrations/supabase_migration_44.sql
 
-echo "3/8 backfill de status + publicação shadow com paridade zero"
+echo "3/9 backfill de status + publicação shadow com paridade zero"
 PSQL <<'SQL'
 do $$
 declare m jsonb;
@@ -90,7 +91,7 @@ begin
 end $$;
 SQL
 
-echo "4/8 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
+echo "4/9 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
 PSQL <<'SQL'
 update ingredientes set preco_manual = 99 where id = 11;
 do $$
@@ -107,7 +108,7 @@ begin
 end $$;
 SQL
 
-echo "5/8 falha injetada faz rollback total (custo zero e conjunto incompleto)"
+echo "5/9 falha injetada faz rollback total (custo zero e conjunto incompleto)"
 PSQL <<'SQL'
 -- prato ativo cujo único ingrediente não tem preço nenhum → custo 0 → não publica
 insert into pratos values (3,'P3','norte',true);
@@ -155,7 +156,7 @@ begin
 end $$;
 SQL
 
-echo "6/8 append-only: UPDATE/DELETE em fato publicado são bloqueados"
+echo "6/9 append-only: UPDATE/DELETE em fato publicado são bloqueados"
 PSQL <<'SQL'
 do $$
 begin
@@ -176,7 +177,7 @@ begin
 end $$;
 SQL
 
-echo "7/8 integração com shadow no momento certo (migração 44)"
+echo "7/9 integração com shadow no momento certo (migração 44)"
 PSQL <<'SQL'
 update pratos set ativo = false where id = 3;   -- prato sem receita sai do universo esperado
 -- sucesso: integrar publica shadow com paridade zero por construção
@@ -204,7 +205,7 @@ begin
 end $$;
 SQL
 
-echo "8/8 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
+echo "8/9 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
 PSQL <<'SQL'
 -- duplicata no padrão real de produção (33/34): linha original sem mediana +
 -- linha regravada com valor, ANTES da migração 45 existir
@@ -251,4 +252,50 @@ begin
 end $$;
 SQL
 
-echo "PASS: migrações 42/43/44/45 — todos os testes passaram"
+echo "9/9 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
+PSQL <<'SQL'
+insert into resultados_brutos (snapshot_id, ingrediente_id, titulo, preco_bruto, preco_normalizado, loja, exibicao) values
+  (1, 10, 'Arroz 5kg', 25.00, 0.005, 'Loja A', 'R$ 5,00/kg'),
+  (1, 10, 'Arroz 5kg', 25.00, 0.005, 'Loja A', 'R$ 5,00/kg'),   -- oferta idêntica: colapsa
+  (1, 11, 'Feijão 1kg', 8.00, 0.008, 'Loja B', 'R$ 8,00/kg');
+SQL
+PSQL < supabase/migrations/supabase_migration_46.sql
+PSQL < supabase/migrations/supabase_migration_46.sql
+PSQL <<'SQL'
+do $$
+begin
+  -- 3 linhas brutas → 2 observações (dupla idêntica colapsa); reaplicação não duplicou
+  assert (select count(*) from price_observations) = 2, 'backfill deveria produzir 2 observações';
+  assert (select legacy_id from price_observations where ingrediente_id = 11) is not null, 'legacy_id não preservado';
+  -- replay do pipeline (mesma oferta) não duplica
+  insert into price_observations (fonte, snapshot_id, ingrediente_id, titulo, loja, preco_bruto, preco_normalizado, exibicao)
+  values ('online_scrape', 1, 10, 'Arroz 5kg', 'Loja A', 25.00, 0.005, 'R$ 5,00/kg')
+  on conflict (fonte, dedup_hash) do nothing;
+  assert (select count(*) from price_observations) = 2, 'replay duplicou observação';
+  -- oferta nova entra
+  insert into price_observations (fonte, snapshot_id, ingrediente_id, titulo, loja, preco_bruto, preco_normalizado, exibicao)
+  values ('online_scrape', 1, 10, 'Arroz 5kg', 'Loja C', 24.00, 0.0048, 'R$ 4,80/kg')
+  on conflict (fonte, dedup_hash) do nothing;
+  assert (select count(*) from price_observations) = 3, 'oferta nova não entrou';
+  -- append-only: fato observado não é atualizado nem apagado
+  begin
+    update price_observations set preco_bruto = 1 where ingrediente_id = 11;
+    raise exception 'UPDATE_PASSOU';
+  exception when others then
+    if sqlerrm = 'UPDATE_PASSOU' then raise; end if;
+    assert sqlerrm like '%append-only%', 'erro inesperado: ' || sqlerrm;
+  end;
+  begin
+    delete from price_observations where ingrediente_id = 11;
+    raise exception 'DELETE_PASSOU';
+  exception when others then
+    if sqlerrm = 'DELETE_PASSOU' then raise; end if;
+    assert sqlerrm like '%append-only%', 'erro inesperado: ' || sqlerrm;
+  end;
+  -- o hard-delete do bruto legado (auditoria do Lab) não destrói mais o fato
+  delete from resultados_brutos where ingrediente_id = 11;
+  assert (select count(*) from price_observations where ingrediente_id = 11) = 1, 'observação deveria sobreviver ao delete do legado';
+end $$;
+SQL
+
+echo "PASS: migrações 42/43/44/45/46 — todos os testes passaram"
