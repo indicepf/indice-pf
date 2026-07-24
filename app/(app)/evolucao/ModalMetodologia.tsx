@@ -37,19 +37,25 @@ export default function ModalMetodologia({ onClose }: { onClose: () => void }) {
 
         <Secao t="Como a reconstrução é feita">
           Todo método parte do mesmo princípio: <b>ancorar no que foi medido e caminhar para trás pela
-          variação do deflator</b>. Formalmente, preço(mês−1) = preço(mês) ÷ (1 + variação_do_mês).
-          No método <b>por ingrediente</b>, o custo de cada prato é recomposto e o índice do mês é a
-          mediana desses custos; nos métodos <b>agregados</b>, apenas o índice agregado é projetado por
-          um único deflator — os pratos individuais não são recompostos. Se faltar a variação de um mês
-          (do item e do grupo), a série <b>para ali</b>: mês sem dado não vira variação zero.
+          variação do deflator</b>. Formalmente, razão(mês−1) = razão(mês) ÷ (1 + variação_do_mês).
+          No método <b>por ingrediente</b> (Fase 3), cada <b>componente canônico</b> do prato — o custo
+          real de cada ingrediente, já resolvido como preço online, manual, blend ou custo fixo — é
+          projetado individualmente por sua própria razão; não há peso de receita a normalizar, a soma
+          dos componentes já é o custo do prato. O índice do mês é a mediana desses custos recompostos.
+          Nos métodos <b>agregados</b>, apenas o índice agregado é projetado por um único deflator — os
+          pratos individuais não são recompostos. Se faltar a variação de um mês (do item e do grupo), a
+          série <b>para ali</b>: mês sem dado não vira variação zero.
         </Secao>
 
         <Secao t="Os métodos, do mais preciso ao mais amplo">
           <ul className="list-disc pl-5 space-y-1.5">
-            <li><b>Por ingrediente (recomendado):</b> cada ingrediente é deflacionado pelo <i>seu próprio</i>
-              item do IPCA — tomate pelo IPCA-tomate, carne pela IPCA-carnes. O peso de cada ingrediente
-              vem da participação real dele no custo do prato. Preserva o movimento relativo entre
-              alimentos. <b>Limite: só alcança 2020</b> (início do IPCA por item).</li>
+            <li><b>Por ingrediente (recomendado):</b> cada componente é deflacionado pelo <i>seu próprio</i>
+              item do IPCA — tomate pelo IPCA-tomate, carne pela IPCA-carnes — não importa se o preço da
+              coleta é online, manual ou blend. Componente de <b>custo fixo do negócio</b>, ou ingrediente
+              <b> sem item mapeado</b> no IPCA, fica <b>congelado</b>: mantém o valor nominal da âncora em
+              todos os meses passados, sem ser deflacionado nem redistribuído sobre o resto — mais
+              honesto do que assumir que ele se move junto com os alimentos. <b>Limite: só alcança 2020</b>
+              (início do IPCA por item).</li>
             <li><b>Agregado — Cesta DIEESE:</b> deflaciona o índice inteiro por um único número, o preço da
               cesta básica. Menos preciso (trata todos os pratos igual), mas é a única forma de ir até
               <b> 1994</b>, e usa dado independente do IPCA.</li>
@@ -69,8 +75,9 @@ export default function ModalMetodologia({ onClose }: { onClose: () => void }) {
           </ul>
           O seletor escolhe até qual nível incluir. Ingrediente fora do nível escolhido não sai da
           cesta: ele passa a ser deflacionado pelo grupo (Alimentação no domicílio) — é uma escolha do
-          filtro, não uma lacuna. A cobertura efetiva (% do custo deflacionado por item próprio) aparece
-          na tela, calculada para a âncora atual.
+          filtro, não uma lacuna. Na tela aparecem três números de cobertura, sobre o custo real da
+          âncora: <b>por item próprio</b>, <b>pelo grupo</b> (política do filtro acima) e <b>congelado</b>
+          (custo fixo ou ingrediente sem item — nunca deflacionado). Os três somam o custo total.
         </Secao>
 
         <Secao t="Por que não há faixa de incerteza">
