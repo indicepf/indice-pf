@@ -27,33 +27,29 @@ export async function GET() {
   if (!snaps.length) return NextResponse.json({ error: 'sem coletas' }, { status: 500 })
   const mesDoSnap = new Map(snaps.map(s => [s.id, s.data.slice(0, 7)]))
 
-  // Nosso preço por ingrediente em cada coleta. As coletas antigas não gravaram
-  // ingrediente_id (só nome_ingrediente), então casa também por nome idêntico
-  // (ignorando maiúsculas) — o que dobra a cobertura de vários itens. Match
-  // exato de propósito: a coleta antiga tinha "Carne Bovina" genérica, que NÃO
-  // deve casar com "Alcatra bovina".
-  const precos = await todasLinhas<{ snapshot_id: number; ingrediente_id: number | null; nome_ingrediente: string | null; mediana_exibicao: number; label: string }>((de, ate) =>
-    db.from('precos').select('snapshot_id, ingrediente_id, nome_ingrediente, mediana_exibicao, label').range(de, ate))
+  // Nosso preço por ingrediente em cada coleta (só linhas com ingrediente_id).
+  const precos = await todasLinhas<{ snapshot_id: number; ingrediente_id: number | null; mediana_exibicao: number; label: string }>((de, ate) =>
+    db.from('precos').select('snapshot_id, ingrediente_id, mediana_exibicao, label')
+      .not('ingrediente_id', 'is', null).range(de, ate))
 
-  const norm = (s: string) => s.trim().toLowerCase()
-  const idPorNome = new Map(MAPA_INGREDIENTE_DIEESE.map(m => [norm(m.nome), m.id]))
   const alvo = new Set(ids)
 
-  // agrega por (ingrediente, mês): mediana das coletas do mês
+  // agrega por (ingrediente, mês): mediana das coletas do mês.
+  // SÓ ingrediente_id — a coleta antiga (só nome_ingrediente) misturava
+  // embalagens de 500g, mais caras por kg, e inflava a mediana (farinha caía de
+  // R$11 antiga para R$8 na coleta estruturada). Comparar contra o DIEESE exige
+  // regime homogêneo, então usamos apenas a coleta com ingrediente_id.
   const porIngMes = new Map<string, number[]>()
   const unidade = new Map<number, string>()
   for (const p of precos) {
     const ym = mesDoSnap.get(p.snapshot_id)
     if (!ym || !p.mediana_exibicao || p.mediana_exibicao <= 0) continue
-    const ing = (p.ingrediente_id && alvo.has(p.ingrediente_id))
-      ? p.ingrediente_id
-      : (p.nome_ingrediente ? idPorNome.get(norm(p.nome_ingrediente)) : undefined)
-    if (ing == null) continue
-    const k = `${ing}|${ym}`
+    if (!p.ingrediente_id || !alvo.has(p.ingrediente_id)) continue
+    const k = `${p.ingrediente_id}|${ym}`
     const arr = porIngMes.get(k) ?? []
     arr.push(p.mediana_exibicao)
     porIngMes.set(k, arr)
-    if (p.label) unidade.set(ing, p.label)
+    if (p.label) unidade.set(p.ingrediente_id, p.label)
   }
 
   // DIEESE nos mesmos meses
@@ -75,13 +71,25 @@ export async function GET() {
       }
     }).filter(p => p.nosso != null || p.dieese != null)
 
-    const razoes = pontos.map(p => p.razao).filter((r): r is number => r != null)
+    // resumo sobre os meses comparáveis (com as duas medições) — nosso, dieese e
+    // razão vêm todos do MESMO conjunto, para não descasar as colunas
+    const comparaveis = pontos.filter(p => p.razao != null)
+    const med = (xs: (number | null | undefined)[]) => {
+      const v = xs.filter((x): x is number => x != null)
+      return v.length ? Math.round(mediana(v) * 100) / 100 : null
+    }
+    // valor da nossa coleta mais recente (pode não ter par DIEESE ainda — o
+    // DIEESE atrasa ~1 mês), para mostrar o preço atual mesmo sem comparação
+    const nossoAtual = [...pontos].reverse().find(p => p.nosso != null)?.nosso ?? null
     return {
       id: m.id, nome: m.nome, serie: m.serie,
       comparabilidade: m.comparabilidade, nota: m.nota ?? null,
       unidade: unidade.get(m.id) ?? null,
-      razaoMediana: razoes.length ? Math.round(mediana(razoes) * 1000) / 1000 : null,
-      nMeses: razoes.length,
+      nossoMediana: med(comparaveis.map(p => p.nosso)),
+      dieeseMediana: med(comparaveis.map(p => p.dieese)),
+      nossoAtual,
+      razaoMediana: comparaveis.length ? Math.round(mediana(comparaveis.map(p => p.razao!)) * 1000) / 1000 : null,
+      nMeses: comparaveis.length,
       pontos,
     }
   })
