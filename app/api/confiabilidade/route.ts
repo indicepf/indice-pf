@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { exigirAdmin, SEM_CACHE } from '@/lib/server/autorizar'
 import { todasLinhas } from '@/lib/server/paginar'
 import { mediana } from '@/lib/stats'
 import { MAPA_INGREDIENTE_DIEESE } from '@/lib/mapa-ingredientes'
@@ -16,7 +17,10 @@ import { MAPA_INGREDIENTE_DIEESE } from '@/lib/mapa-ingredientes'
 export const maxDuration = 60
 
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await exigirAdmin(req, 'api/confiabilidade')
+  if ('resposta' in auth) return auth.resposta
+
   const db = supabaseAdmin()
   const ids = [...new Set(MAPA_INGREDIENTE_DIEESE.map(m => m.id))]
   const series = [...new Set(MAPA_INGREDIENTE_DIEESE.map(m => m.serie))]
@@ -24,7 +28,7 @@ export async function GET() {
   // coletas → mês
   const snaps = await todasLinhas<{ id: number; data: string }>((de, ate) =>
     db.from('snapshots').select('id, data').order('data', { ascending: true }).range(de, ate))
-  if (!snaps.length) return NextResponse.json({ error: 'sem coletas' }, { status: 500 })
+  if (!snaps.length) return NextResponse.json({ error: 'sem coletas', code: 'NO_SNAPSHOT' }, { status: 500, headers: SEM_CACHE })
   const mesDoSnap = new Map(snaps.map(s => [s.id, s.data.slice(0, 7)]))
 
   // Nosso preço por ingrediente em cada coleta (só linhas com ingrediente_id).
@@ -94,5 +98,5 @@ export async function GET() {
     }
   })
 
-  return NextResponse.json({ meses, itens })
+  return NextResponse.json({ meses, itens }, { headers: SEM_CACHE })
 }

@@ -12,6 +12,7 @@ import type { ItemDetalhe } from '@/lib/types'
 import { Modal } from '@/components/ui'
 import { PREDITORES_DIARIOS, PREDITORES_MENSAIS, PREDITOR_POR_KEY, fmtValorPreditor } from '@/lib/preditores'
 import { regressaoLinear, type ResultadoRegressao } from '@/lib/regressao'
+import { fetchAdmin } from '@/lib/fetch-admin'
 import SeletorPrato from './SeletorPrato'
 import SeletorSeries from './SeletorSeries'
 import BotaoExportar from './BotaoExportar'
@@ -245,7 +246,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   useEffect(() => {
     if (!admin || !varsQS) { setOverlaySeries({}); return }
     let vivo = true
-    fetch(`/api/preditores?vars=${varsQS}${rangeQS}`).then(r => r.json())
+    fetchAdmin(`/api/preditores?vars=${varsQS}${rangeQS}`).then(r => r.json())
       .then(j => { if (vivo) setOverlaySeries(j || {}) })
       .catch(() => { if (vivo) setOverlaySeries({}) })
     return () => { vivo = false }
@@ -253,7 +254,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   useEffect(() => {
     if (!admin || !varsQSM) { setOverlaySeriesM({}); return }
     let vivo = true
-    fetch(`/api/preditores?vars=${varsQSM}${rangeQS}`).then(r => r.json())
+    fetchAdmin(`/api/preditores?vars=${varsQSM}${rangeQS}`).then(r => r.json())
       .then(j => { if (vivo) setOverlaySeriesM(j || {}) })
       .catch(() => { if (vivo) setOverlaySeriesM({}) })
     return () => { vivo = false }
@@ -263,7 +264,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     if (!keys.length) return
     setCalculando(true)
     try {
-      const j = await fetch(`/api/preditores?vars=${keys.join(',')}${rangeQS}`).then(r => r.json())
+      const j = await fetchAdmin(`/api/preditores?vars=${keys.join(',')}${rangeQS}`).then(r => r.json())
       const y: number[] = []
       const cols: number[][] = keys.map(() => [])
       pontos.forEach(pt => {
