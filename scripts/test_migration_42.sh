@@ -29,7 +29,7 @@ else
   exit 2
 fi
 
-echo "1/12 stub mínimo do schema de produção (docs/016)"
+echo "1/13 stub mínimo do schema de produção (docs/016)"
 PSQL <<'SQL'
 -- roles do Supabase referenciados pelos revokes da migração
 do $$ begin
@@ -50,6 +50,8 @@ create table custos_pratos (id bigint generated always as identity primary key, 
 create table audit_log (id bigint generated always as identity primary key, tabela text, registro_id text, acao text, ator uuid, dados_antes jsonb, dados_depois jsonb, criado_em timestamptz default now());
 create table resultados_brutos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, nome_ingrediente text, titulo text, preco_bruto numeric, preco_normalizado numeric, exibicao text, loja text, link text, criado_em timestamptz default now());
 create table precos_manuais_hist (id bigint generated always as identity primary key, ingrediente_id bigint, nome text, preco_manual numeric, custo_fixo numeric, loja text, link text, origem text, contribuicao_id bigint, tipo_local text, criado_em timestamptz default now());
+create table fatores_preditores (serie text, data date, valor numeric, fonte text, atualizado_em timestamptz default now(), primary key (serie, data));
+create table fatores_catalogo (serie text primary key, label text, categoria text, granularidade text, unidade text, atualizado_em timestamptz default now());
 
 -- fixtures: 2 pratos ativos; online (0.005/g), manual (20 R$/kg), custo fixo (0.50)
 insert into pratos values (1,'P1','sudeste',true),(2,'P2','sul',true);
@@ -68,7 +70,7 @@ insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobe
 values (999,1,42.00,1,0,1);
 SQL
 
-echo "2/12 aplica as migrações 42 (2x: idempotência) e 43"
+echo "2/13 aplica as migrações 42 (2x: idempotência) e 43"
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_43.sql
@@ -76,7 +78,7 @@ PSQL < supabase/migrations/supabase_migration_43.sql
 PSQL -c "create or replace function public.refresh_precos_manuais() returns void language sql as \$\$ select 1 \$\$;"
 PSQL < supabase/migrations/supabase_migration_44.sql
 
-echo "3/12 backfill de status + publicação shadow com paridade zero"
+echo "3/13 backfill de status + publicação shadow com paridade zero"
 PSQL <<'SQL'
 do $$
 declare m jsonb;
@@ -92,7 +94,7 @@ begin
 end $$;
 SQL
 
-echo "4/12 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
+echo "4/13 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
 PSQL <<'SQL'
 update ingredientes set preco_manual = 99 where id = 11;
 do $$
@@ -109,7 +111,7 @@ begin
 end $$;
 SQL
 
-echo "5/12 falha injetada faz rollback total (custo zero e conjunto incompleto)"
+echo "5/13 falha injetada faz rollback total (custo zero e conjunto incompleto)"
 PSQL <<'SQL'
 -- prato ativo cujo único ingrediente não tem preço nenhum → custo 0 → não publica
 insert into pratos values (3,'P3','norte',true);
@@ -157,7 +159,7 @@ begin
 end $$;
 SQL
 
-echo "6/12 append-only: UPDATE/DELETE em fato publicado são bloqueados"
+echo "6/13 append-only: UPDATE/DELETE em fato publicado são bloqueados"
 PSQL <<'SQL'
 do $$
 begin
@@ -178,7 +180,7 @@ begin
 end $$;
 SQL
 
-echo "7/12 integração com shadow no momento certo (migração 44)"
+echo "7/13 integração com shadow no momento certo (migração 44)"
 PSQL <<'SQL'
 update pratos set ativo = false where id = 3;   -- prato sem receita sai do universo esperado
 -- sucesso: integrar publica shadow com paridade zero por construção
@@ -206,7 +208,7 @@ begin
 end $$;
 SQL
 
-echo "8/12 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
+echo "8/13 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
 PSQL <<'SQL'
 -- duplicata no padrão real de produção (33/34): linha original sem mediana +
 -- linha regravada com valor, ANTES da migração 45 existir
@@ -253,7 +255,7 @@ begin
 end $$;
 SQL
 
-echo "9/12 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
+echo "9/13 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
 PSQL <<'SQL'
 insert into resultados_brutos (snapshot_id, ingrediente_id, titulo, preco_bruto, preco_normalizado, loja, exibicao) values
   (1, 10, 'Arroz 5kg', 25.00, 0.005, 'Loja A', 'R$ 5,00/kg'),
@@ -299,7 +301,7 @@ begin
 end $$;
 SQL
 
-echo "10/12 fontes manuais e evidência de descarte (migração 47)"
+echo "10/13 fontes manuais e evidência de descarte (migração 47)"
 PSQL <<'SQL'
 -- duas leituras manuais IGUAIS em datas diferentes = dois fatos; e uma linha
 -- só de custo_fixo, que não é observação de preço
@@ -338,7 +340,7 @@ begin
 end $$;
 SQL
 
-echo "11/12 DAG estimativa/resolução e RLS (migração 48)"
+echo "11/13 DAG estimativa/resolução e RLS (migração 48)"
 PSQL <<'SQL'
 -- observações do snapshot 6 (ing 10): mediana(0.007, 0.009) = 0.008 = precos → reconcilia
 insert into price_observations (fonte, snapshot_id, ingrediente_id, titulo, loja, preco_bruto, preco_normalizado, status)
@@ -394,7 +396,7 @@ begin
 end $$;
 SQL
 
-echo "12/12 QC na autoaprovação e coleta manual vinculada (migração 49)"
+echo "12/13 QC na autoaprovação e coleta manual vinculada (migração 49)"
 PSQL < supabase/migrations/supabase_migration_49.sql
 PSQL < supabase/migrations/supabase_migration_49.sql
 PSQL <<'SQL'
@@ -444,4 +446,47 @@ begin
 end $$;
 SQL
 
-echo "PASS: migrações 42/43/44/45/46/47/48/49 — todos os testes passaram"
+echo "13/13 registry de fatores e vintage (migração 50)"
+PSQL <<'SQL'
+insert into fatores_catalogo (serie, label, categoria, granularidade, unidade) values ('ipca_1101', 'Arroz', 'Cereais', 'mensal', '%');
+insert into fatores_preditores (serie, data, valor, fonte) values
+  ('ipca_1101', '2026-06-01', 1.5, 'sidra_7060'),
+  ('serie_sem_catalogo', '2026-06-01', 2.0, 'fonte_x');
+SQL
+PSQL < supabase/migrations/supabase_migration_50.sql
+PSQL < supabase/migrations/supabase_migration_50.sql
+PSQL <<'SQL'
+do $$
+begin
+  -- registry cobre catálogo + fatos órfãos + seed (dolar etc.)
+  assert (select origem from factor_series where serie = 'ipca_1101') = 'catalogo', 'série do catálogo fora do registry';
+  assert (select origem from factor_series where serie = 'serie_sem_catalogo') = 'auto', 'série órfã não auto-registrada';
+  assert (select origem from factor_series where serie = 'dolar') = 'seed', 'seed não-SIDRA ausente';
+  -- backfill vintage 1 (reaplicação não duplicou)
+  assert (select count(*) from factor_observations) = 2, 'backfill vintage 1 incorreto';
+  -- upsert idêntico não gera vintage novo
+  insert into fatores_preditores (serie, data, valor, fonte) values ('ipca_1101', '2026-06-01', 1.5, 'sidra_7060')
+  on conflict (serie, data) do update set valor = excluded.valor;
+  assert (select count(*) from factor_observations where serie = 'ipca_1101') = 1, 'upsert sem mudança criou vintage';
+  -- REVISÃO da fonte: valor novo vira vintage 2 e o antigo sobrevive
+  insert into fatores_preditores (serie, data, valor, fonte) values ('ipca_1101', '2026-06-01', 1.7, 'sidra_7060')
+  on conflict (serie, data) do update set valor = excluded.valor;
+  assert (select count(*) from factor_observations where serie = 'ipca_1101' and data = '2026-06-01') = 2, 'revisão não preservada';
+  assert (select valor from factor_observations where serie = 'ipca_1101' and vintage = 1) = 1.5, 'vintage 1 perdido';
+  assert (select valor from factor_observations where serie = 'ipca_1101' and vintage = 2) = 1.7, 'vintage 2 errado';
+  -- série inédita na ingestão: auto-registro + observação, sem quebrar
+  insert into fatores_preditores (serie, data, valor, fonte) values ('serie_nova', '2026-07-01', 9.9, 'fonte_y');
+  assert (select origem from factor_series where serie = 'serie_nova') = 'auto', 'série nova não registrada';
+  assert (select count(*) from factor_observations where serie = 'serie_nova') = 1, 'observação da série nova ausente';
+  -- append-only
+  begin
+    delete from factor_observations where serie = 'serie_nova';
+    raise exception 'DELETE_PASSOU';
+  exception when others then
+    if sqlerrm = 'DELETE_PASSOU' then raise; end if;
+    assert sqlerrm like '%append-only%', 'erro inesperado: ' || sqlerrm;
+  end;
+end $$;
+SQL
+
+echo "PASS: migrações 42/43/44/45/46/47/48/49/50 — todos os testes passaram"
