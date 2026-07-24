@@ -110,9 +110,10 @@ def main():
         print(f"❌ Arquivo {SNAPSHOT_FILE} não encontrado. Rode o scraper primeiro.")
         sys.exit(1)
 
-    data       = snapshot["data"]
-    resumo     = snapshot["resumo"]
-    resultados = snapshot["resultados"]
+    data        = snapshot["data"]
+    resumo      = snapshot["resumo"]
+    resultados  = snapshot["resultados"]
+    descartados = snapshot.get("descartados", [])   # ofertas rejeitadas com motivo (Fase 2)
 
     print(f"📅 Salvando snapshot de {data} no Supabase...")
     print(f"   {len(resumo)} ingredientes | {len(resultados)} resultados brutos")
@@ -141,8 +142,8 @@ def main():
             print("🛑 Abortado: limpeza dos preços do merge falhou."); sys.exit(1)
         if not supabase_delete(f"resultados_brutos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})"):
             print("🛑 Abortado: limpeza dos resultados brutos do merge falhou."); sys.exit(1)
-        RUN_INFO.update(snapshot_id=snapshot_id, modo="merge", precos=len(resumo), brutos=len(resultados))
-        falhas = _salvar_precos(snapshot_id, resumo, resultados)
+        RUN_INFO.update(snapshot_id=snapshot_id, modo="merge", precos=len(resumo), brutos=len(resultados), descartados=len(descartados))
+        falhas = _salvar_precos(snapshot_id, resumo, resultados, descartados)
         RUN_INFO["falhas"] = falhas
         if falhas:
             print(f"\n❌ Merge com {falhas} falha(s) de gravação — snapshot pode estar parcial.")
@@ -171,8 +172,8 @@ def main():
         print("🛑 Abortado: limpeza dos preços falhou."); sys.exit(1)
     if not supabase_delete(f"resultados_brutos?snapshot_id=eq.{snapshot_id}"):
         print("🛑 Abortado: limpeza dos resultados brutos falhou."); sys.exit(1)
-    RUN_INFO.update(snapshot_id=snapshot_id, modo="completo", precos=len(resumo), brutos=len(resultados))
-    falhas = _salvar_precos(snapshot_id, resumo, resultados)
+    RUN_INFO.update(snapshot_id=snapshot_id, modo="completo", precos=len(resumo), brutos=len(resultados), descartados=len(descartados))
+    falhas = _salvar_precos(snapshot_id, resumo, resultados, descartados)
     RUN_INFO["falhas"] = falhas
 
     # falha em qualquer preço/lote NÃO pode terminar como sucesso com exit 0:
@@ -187,7 +188,7 @@ def main():
     print(f"{'='*50}")
 
 
-def _salvar_precos(snapshot_id, resumo, resultados):
+def _salvar_precos(snapshot_id, resumo, resultados, descartados=None):
     """Insere preços (resumo) e resultados brutos no snapshot. Não apaga nada —
     a limpeza (total ou por ingrediente) é responsabilidade do chamador.
     Retorna o número de gravações que falharam (0 = tudo gravado)."""
@@ -247,15 +248,16 @@ def _salvar_precos(snapshot_id, resumo, resultados):
             falhas += 1
         print(f"  {'✅' if resp else '❌'} Lote {i//LOTE + 1}: {len(lote)} registros")
 
-    falhas += _salvar_observacoes(snapshot_id, resultados)
+    falhas += _salvar_observacoes(snapshot_id, resultados, descartados or [])
     return falhas
 
 
-def _salvar_observacoes(snapshot_id, resultados):
-    """Camada canônica append-only (Fase 2, migração 46): grava cada resultado
-    em price_observations. O dedup_hash é gerado no banco; replay da mesma
-    oferta não duplica (ON CONFLICT DO NOTHING via ignore-duplicates). Falha
-    aqui CONTA como falha do job — o fato bruto precisa ser preservado."""
+def _salvar_observacoes(snapshot_id, resultados, descartados):
+    """Camada canônica append-only (Fase 2, migrações 46/47): grava cada
+    resultado aceito (status=included) e cada descarte com motivo
+    (status=rejected) em price_observations. O dedup_hash é gerado no banco;
+    replay da mesma oferta não duplica (ON CONFLICT DO NOTHING). Falha aqui
+    CONTA como falha do job — o fato bruto precisa ser preservado."""
     payload = [{
         "fonte":             "online_scrape",
         "snapshot_id":       snapshot_id,
@@ -266,8 +268,21 @@ def _salvar_observacoes(snapshot_id, resultados):
         "preco_bruto":       r["preco_bruto"],
         "preco_normalizado": r["preco_normalizado"],
         "exibicao":          r["exibicao"],
+        "status":            "included",
         "run_id":            _RUN_ID,
-    } for r in resultados]
+    } for r in resultados] + [{
+        "fonte":             "online_scrape",
+        "snapshot_id":       snapshot_id,
+        "ingrediente_id":    d.get("ingrediente_id"),
+        "titulo":            d.get("titulo"),
+        "loja":              d.get("loja"),
+        "link":              d.get("link", ""),
+        "preco_bruto":       d.get("preco_bruto"),
+        "preco_normalizado": d.get("preco_normalizado"),
+        "status":            "rejected",
+        "motivo":            d.get("motivo"),
+        "run_id":            _RUN_ID,
+    } for d in descartados]
     headers = {**HEADERS, "Prefer": "return=minimal,resolution=ignore-duplicates"}
     url = f"{SUPABASE_URL}/rest/v1/price_observations?on_conflict=fonte,dedup_hash"
     falhas = 0
