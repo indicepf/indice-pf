@@ -36,22 +36,6 @@ const DEFLATORES: { key: string; label: string; tipo: 'nivel' | 'variacao'; nota
 
 const SERIES_DIEESE = PREDITORES.filter(p => p.key.startsWith('dieese_'))
 
-// converte a série de um deflator em índice de NÍVEL por mês. 'nivel' já vem em
-// R$; 'variacao' (% ao mês do IPCA) é encadeada num índice base 100.
-function serieNivel(bruto: { data: string; valor: number }[], tipo: 'nivel' | 'variacao'): Map<string, number> {
-  const nivel = new Map<string, number>()
-  if (tipo === 'nivel') { for (const p of bruto) nivel.set(p.data.slice(0, 7), p.valor); return nivel }
-  let acc = 100
-  for (const p of [...bruto].sort((a, b) => a.data.localeCompare(b.data))) { acc *= 1 + p.valor / 100; nivel.set(p.data.slice(0, 7), acc) }
-  return nivel
-}
-// projeta o valor da âncora para trás pela razão de níveis. Só antes da âncora.
-function projetar(nivel: Map<string, number>, ancoraYm: string, ancoraValor: number, ym: string): number | null {
-  const n = nivel.get(ym), n0 = nivel.get(ancoraYm)
-  if (n == null || n0 == null || n0 === 0 || ym >= ancoraYm) return null
-  return Math.round((ancoraValor * (n / n0)) * 100) / 100
-}
-
 type PontoConf = { ym: string; nosso: number | null; dieese: number | null; razao: number | null }
 type ItemConf = {
   id: number; nome: string; unidade: string | null
@@ -136,16 +120,28 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
     return () => { vivo = false }
   }, [])
 
-  // reconstrução por ingrediente (cálculo no servidor)
+  // reconstrução por ingrediente (cálculo no servidor). Contrato discriminado
+  // (Fase 0B): 200 ok, 409 incomplete com gaps, demais erros com código. A
+  // série anterior é limpa ao iniciar — resultado velho nunca fica na tela
+  // como se fosse dos parâmetros novos.
   useEffect(() => {
     if (!ehPorIngrediente) return
-    let vivo = true
-    setErroIng('')
-    fetchAdmin(`/api/indice-retropolado?desde=${desde}&confianca=${confianca}`)
-      .then(r => r.json())
-      .then(j => { if (vivo) { if (j.error) setErroIng(j.error); else setPorIng(j) } })
-      .catch(e => { if (vivo) setErroIng(String(e)) })
-    return () => { vivo = false }
+    const ctrl = new AbortController()
+    setErroIng(''); setPorIng(null)
+    fetchAdmin(`/api/indice-retropolado?desde=${desde}&confianca=${confianca}`, { signal: ctrl.signal })
+      .then(async r => {
+        const j = await r.json().catch(() => null)
+        if (ctrl.signal.aborted) return
+        if (r.ok && j?.status === 'ok') { setPorIng(j); return }
+        if (r.status === 409 && j?.status === 'incomplete') {
+          const gaps: { series: string; month: string }[] = j.gaps ?? []
+          setErroIng(`dados incompletos — sem variação em: ${gaps.map(g => `${g.series} (${g.month.split('-').reverse().join('/')})`).join(', ')}. Nenhum ponto anterior ao gap é estimado.`)
+          return
+        }
+        setErroIng(j?.error ? `${j.error}${j.code ? ` [${j.code}]` : ''}` : `HTTP ${r.status}`)
+      })
+      .catch(e => { if (!ctrl.signal.aborted) setErroIng(String(e)) })
+    return () => ctrl.abort()
   }, [ehPorIngrediente, desde, confianca])
 
   // índice medido, agregado por mês (média das coletas do mês)
@@ -169,11 +165,16 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
       if (!porIng?.serie?.length) return []
       const medido = new Map(medidoPorMes.map(p => [p.ym, p.valor]))
       const ymAncora = porIng.ancora.ym
-      return porIng.serie.map(p => ({
-        ym: p.ym, ts: tsYM(p.ym),
-        estimado: p.ym < ymAncora ? p.indice : null,
-        real: medido.get(p.ym) != null ? Math.round(medido.get(p.ym)! * 100) / 100 : null,
-      }))
+      // estimado XOR medido: mês com coleta real mostra só o medido; a
+      // estimativa nunca sobrepõe um ponto observado (Fase 0B)
+      return porIng.serie.map(p => {
+        const real = medido.get(p.ym) != null ? Math.round(medido.get(p.ym)! * 100) / 100 : null
+        return {
+          ym: p.ym, ts: tsYM(p.ym),
+          estimado: real == null && p.ym < ymAncora ? p.indice : null,
+          real,
+        }
+      })
     }
     const bruto = series[deflator] || []
     if (!bruto.length || !medidoPorMes.length) return []
@@ -207,44 +208,10 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
   const primeiroReal = medidoPorMes[0]
   const maisAntigo = reconstrucao.find(p => p.estimado != null)
 
-  // Margem de incerteza = faixa entre métodos INDEPENDENTES. Onde os vários
-  // caminhos de reconstrução concordam, a estimativa é firme; onde discordam, a
-  // faixa se abre. NÃO é intervalo de confiança estatístico (a retropolação é
-  // determinística) — é uma medida de robustez do método.
-  const banda = useMemo(() => {
-    if (!primeiroReal) return []
-    const ancoraYm = primeiroReal.ym, ancoraVal = primeiroReal.valor
-    // cada método vira um Map ym→estimado
-    const metodos: Map<string, number>[] = []
-    for (const [key, tipo] of [['dieese_cesta', 'nivel'], ['ipca_alimentacao', 'variacao'], ['ipca_alim_fora', 'variacao']] as const) {
-      const nivel = serieNivel(series[key] || [], tipo)
-      const m = new Map<string, number>()
-      for (const ym of nivel.keys()) { const v = projetar(nivel, ancoraYm, ancoraVal, ym); if (v != null) m.set(ym, v) }
-      if (m.size) metodos.push(m)
-    }
-    if (porIng?.serie?.length) {
-      const m = new Map<string, number>()
-      for (const p of porIng.serie) if (p.ym < ancoraYm) m.set(p.ym, p.indice)
-      if (m.size) metodos.push(m)
-    }
-    if (metodos.length < 2) return []
-    const meses = [...new Set(metodos.flatMap(m => [...m.keys()]))].filter(ym => ym >= desde).sort()
-    return meses.map(ym => {
-      const vs = metodos.map(m => m.get(ym)).filter((v): v is number => v != null)
-      if (vs.length < 2) return { ym, ts: tsYM(ym), faixa: null }
-      return { ym, ts: tsYM(ym), faixa: [Math.min(...vs), Math.max(...vs)] as [number, number] }
-    })
-  }, [series, porIng, primeiroReal, desde])
-
-  // funde a banda na série do gráfico (por ym)
-  const reconstrucaoComBanda = useMemo(() => {
-    if (!banda.length) return reconstrucao
-    const fx = new Map(banda.map(b => [b.ym, b.faixa]))
-    const base = new Map(reconstrucao.map(p => [p.ym, p]))
-    const todos = [...new Set([...reconstrucao.map(p => p.ym), ...banda.map(b => b.ym)])].sort()
-    return todos.map(ym => ({ ...(base.get(ym) ?? { ym, ts: tsYM(ym), estimado: null, real: null }), faixa: fx.get(ym) ?? null }))
-  }, [reconstrucao, banda])
-  const temBanda = banda.some(b => b.faixa != null)
+  // A antiga "faixa entre métodos" foi removida na Fase 0B (LAB-008/009): os
+  // métodos comparados usavam âncoras, cestas e conjuntos diferentes por mês,
+  // então o min–max não media incerteza. Um envelope de sensibilidade só volta
+  // na Fase 3, com âncora e universo comuns e backtest.
 
   // gráfico das séries DIEESE (preço real, sem reconstrução)
   const dadosDieese = useMemo(() => {
@@ -339,13 +306,12 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
               Âncora: {primeiroReal ? `${primeiroReal.ym.split('-').reverse().join('/')} = ${brl(primeiroReal.valor)}` : '—'}
               {maisAntigo && <> · estimativa mais antiga: {maisAntigo.ym.split('-').reverse().join('/')} = <strong className="text-ink">{brl(maisAntigo.estimado!)}</strong></>}
               {' '}· método: {ehPorIngrediente ? 'por ingrediente (IPCA item a item)' : `agregado por ${def.label}`}
-              {temBanda && <> · <span style={{ color: COR.ind }}>faixa sombreada</span> = margem entre métodos independentes (medida de robustez, não IC estatístico)</>}
             </>
           )}
         </p>
         <div style={{ width: '100%', height: 340 }}>
           <ResponsiveContainer>
-            <ComposedChart data={reconstrucaoComBanda} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+            <ComposedChart data={reconstrucao} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
               <defs>
                 <linearGradient id="grad-est" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={COR.est} stopOpacity={0.14} />
@@ -356,14 +322,10 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
               <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                 tickFormatter={fmtYM} tick={{ fontSize: 12, fill: COR.muted }} />
               <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={52} tickFormatter={v => `R$${v}`} />
-              <Tooltip formatter={(v: any, n: any) => Array.isArray(v)
-                ? [`R$ ${Number(v[0]).toFixed(2)} – R$ ${Number(v[1]).toFixed(2)}`, n]
-                : [`R$ ${Number(v).toFixed(2)}`, n]} labelFormatter={(t: any) => fmtYM(Number(t))} />
+              <Tooltip formatter={(v: any, n: any) => [`R$ ${Number(v).toFixed(2)}`, n]} labelFormatter={(t: any) => fmtYM(Number(t))} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {primeiroReal && <ReferenceLine x={tsYM(primeiroReal.ym)} stroke={COR.muted} strokeDasharray="4 4"
                 label={{ value: 'início da coleta real', fontSize: 11, fill: COR.muted, position: 'insideTopLeft' }} />}
-              {temBanda && <Area type="monotone" dataKey="faixa" name="Faixa entre métodos" stroke="none"
-                fill={COR.ind} fillOpacity={0.14} connectNulls />}
               <Area type="monotone" dataKey="estimado" name="Estimado (reconstruído)" stroke={COR.est}
                 strokeWidth={2} strokeDasharray="5 4" dot={false} fill="url(#grad-est)" connectNulls />
               <Line type="monotone" dataKey="real" name="Medido (coleta real)" stroke={COR.ind}
