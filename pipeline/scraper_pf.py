@@ -126,39 +126,50 @@ def chave_cache(ingrediente):
     return f"{hoje}_{ingrediente['nome']}"
 
 # ─── Extrator de peso/volume (R$/g e R$/ml) ──────────────────────────────────
+# Unidades reconhecidas e seus fatores para g/ml (ordem importa: kg antes de g).
+_UNIDADES_QTD = [
+    (r'kg',      1000),
+    (r'litros?', 1000),
+    (r'l\b',     1000),
+    (r'ml\b',    1),
+    (r'g\b',     1),
+]
+# Conector de multipack: "2x500g", "2 × 500 ml", "kit 3 pacotes de 500 g",
+# "6 garrafas de 900 ml". O total é n × quantidade — usar só a quantidade da
+# embalagem subcontava o anúncio e inflava o preço normalizado (COL-002).
+_MULTIPACK = r'(\d+)\s*(?:[x×]|(?:pacotes?|garrafas?|latas?|caixas?|potes?|unidades?)\s+de)\s*'
+
 def extrair_quantidade(titulo):
     titulo_lower = titulo.lower()
-    padroes = [
-        (r'(\d+[\.,]?\d*)\s*kg',       1000),
-        (r'(\d+[\.,]?\d*)\s*litros?',  1000),
-        (r'(\d+[\.,]?\d*)\s*l\b',      1000),
-        (r'(\d+[\.,]?\d*)\s*ml\b',     1),
-        (r'(\d+[\.,]?\d*)\s*g\b',      1),
-    ]
-    for padrao, multiplicador in padroes:
-        match = re.search(padrao, titulo_lower)
-        if match:
-            valor = float(match.group(1).replace(',', '.'))
+    for unidade, multiplicador in _UNIDADES_QTD:
+        m = re.search(_MULTIPACK + r'(\d+[\.,]?\d*)\s*' + unidade, titulo_lower)
+        if m:
+            n = int(m.group(1))
+            valor = float(m.group(2).replace(',', '.'))
+            return n * valor * multiplicador
+    for unidade, multiplicador in _UNIDADES_QTD:
+        m = re.search(r'(\d+[\.,]?\d*)\s*' + unidade, titulo_lower)
+        if m:
+            valor = float(m.group(1).replace(',', '.'))
             return valor * multiplicador
     return None
 
 # ─── Extrator de contagem (ovo: unidades; maço: maços) ───────────────────────
 def extrair_contagem(titulo):
     """Quantas unidades/maços o anúncio contém. Ex: 'ovos 30 unidades' → 30,
-    'cheiro verde 2 maços' → 2. Sem contagem explícita, assume 1."""
+    '2 dúzias' → 24, 'cheiro verde 2 maços' → 2. Sem contagem explícita, 1."""
     titulo_lower = titulo.lower()
+    # multiplicador explícito por padrão — o teste por substring no regex nunca
+    # casava ('dúzia' não é substring de 'd[úu]zias?') e '2 dúzias' virava 2 (COL-001)
     padroes = [
-        r'(\d+)\s*unidades?', r'bandeja\s*com\s*(\d+)', r'caixa\s*com\s*(\d+)',
-        r'(\d+)\s*ovos', r'c/\s*(\d+)', r'(\d+)\s*maços?', r'kit\s*(\d+)',
-        r'(\d+)\s*d[úu]zias?',
+        (r'(\d+)\s*d[úu]zias?', 12),
+        (r'(\d+)\s*unidades?', 1), (r'bandeja\s*com\s*(\d+)', 1), (r'caixa\s*com\s*(\d+)', 1),
+        (r'(\d+)\s*ovos', 1), (r'c/\s*(\d+)', 1), (r'(\d+)\s*maços?', 1), (r'kit\s*(\d+)', 1),
     ]
-    for padrao in padroes:
+    for padrao, mult in padroes:
         m = re.search(padrao, titulo_lower)
         if m:
-            n = int(m.group(1))
-            if 'dúzia' in padrao or 'duzia' in padrao:
-                n *= 12
-            return n
+            return int(m.group(1)) * mult
     return 1
 
 # ─── Limpa preço ──────────────────────────────────────────────────────────────
