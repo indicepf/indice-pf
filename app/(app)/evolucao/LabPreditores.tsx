@@ -39,12 +39,17 @@ const DEFLATORES: { key: string; label: string; tipo: 'nivel' | 'variacao'; nota
 const SERIES_DIEESE = PREDITORES.filter(p => p.key.startsWith('dieese_'))
 
 type PontoConf = { ym: string; nosso: number | null; dieese: number | null; razao: number | null }
+type DiagnosticosConf = {
+  viesPct: number | null; maeReais: number; mapePct: number | null
+  madRazao: number; iqrRazao: { q1: number; q3: number; iqr: number }
+  bootstrapIC90Razao: [number, number] | null
+}
 type ItemConf = {
   id: number; nome: string; unidade: string | null
   comparabilidade: 'direta' | 'aproximada'; nota: string | null
   periodo: { ini: string; fim: string } | null
   nossoMediana: number | null; dieeseMediana: number | null; nossoAtual: number | null
-  razaoMediana: number | null; nMeses: number; pontos: PontoConf[]
+  razaoMediana: number | null; nMeses: number; diagnosticos: DiagnosticosConf | null; pontos: PontoConf[]
 }
 
 const CONFIANCAS: [string, string][] = [
@@ -477,9 +482,22 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
               if (!it) return null
               const dados = it.pontos.filter(p => p.nosso != null || p.dieese != null)
                 .map(p => ({ ...p, ts: tsYM(p.ym) }))
+              const d = it.diagnosticos
               return (
                 <div className="mt-4">
                   <p className="text-sm font-medium mb-2">{it.nome} — nossa medição × DIEESE</p>
+                  {d && (
+                    <p className="text-xs text-dim mb-3">
+                      Viés: <strong className="text-ink">{d.viesPct != null ? `${d.viesPct > 0 ? '+' : ''}${d.viesPct}%` : '—'}</strong>
+                      {' · '}MAE: <strong className="text-ink">{brl(d.maeReais)}</strong>
+                      {d.mapePct != null && <> · MAPE: <strong className="text-ink">{d.mapePct}%</strong></>}
+                      {' · '}dispersão da razão (MAD): <strong className="text-ink">{d.madRazao}</strong>
+                      {' · '}IQR: <strong className="text-ink">[{d.iqrRazao.q1}, {d.iqrRazao.q3}]</strong>
+                      {d.bootstrapIC90Razao
+                        ? <> · IC 90% (bootstrap): <strong className="text-ink">[{d.bootstrapIC90Razao[0]}, {d.bootstrapIC90Razao[1]}]</strong></>
+                        : <> · IC por bootstrap indisponível (N &lt; 8)</>}
+                    </p>
+                  )}
                   <div style={{ width: '100%', height: 260 }}>
                     <ResponsiveContainer>
                       <ComposedChart data={dados} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
