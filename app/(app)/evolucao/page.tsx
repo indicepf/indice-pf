@@ -5,7 +5,8 @@ import {
   ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import dynamic from 'next/dynamic'
-import { getEvolucao, getSnapshotsNovos, getContribuicoesMapa, getCalibracao, getAllFontes, type Evolucao, type FonteKey, type PontoContrib, type Calibracao } from '@/lib/queries'
+import { getEvolucao, getSnapshotsNovos, getContribuicoesMapa, getCalibracao, getAllFontes, isSuper, type Evolucao, type FonteKey, type PontoContrib, type Calibracao } from '@/lib/queries'
+import { usuarioDoStorage } from '@/lib/supabase'
 import { brl } from '@/lib/format'
 import { mediana } from '@/lib/stats'
 import { ACCENT, BRAND, CHART_SERIES, CORES_REGIAO, DIM, INK } from '@/lib/theme'
@@ -52,6 +53,7 @@ function EvolucaoInner() {
   const [pontos, setPontos] = useState<PontoContrib[]>([])
   const [fRegs, setFRegs] = useState<Set<string>>(new Set()); const [fTipo, setFTipo] = useState(''); const [fIng, setFIng] = useState(0)
   const [snapsNovos, setSnapsNovos] = useState<{ id: number; data: string }[]>([])
+  const [souSuper, setSouSuper] = useState(false)
 
   const noPeriodo = (d: string) => (!ini || d >= ini) && (!fim || d <= fim)
 
@@ -59,6 +61,8 @@ function EvolucaoInner() {
     getEvolucao().then(setEv)
     getSnapshotsNovos().then(setSnapsNovos)
     getContribuicoesMapa().then(setPontos)
+    const uid = usuarioDoStorage()?.id
+    if (uid) isSuper(uid).then(setSouSuper)
   }, [])
   // calibração: (re)carrega ao abrir a aba e quando o período muda
   useEffect(() => {
@@ -391,7 +395,7 @@ function EvolucaoInner() {
       ) : !ev ? (
         <p className="max-w-6xl mx-auto px-6 py-10 text-sm text-dim">Carregando…</p>
       ) : aba === 'preditores' ? (
-        <LabPreditores ev={ev} />
+        <LabPreditores ev={ev} souSuper={souSuper} />
       ) : aba === 'variacao' ? (
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">

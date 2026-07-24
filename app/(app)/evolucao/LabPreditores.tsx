@@ -4,11 +4,14 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
-import { type Evolucao } from '@/lib/queries'
+import { getEntradasIngrediente, excluirEntradaERecalcular, type Evolucao, type EntradaBruta } from '@/lib/queries'
+import { capturarContexto } from '@/lib/contexto'
+import { Modal } from '@/components/ui'
 import { brl } from '@/lib/format'
 import { ACCENT, BRAND, CHART_SERIES, DIM, INK } from '@/lib/theme'
 import { PREDITORES, fmtValorPreditor } from '@/lib/preditores'
 import BotaoExportar from './BotaoExportar'
+import ModalMetodologia from './ModalMetodologia'
 import InfoTip from '../../InfoTip'
 
 // Laboratório (admin): reconstrução do índice para o passado e exploração das
@@ -31,6 +34,22 @@ const DEFLATORES: { key: string; label: string; tipo: 'nivel' | 'variacao'; nota
 
 const SERIES_DIEESE = PREDITORES.filter(p => p.key.startsWith('dieese_'))
 
+// converte a série de um deflator em índice de NÍVEL por mês. 'nivel' já vem em
+// R$; 'variacao' (% ao mês do IPCA) é encadeada num índice base 100.
+function serieNivel(bruto: { data: string; valor: number }[], tipo: 'nivel' | 'variacao'): Map<string, number> {
+  const nivel = new Map<string, number>()
+  if (tipo === 'nivel') { for (const p of bruto) nivel.set(p.data.slice(0, 7), p.valor); return nivel }
+  let acc = 100
+  for (const p of [...bruto].sort((a, b) => a.data.localeCompare(b.data))) { acc *= 1 + p.valor / 100; nivel.set(p.data.slice(0, 7), acc) }
+  return nivel
+}
+// projeta o valor da âncora para trás pela razão de níveis. Só antes da âncora.
+function projetar(nivel: Map<string, number>, ancoraYm: string, ancoraValor: number, ym: string): number | null {
+  const n = nivel.get(ym), n0 = nivel.get(ancoraYm)
+  if (n == null || n0 == null || n0 === 0 || ym >= ancoraYm) return null
+  return Math.round((ancoraValor * (n / n0)) * 100) / 100
+}
+
 type PontoConf = { ym: string; nosso: number | null; dieese: number | null; razao: number | null }
 type ItemConf = {
   id: number; nome: string; unidade: string | null
@@ -44,7 +63,7 @@ const CONFIANCAS: [string, string][] = [
   ['alta,media,baixa', 'tudo, inclusive fallback de grupo'],
 ]
 
-export default function LabPreditores({ ev }: { ev: Evolucao }) {
+export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; souSuper?: boolean }) {
   const [metodo, setMetodo] = useState('ingrediente')   // 'ingrediente' ou chave de DEFLATORES
   const [confianca, setConfianca] = useState('alta,media')
   const [desde, setDesde] = useState('2015-01')
@@ -55,6 +74,29 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
   const [erroIng, setErroIng] = useState('')
   const [conf, setConf] = useState<ItemConf[] | null>(null)
   const [itemConf, setItemConf] = useState<number | null>(null)
+  const [verMetodo, setVerMetodo] = useState(false)
+  // auditoria da coleta (item da tabela de confiabilidade). Só super exclui.
+  const [auditar, setAuditar] = useState<{ id: number; nome: string } | null>(null)
+  const [entradas, setEntradas] = useState<EntradaBruta[] | null>(null)
+  const [snapAudit, setSnapAudit] = useState(0)
+  const [auditMsg, setAuditMsg] = useState('')
+  const [auditBusy, setAuditBusy] = useState(false)
+
+  async function abrirAuditoria(id: number, nome: string) {
+    setAuditar({ id, nome }); setEntradas(null); setAuditMsg('')
+    const { snapshotId, entradas } = await getEntradasIngrediente(id)
+    setSnapAudit(snapshotId); setEntradas(entradas)
+  }
+  async function excluirEntrada(e: EntradaBruta) {
+    if (!auditar) return
+    if (!confirm(`Excluir esta entrada de ${auditar.nome}? A mediana do ingrediente e o índice são recalculados. Fica registrado em "Ações do super".\n\n${e.titulo}\n${e.exibicao}`)) return
+    setAuditBusy(true); setAuditMsg('')
+    const ctx = await capturarContexto()
+    const { error } = await excluirEntradaERecalcular(e.id, snapAudit, auditar.id, ctx)
+    if (error) { setAuditBusy(false); setAuditMsg(`Erro: ${error.message}`); return }
+    setEntradas(prev => prev?.filter(x => x.id !== e.id) ?? null)
+    setAuditBusy(false); setAuditMsg('Entrada excluída e índice recalculado.')
+  }
 
   const ehPorIngrediente = metodo === 'ingrediente'
   const deflator = ehPorIngrediente ? 'dieese_cesta' : metodo
@@ -149,6 +191,45 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
   const primeiroReal = medidoPorMes[0]
   const maisAntigo = reconstrucao.find(p => p.estimado != null)
 
+  // Margem de incerteza = faixa entre métodos INDEPENDENTES. Onde os vários
+  // caminhos de reconstrução concordam, a estimativa é firme; onde discordam, a
+  // faixa se abre. NÃO é intervalo de confiança estatístico (a retropolação é
+  // determinística) — é uma medida de robustez do método.
+  const banda = useMemo(() => {
+    if (!primeiroReal) return []
+    const ancoraYm = primeiroReal.ym, ancoraVal = primeiroReal.valor
+    // cada método vira um Map ym→estimado
+    const metodos: Map<string, number>[] = []
+    for (const [key, tipo] of [['dieese_cesta', 'nivel'], ['ipca_alimentacao', 'variacao'], ['ipca_alim_fora', 'variacao']] as const) {
+      const nivel = serieNivel(series[key] || [], tipo)
+      const m = new Map<string, number>()
+      for (const ym of nivel.keys()) { const v = projetar(nivel, ancoraYm, ancoraVal, ym); if (v != null) m.set(ym, v) }
+      if (m.size) metodos.push(m)
+    }
+    if (porIng?.serie?.length) {
+      const m = new Map<string, number>()
+      for (const p of porIng.serie) if (p.ym < ancoraYm) m.set(p.ym, p.indice)
+      if (m.size) metodos.push(m)
+    }
+    if (metodos.length < 2) return []
+    const meses = [...new Set(metodos.flatMap(m => [...m.keys()]))].filter(ym => ym >= desde).sort()
+    return meses.map(ym => {
+      const vs = metodos.map(m => m.get(ym)).filter((v): v is number => v != null)
+      if (vs.length < 2) return { ym, ts: tsYM(ym), faixa: null }
+      return { ym, ts: tsYM(ym), faixa: [Math.min(...vs), Math.max(...vs)] as [number, number] }
+    })
+  }, [series, porIng, primeiroReal, desde])
+
+  // funde a banda na série do gráfico (por ym)
+  const reconstrucaoComBanda = useMemo(() => {
+    if (!banda.length) return reconstrucao
+    const fx = new Map(banda.map(b => [b.ym, b.faixa]))
+    const base = new Map(reconstrucao.map(p => [p.ym, p]))
+    const todos = [...new Set([...reconstrucao.map(p => p.ym), ...banda.map(b => b.ym)])].sort()
+    return todos.map(ym => ({ ...(base.get(ym) ?? { ym, ts: tsYM(ym), estimado: null, real: null }), faixa: fx.get(ym) ?? null }))
+  }, [reconstrucao, banda])
+  const temBanda = banda.some(b => b.faixa != null)
+
   // gráfico das séries DIEESE (preço real, sem reconstrução)
   const dadosDieese = useMemo(() => {
     const keys = [...vistaDieese]
@@ -165,13 +246,17 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
       <div className="border border-brand-roxo/30 bg-brand-roxo/5 rounded-lg p-4">
-        <p className="text-sm font-medium text-brand-roxo">Laboratório — não publicado</p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <p className="text-sm font-medium text-brand-roxo">Laboratório — não publicado</p>
+          <button onClick={() => setVerMetodo(true)} className="btn-mk ghost sm shrink-0">Como funciona · metodologia</button>
+        </div>
         <p className="text-xs text-dim mt-1">
           Área de teste, visível só para admin. A série reconstruída abaixo <strong>não é dado medido</strong>:
           é o índice atual projetado para trás por um deflator. Serve para leitura gráfica e contexto histórico —
           não use como variável em modelo, principalmente contra o próprio IPCA (seria circular).
         </p>
       </div>
+      {verMetodo && <ModalMetodologia onClose={() => setVerMetodo(false)} />}
 
       <div className="flex items-end gap-4 flex-wrap text-xs">
         <label className="text-dim">Método
@@ -190,12 +275,9 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
           </label>
         )}
         <label className="text-dim">Desde
-          <select value={desde} onChange={e => setDesde(e.target.value)}
-            className="block mt-1 bg-surface-2 border border-border rounded-md px-2.5 py-2 text-sm text-ink focus:outline-none focus:border-accent">
-            {['1994-07', '2000-01', '2010-01', '2015-01', '2020-01', '2024-01'].map(d => (
-              <option key={d} value={d}>{d.split('-').reverse().join('/')}</option>
-            ))}
-          </select>
+          <input type="month" value={desde} min="1994-07" max={primeiroReal?.ym ?? '2026-12'}
+            onChange={e => e.target.value && setDesde(e.target.value)}
+            className="block mt-1 bg-surface-2 border border-border rounded-md px-2.5 py-[7px] text-sm text-ink focus:outline-none focus:border-accent" />
         </label>
       </div>
       <p className="text-xs text-dim -mt-4">
@@ -231,12 +313,13 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
               Âncora: {primeiroReal ? `${primeiroReal.ym.split('-').reverse().join('/')} = ${brl(primeiroReal.valor)}` : '—'}
               {maisAntigo && <> · estimativa mais antiga: {maisAntigo.ym.split('-').reverse().join('/')} = <strong className="text-ink">{brl(maisAntigo.estimado!)}</strong></>}
               {' '}· método: {ehPorIngrediente ? 'por ingrediente (IPCA item a item)' : `agregado por ${def.label}`}
+              {temBanda && <> · <span className="text-est" style={{ color: COR.est }}>faixa sombreada</span> = margem entre métodos independentes (medida de robustez, não IC estatístico)</>}
             </>
           )}
         </p>
         <div style={{ width: '100%', height: 340 }}>
           <ResponsiveContainer>
-            <ComposedChart data={reconstrucao} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+            <ComposedChart data={reconstrucaoComBanda} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
               <defs>
                 <linearGradient id="grad-est" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={COR.est} stopOpacity={0.14} />
@@ -247,10 +330,14 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
               <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                 tickFormatter={fmtYM} tick={{ fontSize: 12, fill: COR.muted }} />
               <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={52} tickFormatter={v => `R$${v}`} />
-              <Tooltip formatter={(v: any, n: any) => [`R$ ${Number(v).toFixed(2)}`, n]} labelFormatter={(t: any) => fmtYM(Number(t))} />
+              <Tooltip formatter={(v: any, n: any) => Array.isArray(v)
+                ? [`R$ ${Number(v[0]).toFixed(2)} – R$ ${Number(v[1]).toFixed(2)}`, n]
+                : [`R$ ${Number(v).toFixed(2)}`, n]} labelFormatter={(t: any) => fmtYM(Number(t))} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {primeiroReal && <ReferenceLine x={tsYM(primeiroReal.ym)} stroke={COR.muted} strokeDasharray="4 4"
                 label={{ value: 'início da coleta real', fontSize: 11, fill: COR.muted, position: 'insideTopLeft' }} />}
+              {temBanda && <Area type="monotone" dataKey="faixa" name="Faixa entre métodos" stroke="none"
+                fill={COR.est} fillOpacity={0.12} connectNulls />}
               <Area type="monotone" dataKey="estimado" name="Estimado (reconstruído)" stroke={COR.est}
                 strokeWidth={2} strokeDasharray="5 4" dot={false} fill="url(#grad-est)" connectNulls />
               <Line type="monotone" dataKey="real" name="Medido (coleta real)" stroke={COR.ind}
@@ -276,19 +363,33 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
             </label>
           ))}
         </div>
-        <div style={{ width: '100%', height: 320 }}>
+        <div style={{ width: '100%', height: 340 }}>
           <ResponsiveContainer>
             <ComposedChart data={dadosDieese} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+              <defs>
+                <linearGradient id="grad-dieese" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COR.ind} stopOpacity={0.14} />
+                  <stop offset="100%" stopColor={COR.ind} stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                 tickFormatter={fmtYM} tick={{ fontSize: 12, fill: COR.muted }} />
               <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={56} tickFormatter={v => `R$${v}`} />
               <Tooltip formatter={(v: any, n: any) => [fmtValorPreditor(Number(v), 'moeda'), n]} labelFormatter={(t: any) => fmtYM(Number(t))} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              {[...vistaDieese].map(k => {
+              {/* uma série só → área com gradiente, igual ao gráfico da reconstrução;
+                  várias → linhas para não empastar */}
+              {[...vistaDieese].map((k, idx) => {
                 const i = SERIES_DIEESE.findIndex(s => s.key === k)
-                return <Line key={k} type="monotone" dataKey={k} name={SERIES_DIEESE[i]?.label ?? k}
-                  stroke={CHART_SERIES[i % CHART_SERIES.length]} strokeWidth={2} dot={false} connectNulls />
+                const nome = SERIES_DIEESE[i]?.label ?? k
+                const cor = CHART_SERIES[i % CHART_SERIES.length]
+                if (vistaDieese.size === 1) return (
+                  <Area key={k} type="monotone" dataKey={k} name={nome} stroke={cor}
+                    strokeWidth={2.5} dot={{ r: 3 }} fill="url(#grad-dieese)" connectNulls />
+                )
+                return <Line key={k} type="monotone" dataKey={k} name={nome}
+                  stroke={cor} strokeWidth={2} dot={false} connectNulls />
               })}
             </ComposedChart>
           </ResponsiveContainer>
@@ -319,6 +420,7 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
                     <th className="px-3 py-2 text-right">Razão</th>
                     <th className="px-3 py-2 text-right">Meses</th>
                     <th className="px-3 py-2">Comparação</th>
+                    <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -340,6 +442,10 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
                         </td>
                         <td className="px-3 py-1.5 text-right tnum text-dim">{it.nMeses}</td>
                         <td className="px-3 py-1.5 text-xs text-dim">{it.comparabilidade}</td>
+                        <td className="px-3 py-1.5 text-right">
+                          <button onClick={ev => { ev.stopPropagation(); abrirAuditoria(it.id, it.nome) }}
+                            className="text-xs text-accent hover:underline whitespace-nowrap">auditar coleta</button>
+                        </td>
                       </tr>
                     )
                   })}
@@ -375,6 +481,39 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
           </>
         )}
       </div>
+
+      {auditar && (
+        <Modal title={`Auditoria — ${auditar.nome}`} onClose={() => setAuditar(null)} wide>
+          <div className="space-y-3 max-h-[70vh] overflow-y-auto">
+            <p className="text-xs text-dim">
+              Entradas brutas da nossa coleta mais recente (raspagem online) para este ingrediente.
+              Um preço destoante puxa a mediana — ex.: um produto pronto no lugar do ingrediente.
+              {souSuper
+                ? ' Como superusuário, você pode excluir a entrada ruim: a mediana e o índice são recalculados e a ação fica registrada.'
+                : ' Só superusuário pode excluir; aqui é leitura.'}
+            </p>
+            {auditMsg && <p className="text-xs text-ok">{auditMsg}</p>}
+            {entradas == null ? <p className="text-sm text-dim py-4">Carregando…</p>
+              : !entradas.length ? <p className="text-sm text-dim py-4">Sem entradas online nesta coleta.</p> : (
+              <div className="space-y-2">
+                {entradas.map(e => (
+                  <div key={e.id} className="border border-border rounded-md bg-surface px-3 py-2.5 flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <a href={e.link || undefined} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-accent truncate block">{e.titulo}</a>
+                      <p className="text-xs text-dim">{e.loja} · {e.exibicao}</p>
+                    </div>
+                    <span className="text-sm tnum text-accent shrink-0">{e.preco_bruto != null ? brl(Number(e.preco_bruto)) : '—'}</span>
+                    {souSuper && (
+                      <button disabled={auditBusy} onClick={() => excluirEntrada(e)}
+                        className="text-xs border border-danger/30 text-danger px-2.5 py-1 rounded-md hover:bg-danger/5 transition disabled:opacity-60 shrink-0">excluir</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
