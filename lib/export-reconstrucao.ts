@@ -35,6 +35,12 @@ export function abasReconstrucao(args: {
     {
       nome: 'Metadados',
       linhas: [
+        // Todo método aqui ancora no ÚLTIMO ponto medido e projeta a cesta
+        // ATUAL para trás — nunca uma série medida contínua desde o passado.
+        // Decisão padrão da auditoria docs/014 §12: nunca colar os dois
+        // productKind silenciosamente. historical_extension não existe nesta
+        // fase (exigiria série ancorada no PRIMEIRO ponto do regime canônico).
+        { Campo: 'productKind', Valor: 'current_basket_backcast' },
         { Campo: 'method', Valor: metodoExportado },
         { Campo: 'deflator', Valor: porIngrediente ? 'IPCA item a item (mapa próprio)' : (args.deflatorLabel ?? args.metodo) },
         { Campo: 'ancora', Valor: args.ancoraYm ?? null },
