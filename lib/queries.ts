@@ -614,7 +614,7 @@ export async function getContribuicoesMapa(): Promise<PontoContrib[]> {
 }
 
 export async function getIngredientes(): Promise<Ing[]> {
-  const { data } = await supabase.from('ingredientes').select('id,nome,categoria,unidade,peso_ref_g').order('nome')
+  const { data } = await supabase.from('ingredientes').select('id,nome,categoria,unidade,peso_ref_g,ativo').order('nome')
   return (data as Ing[]) || []
 }
 
