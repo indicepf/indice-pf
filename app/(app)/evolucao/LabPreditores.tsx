@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
-import { getEntradasIngrediente, excluirEntradaERecalcular, type Evolucao, type EntradaBruta } from '@/lib/queries'
+import { getEntradasIngrediente, excluirEntradaERecalcular, getIngredientes, type Evolucao, type EntradaBruta } from '@/lib/queries'
+import type { Ing } from '@/lib/types'
 import { capturarContexto } from '@/lib/contexto'
 import { Modal } from '@/components/ui'
 import { brl } from '@/lib/format'
@@ -82,6 +83,10 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
   const [snapAudit, setSnapAudit] = useState(0)
   const [auditMsg, setAuditMsg] = useState('')
   const [auditBusy, setAuditBusy] = useState(false)
+  const [ings, setIngs] = useState<Ing[]>([])
+  const [buscaIng, setBuscaIng] = useState('')
+
+  useEffect(() => { getIngredientes().then(setIngs) }, [])
 
   async function abrirAuditoria(id: number, nome: string) {
     setAuditar({ id, nome }); setEntradas(null); setAuditMsg('')
@@ -502,6 +507,28 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
             })()}
           </>
         )}
+
+        {/* auditar qualquer ingrediente — a comparação com DIEESE existe só para
+            os 13 alimentos da cesta, mas a coleta de todos os 139 é auditável */}
+        <div className="border-t border-border/60 mt-5 pt-4">
+          <p className="text-sm font-medium mb-1">Auditar qualquer ingrediente</p>
+          <p className="text-xs text-dim mb-2">
+            O DIEESE só mede 13 alimentos básicos, então a tabela acima compara só esses. Mas você pode
+            inspecionar a coleta de qualquer um dos {ings.length || 139} ingredientes do índice.
+          </p>
+          <input value={buscaIng} onChange={e => setBuscaIng(e.target.value)} placeholder="Buscar ingrediente… (ex.: carne de sol, pintado, camarão)"
+            className="bg-surface-2 border border-border rounded-md px-3 py-1.5 text-sm w-full sm:w-96 focus:outline-none focus:border-accent" />
+          {buscaIng.trim() && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {ings.filter(i => i.nome.toLowerCase().includes(buscaIng.trim().toLowerCase())).slice(0, 12).map(i => (
+                <button key={i.id} onClick={() => { abrirAuditoria(i.id, i.nome); setBuscaIng('') }}
+                  className="text-xs border border-border rounded-md px-2.5 py-1 hover:border-accent transition">{i.nome}</button>
+              ))}
+              {!ings.some(i => i.nome.toLowerCase().includes(buscaIng.trim().toLowerCase())) &&
+                <span className="text-xs text-dim">Nenhum ingrediente encontrado.</span>}
+            </div>
+          )}
+        </div>
       </div>
 
       {auditar && (
