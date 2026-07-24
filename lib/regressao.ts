@@ -21,6 +21,7 @@ export type ResultadoRegressao = {
   observado: number[]
   previsto: number[]
   residuos: number[]
+  avisoAmostra: string | null      // não-bloqueante: amostra abaixo do prudencial (n < nMin)
 }
 
 // ── álgebra linear (matrizes pequenas) ──────────────────────────────────────
@@ -109,12 +110,20 @@ export function regressaoLinear(
   const n = y.length
   const k = xs.length
   const p = k + 1   // + intercepto
-  // Gate prudencial da Fase 0 (docs/014 §12): OLS exploratória exige pelo
-  // menos max(30, 10 × parâmetros) observações. Abaixo disso o modelo NÃO é
-  // gerado — amostra curta produz associação espúria com cara de resultado.
-  const nMin = Math.max(30, 10 * p)
-  if (n < nMin) return { erro: `Amostra insuficiente para associação exploratória: ${n} observações para ${k} preditor(es); o mínimo prudencial é ${nMin}. O modelo não é gerado com a base atual.` }
+  // Piso MATEMÁTICO (não prudencial): sem gl>=1 (n>=p+1), sigma²=rss/gl e
+  // r2Ajustado/F dividem por zero e viram NaN/Infinity. Isto é a única
+  // trava — abaixo dela o resultado não é "cauteloso", é indefinido.
+  if (n < p + 1) return { erro: `Amostra matematicamente insuficiente: ${n} observação(ões) para ${k} preditor(es) + intercepto (${p}). Precisa de pelo menos ${p + 1} para ter algum grau de liberdade.` }
   for (const x of xs) if (x.valores.length !== n) return { erro: `Preditor "${x.nome}" com tamanho diferente de y.` }
+  // Gate PRUDENCIAL da Fase 0 (docs/014 §12): max(30, 10×parâmetros)
+  // observações. Por decisão explícita do responsável (24/07/2026, ciente
+  // das limitações), amostra abaixo disso NÃO bloqueia mais — só gera um
+  // aviso não-bloqueante, para o resultado nunca aparecer como robusto sem
+  // sê-lo (princípio 8 do super prompt: sem causalidade/previsão indevida).
+  const nMinPrudencial = Math.max(30, 10 * p)
+  const avisoAmostra = n < nMinPrudencial
+    ? `Amostra pequena: ${n} observação(ões) para ${k} preditor(es); o mínimo prudencial seria ${nMinPrudencial}. Resultado liberado por decisão do responsável — trate como exploração informal, não como achado estatístico validado.`
+    : null
 
   // X (n×p): coluna 1 = intercepto
   const X = y.map((_, i) => [1, ...xs.map(x => x.valores[i])])
@@ -146,5 +155,5 @@ export function regressaoLinear(
     return { nome: nomes[j], coef: b, erroPadrao: se, t, p: pValorT(t, gl) }
   })
 
-  return { coeficientes, r2, r2Ajustado, f, fP, n, gl, observado: y, previsto, residuos }
+  return { coeficientes, r2, r2Ajustado, f, fP, n, gl, observado: y, previsto, residuos, avisoAmostra }
 }
