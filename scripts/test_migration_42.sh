@@ -29,7 +29,7 @@ else
   exit 2
 fi
 
-echo "1/10 stub mínimo do schema de produção (docs/016)"
+echo "1/11 stub mínimo do schema de produção (docs/016)"
 PSQL <<'SQL'
 -- roles do Supabase referenciados pelos revokes da migração
 do $$ begin
@@ -68,7 +68,7 @@ insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobe
 values (999,1,42.00,1,0,1);
 SQL
 
-echo "2/10 aplica as migrações 42 (2x: idempotência) e 43"
+echo "2/11 aplica as migrações 42 (2x: idempotência) e 43"
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_43.sql
@@ -76,7 +76,7 @@ PSQL < supabase/migrations/supabase_migration_43.sql
 PSQL -c "create or replace function public.refresh_precos_manuais() returns void language sql as \$\$ select 1 \$\$;"
 PSQL < supabase/migrations/supabase_migration_44.sql
 
-echo "3/10 backfill de status + publicação shadow com paridade zero"
+echo "3/11 backfill de status + publicação shadow com paridade zero"
 PSQL <<'SQL'
 do $$
 declare m jsonb;
@@ -92,7 +92,7 @@ begin
 end $$;
 SQL
 
-echo "4/10 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
+echo "4/11 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
 PSQL <<'SQL'
 update ingredientes set preco_manual = 99 where id = 11;
 do $$
@@ -109,7 +109,7 @@ begin
 end $$;
 SQL
 
-echo "5/10 falha injetada faz rollback total (custo zero e conjunto incompleto)"
+echo "5/11 falha injetada faz rollback total (custo zero e conjunto incompleto)"
 PSQL <<'SQL'
 -- prato ativo cujo único ingrediente não tem preço nenhum → custo 0 → não publica
 insert into pratos values (3,'P3','norte',true);
@@ -157,7 +157,7 @@ begin
 end $$;
 SQL
 
-echo "6/10 append-only: UPDATE/DELETE em fato publicado são bloqueados"
+echo "6/11 append-only: UPDATE/DELETE em fato publicado são bloqueados"
 PSQL <<'SQL'
 do $$
 begin
@@ -178,7 +178,7 @@ begin
 end $$;
 SQL
 
-echo "7/10 integração com shadow no momento certo (migração 44)"
+echo "7/11 integração com shadow no momento certo (migração 44)"
 PSQL <<'SQL'
 update pratos set ativo = false where id = 3;   -- prato sem receita sai do universo esperado
 -- sucesso: integrar publica shadow com paridade zero por construção
@@ -206,7 +206,7 @@ begin
 end $$;
 SQL
 
-echo "8/10 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
+echo "8/11 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
 PSQL <<'SQL'
 -- duplicata no padrão real de produção (33/34): linha original sem mediana +
 -- linha regravada com valor, ANTES da migração 45 existir
@@ -253,7 +253,7 @@ begin
 end $$;
 SQL
 
-echo "9/10 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
+echo "9/11 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
 PSQL <<'SQL'
 insert into resultados_brutos (snapshot_id, ingrediente_id, titulo, preco_bruto, preco_normalizado, loja, exibicao) values
   (1, 10, 'Arroz 5kg', 25.00, 0.005, 'Loja A', 'R$ 5,00/kg'),
@@ -299,7 +299,7 @@ begin
 end $$;
 SQL
 
-echo "10/10 fontes manuais e evidência de descarte (migração 47)"
+echo "10/11 fontes manuais e evidência de descarte (migração 47)"
 PSQL <<'SQL'
 -- duas leituras manuais IGUAIS em datas diferentes = dois fatos; e uma linha
 -- só de custo_fixo, que não é observação de preço
@@ -338,4 +338,60 @@ begin
 end $$;
 SQL
 
-echo "PASS: migrações 42/43/44/45/46/47 — todos os testes passaram"
+echo "11/11 DAG estimativa/resolução e RLS (migração 48)"
+PSQL <<'SQL'
+-- observações do snapshot 6 (ing 10): mediana(0.007, 0.009) = 0.008 = precos → reconcilia
+insert into price_observations (fonte, snapshot_id, ingrediente_id, titulo, loja, preco_bruto, preco_normalizado, status)
+values ('online_scrape', 6, 10, 'Arroz A 5kg', 'Loja A', 35.00, 0.007, 'included'),
+       ('online_scrape', 6, 10, 'Arroz B 5kg', 'Loja B', 45.00, 0.009, 'included');
+SQL
+PSQL < supabase/migrations/supabase_migration_48.sql
+PSQL < supabase/migrations/supabase_migration_48.sql
+PSQL <<'SQL'
+do $$
+declare m jsonb; v int;
+begin
+  m := publicar_snapshot_shadow(6);
+  v := (m->>'calcVersion')::int;
+  assert (m->>'mediana')::numeric = 7.45, 'paridade quebrou com o DAG: mediana ' || (m->>'mediana');
+  assert (select count(*) from verificar_paridade_shadow(6, v) where diff <> 0) = 0, 'paridade legado deveria seguir zero';
+  -- estimativa online reconciliada com as observações (membership real)
+  assert (select valor from price_estimates where snapshot_id = 6 and calc_version = v and fonte = 'online' and ingrediente_id = 10) = 0.008,
+    'estimativa online != 0.008';
+  assert (select n_inputs from price_estimates where snapshot_id = 6 and calc_version = v and ingrediente_id = 10 and fonte = 'online') = 2,
+    'n_inputs != 2';
+  assert (select reconciliado from price_estimates where snapshot_id = 6 and calc_version = v and ingrediente_id = 10 and fonte = 'online') is true,
+    'estimativa deveria reconciliar';
+  assert (select count(*) from price_estimate_inputs pei join price_estimates e on e.id = pei.estimate_id
+          where e.snapshot_id = 6 and e.calc_version = v) = 2, 'membership != 2 observações';
+  -- resoluções: blend impossível aqui (ing10 só online; ing11 só manual; ing12 fixo)
+  assert (select regra from price_resolutions where snapshot_id = 6 and calc_version = v and ingrediente_id = 10) = 'online', 'regra ing10';
+  assert (select regra from price_resolutions where snapshot_id = 6 and calc_version = v and ingrediente_id = 11) = 'manual', 'regra ing11';
+  assert (select regra from price_resolutions where snapshot_id = 6 and calc_version = v and ingrediente_id = 12) = 'custo_fixo', 'regra ing12';
+  -- todo componente aponta para a sua resolução
+  assert (select count(*) from dish_cost_components where snapshot_id = 6 and calc_version = v and resolution_id is null) = 0,
+    'componente sem resolução';
+  -- snapshot sem observações: estimativa sem inputs fica com reconciliado null
+  m := publicar_snapshot_shadow(4);
+  assert (m->>'mediana')::numeric = 6.95, 'mediana do snapshot 4 mudou';
+  assert (select reconciliado from price_estimates where snapshot_id = 4
+          and calc_version = (m->>'calcVersion')::int and fonte = 'online' and ingrediente_id = 10) is null,
+    'sem inputs deveria ser reconciliado null';
+  -- append-only nas tabelas novas
+  begin
+    update price_estimates set valor = 1 where snapshot_id = 6;
+    raise exception 'UPDATE_PASSOU';
+  exception when others then
+    if sqlerrm = 'UPDATE_PASSOU' then raise; end if;
+    assert sqlerrm like '%append-only%', 'erro inesperado: ' || sqlerrm;
+  end;
+  -- RLS habilitado nas 7 tabelas canônicas
+  assert (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public' and c.relrowsecurity
+            and c.relname in ('pipeline_runs','dish_cost_components','shadow_publicacoes',
+                              'price_observations','price_estimates','price_estimate_inputs','price_resolutions')) = 7,
+    'RLS não habilitado em todas as tabelas canônicas';
+end $$;
+SQL
+
+echo "PASS: migrações 42/43/44/45/46/47/48 — todos os testes passaram"
