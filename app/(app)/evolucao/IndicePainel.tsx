@@ -13,6 +13,7 @@ import { Modal } from '@/components/ui'
 import { PREDITORES_DIARIOS, PREDITORES_MENSAIS, PREDITOR_POR_KEY, fmtValorPreditor } from '@/lib/preditores'
 import { regressaoLinear, type ResultadoRegressao } from '@/lib/regressao'
 import SeletorPrato from './SeletorPrato'
+import SeletorSeries from './SeletorSeries'
 import BotaoExportar from './BotaoExportar'
 import InfoTip from '../../InfoTip'
 
@@ -23,6 +24,10 @@ const fmtDia = (d: string) => d.split('-').reverse().join('/')   // DD/MM/AAAA
 const ts = (d: string) => new Date(d + 'T00:00:00Z').getTime()
 const r2 = (n: number) => Math.round(n * 100) / 100
 const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
+
+// liga/desliga uma chave num Set de estado
+const alternar = (set: React.Dispatch<React.SetStateAction<Set<string>>>) => (k: string) =>
+  set(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
 
 // carry-forward: último valor da série (asc) com data <= d
 const cf = (serie: { data: string; valor: number }[], d: string): number | null => {
@@ -141,28 +146,41 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   // de uma (ou escalas muito diferentes), normaliza por z-score para caberem
   // no mesmo eixo direito. Os valores originais seguem no tooltip.
   const overlayKeys = admin ? [...overlayVars].filter(k => (overlaySeries[k] || []).length) : []
-  const zAtivo = normalizar && overlayKeys.length > 1
+  // z-score é escolha do usuário, não depende de quantas séries há. Quando
+  // ligado, o ÍNDICE também é normalizado: comparar formatos só faz sentido se
+  // as duas curvas passarem pela mesma transformação (eixo único em σ).
+  const zAtivo = admin && normalizar && overlayKeys.length > 0
   const dadosChart = useMemo(() => {
     if (!overlayKeys.length) return dadosP
+    const z = (vs: (number | null)[]) => {
+      const ok = vs.filter((v): v is number => v != null)
+      const m = ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : 0
+      const s = ok.length > 1 ? Math.sqrt(ok.reduce((a, b) => a + (b - m) ** 2, 0) / (ok.length - 1)) : 0
+      return (v: number | null) => v == null ? null : s > 0 ? (v - m) / s : 0
+    }
     const brutos: Record<string, (number | null)[]> = {}
     for (const k of overlayKeys) brutos[k] = datasColeta.map(d => cf(overlaySeries[k], d))
-    const stats: Record<string, { m: number; s: number }> = {}
-    for (const k of overlayKeys) {
-      const vs = brutos[k].filter((v): v is number => v != null)
-      const m = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : 0
-      const s = vs.length > 1 ? Math.sqrt(vs.reduce((a, b) => a + (b - m) ** 2, 0) / (vs.length - 1)) : 0
-      stats[k] = { m, s }
-    }
-    return dadosP.map((d, i) => {
+    const zDe: Record<string, (v: number | null) => number | null> = {}
+    for (const k of overlayKeys) zDe[k] = z(brutos[k])
+    // normalizadores das séries do índice, na mesma janela
+    const chaveIndice = nacional ? ['mediana', 'media', 'min', 'max'] : ['blend', 'online', 'manual']
+    const zIndice: Record<string, (v: number | null) => number | null> = {}
+    if (zAtivo) for (const c of chaveIndice) zIndice[c] = z(dadosP.map((d: any) => d[c] ?? null))
+
+    return dadosP.map((d: any, i) => {
       const row: any = { ...d }
+      if (zAtivo) {
+        for (const c of chaveIndice) if (d[c] != null) { row[`z_${c}`] = zIndice[c](d[c]); row[`raw_${c}`] = d[c] }
+        row.faixa = undefined                       // banda em R$ não cabe no eixo σ
+      }
       for (const k of overlayKeys) {
         const v = brutos[k][i]
-        row[`p_${k}`] = v == null ? null : zAtivo ? (stats[k].s > 0 ? (v - stats[k].m) / stats[k].s : 0) : v
+        row[`p_${k}`] = v == null ? null : zAtivo ? zDe[k](v) : v
         row[`raw_${k}`] = v
       }
       return row
     })
-  }, [dadosP, datasColeta, overlaySeries, overlayKeys.join(','), zAtivo])
+  }, [dadosP, datasColeta, overlaySeries, overlayKeys.join(','), zAtivo, nacional])
   const pontosDiarios = dadosP.map((d: any, i) => ({ data: datasColeta[i], y: nacional ? d.mediana : d.blend }))
 
   // índice agregado por mês (média da mediana/blend das coletas do mês)
@@ -179,23 +197,27 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     }))
   }, [dadosP, nacional])
   const overlayKeysM = admin ? [...overlayVarsM].filter(k => (overlaySeriesM[k] || []).length) : []
-  const zAtivoM = normalizar && overlayKeysM.length > 1
+  const zAtivoM = admin && normalizar && overlayKeysM.length > 0
   const dadosMes = useMemo(() => {
     if (!overlayKeysM.length) return pontosMensais
+    const z = (vs: (number | null)[]) => {
+      const ok = vs.filter((v): v is number => v != null)
+      const m = ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : 0
+      const s = ok.length > 1 ? Math.sqrt(ok.reduce((a, b) => a + (b - m) ** 2, 0) / (ok.length - 1)) : 0
+      return (v: number | null) => v == null ? null : s > 0 ? (v - m) / s : 0
+    }
     const brutos: Record<string, (number | null)[]> = {}
     for (const k of overlayKeysM) brutos[k] = pontosMensais.map(p => cf(overlaySeriesM[k], p.data))
-    const stats: Record<string, { m: number; s: number }> = {}
-    for (const k of overlayKeysM) {
-      const vs = brutos[k].filter((v): v is number => v != null)
-      const m = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : 0
-      const s = vs.length > 1 ? Math.sqrt(vs.reduce((a, b) => a + (b - m) ** 2, 0) / (vs.length - 1)) : 0
-      stats[k] = { m, s }
-    }
+    const zDe: Record<string, (v: number | null) => number | null> = {}
+    for (const k of overlayKeysM) zDe[k] = z(brutos[k])
+    const zInd = zAtivoM ? z(pontosMensais.map(p => p.indice)) : null
+
     return pontosMensais.map((p, i) => {
       const row: any = { ...p }
+      if (zInd) { row.z_indice = zInd(p.indice); row.raw_indice = p.indice }
       for (const k of overlayKeysM) {
         const v = brutos[k][i]
-        row[`p_${k}`] = v == null ? null : zAtivoM ? (stats[k].s > 0 ? (v - stats[k].m) / stats[k].s : 0) : v
+        row[`p_${k}`] = v == null ? null : zAtivoM ? zDe[k](v) : v
         row[`raw_${k}`] = v
       }
       return row
@@ -323,36 +345,17 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         {admin && (
           <div className="border border-brand-roxo/30 bg-brand-roxo/5 rounded-lg p-4 space-y-3">
             <p className="text-xs font-semibold text-brand-roxo uppercase tracking-wide">Análise (admin) · séries diárias</p>
-            <div>
-              <p className="text-xs text-dim mb-1.5">Sobrepor no eixo direito (pode marcar várias)</p>
-              <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
-                {PREDITORES_DIARIOS.map(p => (
-                  <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                    <input type="checkbox" checked={overlayVars.has(p.key)}
-                      onChange={() => setOverlayVars(s => { const n = new Set(s); n.has(p.key) ? n.delete(p.key) : n.add(p.key); return n })} />
-                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: CHART_SERIES[PREDITORES_DIARIOS.findIndex(x => x.key === p.key) % CHART_SERIES.length] }} />
-                    {p.label}
-                  </label>
-                ))}
-                {overlayVars.size > 1 && (
-                  <label className="flex items-center gap-1.5 cursor-pointer text-xs ml-2 text-dim">
-                    <input type="checkbox" checked={normalizar} onChange={e => setNormalizar(e.target.checked)} />
-                    Normalizar (z-score)
-                  </label>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-dim mb-1.5">Regressão: índice {nacional ? '(mediana nacional)' : '(blend do prato)'} ~ preditores diários</p>
-              <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
-                {PREDITORES_DIARIOS.map(p => (
-                  <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                    <input type="checkbox" checked={regVars.has(p.key)}
-                      onChange={() => setRegVars(s => { const n = new Set(s); n.has(p.key) ? n.delete(p.key) : n.add(p.key); return n })} />
-                    {p.label}
-                  </label>
-                ))}
-              </div>
+            <SeletorSeries titulo="Sobrepor no gráfico" opcoes={PREDITORES_DIARIOS}
+              selecionadas={overlayVars} onToggle={alternar(setOverlayVars)}
+              cor={k => CHART_SERIES[([...overlayVars].indexOf(k) + 1) % CHART_SERIES.length]} />
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-dim w-fit">
+              <input type="checkbox" checked={normalizar} onChange={e => setNormalizar(e.target.checked)} />
+              Normalizar em z-score (índice e preditores no mesmo eixo, em desvios-padrão)
+            </label>
+            <div className="border-t border-border/60 pt-3">
+              <SeletorSeries titulo={`Regressão: índice ${nacional ? '(mediana nacional)' : '(blend do prato)'} ~ preditores`}
+                opcoes={PREDITORES_DIARIOS} selecionadas={regVars} onToggle={alternar(setRegVars)}
+                cor={() => COR.muted} />
               <button onClick={() => gerarModelo([...regVars], pontosDiarios)} disabled={!regVars.size || calculando} className="btn-mk sm mt-2">
                 {calculando ? 'Calculando…' : 'Gerar modelo'}
               </button>
@@ -361,7 +364,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         )}
 
         {/* gráfico */}
-        <div className="border border-border rounded-lg bg-surface p-4">
+        <div className="panel p-5">
           <div className="flex items-start justify-between gap-3">
           <p className="text-sm font-medium mb-1">
             {nacional ? 'Custo do prato feito (R$) — distribuição dos 100 pratos' : 'Custo do prato (R$) — por fonte'}
@@ -388,11 +391,11 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                 <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                   ticks={ticks} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
                   tick={{ fontSize: 13, fill: COR.muted }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 13, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
-                {overlayKeys.length > 0 && (
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 13, fill: COR.muted }} width={zAtivo ? 44 : 64}
+                <YAxis yAxisId="left" tick={{ fontSize: 13, fill: COR.muted }} width={zAtivo ? 46 : 48}
+                  tickFormatter={v => zAtivo ? `${Number(v).toFixed(1)}σ` : `R$${v}`} />
+                {overlayKeys.length > 0 && !zAtivo && (
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 13, fill: COR.muted }} width={64}
                     tickFormatter={v => {
-                      if (zAtivo) return `${Number(v).toFixed(1)}σ`
                       const u = PREDITOR_POR_KEY[overlayKeys[0]]?.unidade
                       return u === 'R$' ? `R$${v}` : u === '%' ? `${v}%` : `${v}`
                     }} />
@@ -405,6 +408,10 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                     const info = PREDITOR_POR_KEY[k]
                     return raw == null ? '—' : fmtValorPreditor(Number(raw), info?.formato ?? 'numero')
                   }
+                  if (dk.startsWith('z_')) {                     // índice normalizado: mostra o R$ original
+                    const raw = p?.payload?.[`raw_${dk.slice(2)}`]
+                    return raw == null ? '—' : `R$ ${Number(raw).toFixed(2)}`
+                  }
                   return Array.isArray(v)
                     ? `R$ ${Number(v[0]).toFixed(2)} – R$ ${Number(v[1]).toFixed(2)}`
                     : `R$ ${Number(v).toFixed(2)}`
@@ -413,23 +420,23 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                 <Legend wrapperStyle={{ fontSize: 13 }} />
                 {nacional ? (
                   <>
-                    {banda && <Area yAxisId="left" type="monotone" dataKey="faixa" name="faixa mín–máx" fill={COR.paprika} fillOpacity={0.1} stroke="none" />}
-                    {metricas.mediana && <Area yAxisId="left" type="monotone" dataKey="mediana" name="Mediana" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill="url(#grad-ind)" />}
-                    {metricas.media && <Line yAxisId="left" type="monotone" dataKey="media" name="Média" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />}
-                    {metricas.min && <Line yAxisId="left" type="monotone" dataKey="min" name="Mínimo" stroke={COR.muted} strokeWidth={1.5} dot={{ r: 2 }} />}
-                    {metricas.max && <Line yAxisId="left" type="monotone" dataKey="max" name="Máximo" stroke={COR.ink} strokeWidth={1.5} dot={{ r: 2 }} />}
+                    {banda && !zAtivo && <Area yAxisId="left" type="monotone" dataKey="faixa" name="faixa mín–máx" fill={COR.paprika} fillOpacity={0.1} stroke="none" />}
+                    {metricas.mediana && <Area yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_mediana' : 'mediana'} name="Mediana" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivo ? 'none' : 'url(#grad-ind)'} />}
+                    {metricas.media && <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_media' : 'media'} name="Média" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />}
+                    {metricas.min && <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_min' : 'min'} name="Mínimo" stroke={COR.muted} strokeWidth={1.5} dot={{ r: 2 }} />}
+                    {metricas.max && <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_max' : 'max'} name="Máximo" stroke={COR.ink} strokeWidth={1.5} dot={{ r: 2 }} />}
                   </>
                 ) : (
                   <>
-                    <Area yAxisId="left" type="monotone" dataKey="blend" name="Blend" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill="url(#grad-ind)" />
-                    <Line yAxisId="left" type="monotone" dataKey="online" name="Online" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />
-                    <Line yAxisId="left" type="monotone" dataKey="manual" name="Manual" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
+                    <Area yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_blend' : 'blend'} name="Blend" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivo ? 'none' : 'url(#grad-ind)'} />
+                    <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_online' : 'online'} name="Online" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />
+                    <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_manual' : 'manual'} name="Manual" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />
                   </>
                 )}
-                {overlayKeys.map(k => (
-                  <Line key={k} yAxisId="right" type="monotone" dataKey={`p_${k}`}
+                {overlayKeys.map((k, i) => (
+                  <Line key={k} yAxisId={zAtivo ? 'left' : 'right'} type="monotone" dataKey={`p_${k}`}
                     name={PREDITOR_POR_KEY[k]?.label || k}
-                    stroke={CHART_SERIES[PREDITORES_DIARIOS.findIndex(x => x.key === k) % CHART_SERIES.length]}
+                    stroke={CHART_SERIES[(i + 1) % CHART_SERIES.length]}
                     strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls />
                 ))}
               </ComposedChart>
@@ -442,36 +449,13 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
             <p className="text-sm font-medium">Índice mensal × preditores mensais (admin)
               <InfoTip texto="Índice agregado por mês (média das coletas do mês) para casar com as variáveis mensais do IPCA/juros/salário. Sobreponha uma variável no eixo direito ou rode a regressão mensal." /></p>
             <div className="border border-brand-roxo/30 bg-brand-roxo/5 rounded-lg p-3 space-y-3">
-              <div>
-                <p className="text-xs text-dim mb-1.5">Sobrepor no eixo direito (pode marcar várias)</p>
-                <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
-                  {PREDITORES_MENSAIS.map(p => (
-                    <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                      <input type="checkbox" checked={overlayVarsM.has(p.key)}
-                        onChange={() => setOverlayVarsM(s => { const n = new Set(s); n.has(p.key) ? n.delete(p.key) : n.add(p.key); return n })} />
-                      <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: CHART_SERIES[PREDITORES_MENSAIS.findIndex(x => x.key === p.key) % CHART_SERIES.length] }} />
-                      {p.label}
-                    </label>
-                  ))}
-                  {overlayVarsM.size > 1 && (
-                    <label className="flex items-center gap-1.5 cursor-pointer text-xs ml-2 text-dim">
-                      <input type="checkbox" checked={normalizar} onChange={e => setNormalizar(e.target.checked)} />
-                      Normalizar (z-score)
-                    </label>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-dim mb-1.5">Regressão: índice mensal ~ preditores mensais</p>
-                <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap">
-                  {PREDITORES_MENSAIS.map(p => (
-                    <label key={p.key} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                      <input type="checkbox" checked={regVarsM.has(p.key)}
-                        onChange={() => setRegVarsM(s => { const n = new Set(s); n.has(p.key) ? n.delete(p.key) : n.add(p.key); return n })} />
-                      {p.label}
-                    </label>
-                  ))}
-                </div>
+              <SeletorSeries titulo="Sobrepor no gráfico" opcoes={PREDITORES_MENSAIS}
+                selecionadas={overlayVarsM} onToggle={alternar(setOverlayVarsM)}
+                cor={k => CHART_SERIES[([...overlayVarsM].indexOf(k) + 1) % CHART_SERIES.length]} />
+              <div className="border-t border-border/60 pt-3">
+                <SeletorSeries titulo="Regressão: índice mensal ~ preditores mensais"
+                  opcoes={PREDITORES_MENSAIS} selecionadas={regVarsM} onToggle={alternar(setRegVarsM)}
+                  cor={() => COR.muted} />
                 <button onClick={() => gerarModelo([...regVarsM], pontosMensais.map(p => ({ data: p.data, y: p.indice })))}
                   disabled={!regVarsM.size || calculando} className="btn-mk sm mt-2">
                   {calculando ? 'Calculando…' : 'Gerar modelo mensal'}
@@ -491,11 +475,11 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                   <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                     ticks={dadosMes.map(p => p.ts)} tickFormatter={(t: number) => new Date(t).toISOString().slice(0, 7).split('-').reverse().join('/')}
                     tick={{ fontSize: 12, fill: COR.muted }} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 12, fill: COR.muted }} width={48} tickFormatter={v => `R$${v}`} />
-                  {overlayKeysM.length > 0 && (
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: COR.muted }} width={zAtivoM ? 44 : 64}
+                  <YAxis yAxisId="left" tick={{ fontSize: 12, fill: COR.muted }} width={zAtivoM ? 46 : 48}
+                    tickFormatter={v => zAtivoM ? `${Number(v).toFixed(1)}σ` : `R$${v}`} />
+                  {overlayKeysM.length > 0 && !zAtivoM && (
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: COR.muted }} width={64}
                       tickFormatter={v => {
-                        if (zAtivoM) return `${Number(v).toFixed(1)}σ`
                         const u = PREDITOR_POR_KEY[overlayKeysM[0]]?.unidade
                         return u === 'R$' ? `R$${v}` : u === '%' ? `${v}%` : `${v}`
                       }} />
@@ -508,14 +492,16 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                       const info = PREDITOR_POR_KEY[k]
                       return raw == null ? '—' : fmtValorPreditor(Number(raw), info?.formato ?? 'numero')
                     }
+                    if (dk === 'z_indice') return `R$ ${Number(p?.payload?.raw_indice).toFixed(2)}`
                     return `R$ ${Number(v).toFixed(2)}`
                   }} labelFormatter={(t: any) => new Date(t).toISOString().slice(0, 7).split('-').reverse().join('/')} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Area yAxisId="left" type="monotone" dataKey="indice" name="Índice (mês)" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill="url(#grad-mes)" />
-                  {overlayKeysM.map(k => (
-                    <Line key={k} yAxisId="right" type="monotone" dataKey={`p_${k}`}
+                  <Area yAxisId="left" type="monotone" dataKey={zAtivoM ? 'z_indice' : 'indice'} name="Índice (mês)"
+                    stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivoM ? 'none' : 'url(#grad-mes)'} />
+                  {overlayKeysM.map((k, i) => (
+                    <Line key={k} yAxisId={zAtivoM ? 'left' : 'right'} type="monotone" dataKey={`p_${k}`}
                       name={PREDITOR_POR_KEY[k]?.label || k}
-                      stroke={CHART_SERIES[PREDITORES_MENSAIS.findIndex(x => x.key === k) % CHART_SERIES.length]}
+                      stroke={CHART_SERIES[(i + 1) % CHART_SERIES.length]}
                       strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls />
                   ))}
                 </ComposedChart>
@@ -525,7 +511,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         )}
 
         {/* composição por grupo (total quando nacional; do prato quando selecionado) */}
-        <div className="border border-border rounded-lg bg-surface p-4">
+        <div className="panel p-5">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div>
               <p className="text-sm font-medium">{nacional ? 'Composição do custo por grupo de alimento' : 'Composição do prato por grupo'}
@@ -560,7 +546,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
           const cheio = its.reduce((s, it) => s + it.custo, 0)
           const atual = its.reduce((s, it) => s + (off.has(it.ingrediente_id) ? 0 : it.custo), 0)
           return (
-            <div className="border border-border rounded-lg bg-surface p-4">
+            <div className="panel p-5">
               <p className="text-sm font-medium mb-1">Simular sem ingredientes
                 <InfoTip texto="Desmarque ingredientes para ver o custo do prato sem eles (última coleta, blend). O R$ de cada item é o custo da quantidade da receita (em gramas)." /></p>
               <p className="text-xs text-dim mb-3">

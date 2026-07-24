@@ -213,7 +213,7 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
       {erroIng && <p className="text-xs text-accent -mt-4">Falha ao calcular por ingrediente: {erroIng}</p>}
 
       {/* reconstrução */}
-      <div className="border border-border rounded-lg bg-surface p-4">
+      <div className="panel p-5">
         <div className="flex items-start justify-between gap-3 mb-1">
           <p className="text-sm font-medium">Índice PF reconstruído — quanto custaria no passado
             <InfoTip texto="Ancora no primeiro mês com coleta real e projeta para trás pela variação do deflator escolhido. Linha sólida = medido; tracejada = estimado." />
@@ -261,7 +261,7 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
       </div>
 
       {/* séries DIEESE — preço real, histórico longo */}
-      <div className="border border-border rounded-lg bg-surface p-4">
+      <div className="panel p-5">
         <p className="text-sm font-medium mb-1">Preço real dos alimentos — cesta básica DIEESE
           <InfoTip texto="Preço médio em R$ medido nas capitais pelo DIEESE (mediana entre elas), mensal desde jul/1994. Dado medido por fonte independente — diferente da reconstrução acima." />
         </p>
@@ -296,7 +296,7 @@ export default function LabPreditores({ ev }: { ev: Evolucao }) {
       </div>
 
       {/* confiabilidade: nossa medição × DIEESE */}
-      <div className="border border-border rounded-lg bg-surface p-4">
+      <div className="panel p-5">
         <p className="text-sm font-medium mb-1">Confiabilidade — nosso preço × preço do DIEESE
           <InfoTip texto="Duas medições independentes do mesmo produto. Razão = nosso preço ÷ preço do DIEESE. Perto de 1,00 significa que as duas fontes concordam; divergência grande em item de comparação direta é sinal para investigar nossa coleta." />
         </p>
