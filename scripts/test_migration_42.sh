@@ -29,7 +29,7 @@ else
   exit 2
 fi
 
-echo "1/7 stub mínimo do schema de produção (docs/016)"
+echo "1/8 stub mínimo do schema de produção (docs/016)"
 PSQL <<'SQL'
 -- roles do Supabase referenciados pelos revokes da migração
 do $$ begin
@@ -47,6 +47,7 @@ create table receitas (id bigint generated always as identity primary key, prato
 -- (duplicatas reais encontradas nos snapshots 33/34 — docs/018)
 create table precos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, mediana_normalizada numeric);
 create table custos_pratos (id bigint generated always as identity primary key, snapshot_id bigint, prato_id bigint, custo_total numeric, ingredientes_cobertos int, ingredientes_estimados int, ingredientes_total int, unique (snapshot_id, prato_id));
+create table audit_log (id bigint generated always as identity primary key, tabela text, registro_id text, acao text, ator uuid, dados_antes jsonb, dados_depois jsonb, criado_em timestamptz default now());
 
 -- fixtures: 2 pratos ativos; online (0.005/g), manual (20 R$/kg), custo fixo (0.50)
 insert into pratos values (1,'P1','sudeste',true),(2,'P2','sul',true);
@@ -65,7 +66,7 @@ insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobe
 values (999,1,42.00,1,0,1);
 SQL
 
-echo "2/7 aplica as migrações 42 (2x: idempotência) e 43"
+echo "2/8 aplica as migrações 42 (2x: idempotência) e 43"
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_43.sql
@@ -73,7 +74,7 @@ PSQL < supabase/migrations/supabase_migration_43.sql
 PSQL -c "create or replace function public.refresh_precos_manuais() returns void language sql as \$\$ select 1 \$\$;"
 PSQL < supabase/migrations/supabase_migration_44.sql
 
-echo "3/7 backfill de status + publicação shadow com paridade zero"
+echo "3/8 backfill de status + publicação shadow com paridade zero"
 PSQL <<'SQL'
 do $$
 declare m jsonb;
@@ -89,7 +90,7 @@ begin
 end $$;
 SQL
 
-echo "4/7 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
+echo "4/8 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
 PSQL <<'SQL'
 update ingredientes set preco_manual = 99 where id = 11;
 do $$
@@ -106,7 +107,7 @@ begin
 end $$;
 SQL
 
-echo "5/7 falha injetada faz rollback total (custo zero e conjunto incompleto)"
+echo "5/8 falha injetada faz rollback total (custo zero e conjunto incompleto)"
 PSQL <<'SQL'
 -- prato ativo cujo único ingrediente não tem preço nenhum → custo 0 → não publica
 insert into pratos values (3,'P3','norte',true);
@@ -154,7 +155,7 @@ begin
 end $$;
 SQL
 
-echo "6/7 append-only: UPDATE/DELETE em fato publicado são bloqueados"
+echo "6/8 append-only: UPDATE/DELETE em fato publicado são bloqueados"
 PSQL <<'SQL'
 do $$
 begin
@@ -175,7 +176,7 @@ begin
 end $$;
 SQL
 
-echo "7/7 integração com shadow no momento certo (migração 44)"
+echo "7/8 integração com shadow no momento certo (migração 44)"
 PSQL <<'SQL'
 update pratos set ativo = false where id = 3;   -- prato sem receita sai do universo esperado
 -- sucesso: integrar publica shadow com paridade zero por construção
@@ -203,4 +204,51 @@ begin
 end $$;
 SQL
 
-echo "PASS: migrações 42/43/44 — todos os testes passaram"
+echo "8/8 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
+PSQL <<'SQL'
+-- duplicata no padrão real de produção (33/34): linha original sem mediana +
+-- linha regravada com valor, ANTES da migração 45 existir
+insert into snapshots (data) values ('2026-08-17');   -- id 6
+insert into precos (snapshot_id, ingrediente_id, mediana_normalizada) values (6,10,null),(6,10,0.008);
+SQL
+PSQL < supabase/migrations/supabase_migration_45.sql
+PSQL < supabase/migrations/supabase_migration_45.sql
+PSQL <<'SQL'
+do $$
+declare vencedora bigint;
+begin
+  -- dedup: nenhuma dupla ativa restante em nenhum snapshot
+  assert (select count(*) from (
+    select 1 from precos where ingrediente_id is not null and superseded_by is null
+    group by snapshot_id, ingrediente_id having count(*) > 1) g) = 0, 'restaram duplicatas ativas';
+  -- snapshot 6: vence a linha com valor; a nula está superseded com trilha
+  select id into vencedora from precos where snapshot_id = 6 and superseded_by is null;
+  assert (select mediana_normalizada from precos where id = vencedora) = 0.008, 'vencedora errada no snapshot 6';
+  assert (select superseded_by from precos where snapshot_id = 6 and id <> vencedora) = vencedora, 'superseded_by não aponta para a vencedora';
+  assert (select count(*) from audit_log where acao = 'supersede_dedup') >= 2, 'dedup sem trilha em audit_log';
+  -- nova duplicata ativa é impossível
+  begin
+    insert into precos (snapshot_id, ingrediente_id, mediana_normalizada) values (6,10,0.009);
+    raise exception 'DUP_PASSOU';
+  exception when others then
+    if sqlerrm = 'DUP_PASSOU' then raise; end if;
+    assert sqlerrm like '%uq_precos_ativos%', 'erro inesperado: ' || sqlerrm;
+  end;
+end $$;
+-- integração usa só a linha ativa: P1 = 1.6+9.9+0.5 = 12.00 ; P2 = 2.4+0.5 = 2.90
+select integrar_snapshot(6);
+do $$
+begin
+  assert (select custo_total_pf from snapshots where id = 6) = 7.45, 'mediana legada != 7.45';
+  assert (select mediana from shadow_publicacoes where snapshot_id = 6) = 7.45, 'mediana shadow != 7.45';
+  assert (select count(*) from verificar_paridade_shadow(6) where diff <> 0) = 0, 'paridade do snapshot 6 deveria ser zero';
+  -- lineage aponta para a linha ativa, nunca para a superseded
+  assert (select count(*) from dish_cost_components d join precos p on p.id = d.preco_id
+          where d.snapshot_id = 6 and p.superseded_by is not null) = 0, 'componente referenciou linha superseded';
+  -- o snapshot 5 (recusado no passo 7 por duplicata) agora publica — como 33/34 em produção
+  perform publicar_snapshot_shadow(5);
+  assert (select mediana from shadow_publicacoes where snapshot_id = 5) = 7.20, 'mediana do snapshot 5 pós-dedup != 7.20';
+end $$;
+SQL
+
+echo "PASS: migrações 42/43/44/45 — todos os testes passaram"

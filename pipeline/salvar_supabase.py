@@ -24,6 +24,40 @@ HEADERS = {
     "Prefer":        "return=representation",
 }
 
+# ─── Ledger de execução (Fase 2, docs/019): pipeline_runs ────────────────────
+# Melhor esforço: falha ao registrar não derruba o job (o ledger observa o
+# pipeline, não pode virar ponto único de falha), mas é impressa.
+RUN_INFO = {}   # main() preenche snapshot_id/contagens para o registro final
+
+def _run_start():
+    try:
+        r = requests.post(f"{SUPABASE_URL}/rest/v1/pipeline_runs", headers=HEADERS,
+                          json={"kind": "coleta_salvar", "status": "started"}, timeout=30)
+        if r.status_code in (200, 201):
+            return r.json()[0]["id"]
+        print(f"⚠️  ledger: início não registrado ({r.status_code})")
+    except Exception as e:
+        print(f"⚠️  ledger: início não registrado ({e})")
+    return None
+
+def _run_end(run_id, status, error=None):
+    if run_id is None:
+        return
+    corpo = {"status": status, "finished_at": datetime.now().astimezone().isoformat()}
+    if RUN_INFO:
+        corpo["counts"] = {k: v for k, v in RUN_INFO.items() if k != "snapshot_id"}
+        if RUN_INFO.get("snapshot_id") is not None:
+            corpo["snapshot_id"] = RUN_INFO["snapshot_id"]
+    if error:
+        corpo["error"] = str(error)[:500]
+    try:
+        r = requests.patch(f"{SUPABASE_URL}/rest/v1/pipeline_runs?id=eq.{run_id}",
+                           headers=HEADERS, json=corpo, timeout=30)
+        if r.status_code not in (200, 204):
+            print(f"⚠️  ledger: fim não registrado ({r.status_code})")
+    except Exception as e:
+        print(f"⚠️  ledger: fim não registrado ({e})")
+
 def supabase_post(tabela, dados):
     url  = f"{SUPABASE_URL}/rest/v1/{tabela}"
     resp = requests.post(url, headers=HEADERS, json=dados, timeout=60)
@@ -106,7 +140,9 @@ def main():
             print("🛑 Abortado: limpeza dos preços do merge falhou."); sys.exit(1)
         if not supabase_delete(f"resultados_brutos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})"):
             print("🛑 Abortado: limpeza dos resultados brutos do merge falhou."); sys.exit(1)
+        RUN_INFO.update(snapshot_id=snapshot_id, modo="merge", precos=len(resumo), brutos=len(resultados))
         falhas = _salvar_precos(snapshot_id, resumo, resultados)
+        RUN_INFO["falhas"] = falhas
         if falhas:
             print(f"\n❌ Merge com {falhas} falha(s) de gravação — snapshot pode estar parcial.")
             sys.exit(1)
@@ -134,7 +170,9 @@ def main():
         print("🛑 Abortado: limpeza dos preços falhou."); sys.exit(1)
     if not supabase_delete(f"resultados_brutos?snapshot_id=eq.{snapshot_id}"):
         print("🛑 Abortado: limpeza dos resultados brutos falhou."); sys.exit(1)
+    RUN_INFO.update(snapshot_id=snapshot_id, modo="completo", precos=len(resumo), brutos=len(resultados))
     falhas = _salvar_precos(snapshot_id, resumo, resultados)
+    RUN_INFO["falhas"] = falhas
 
     # falha em qualquer preço/lote NÃO pode terminar como sucesso com exit 0:
     # o workflow seguiria e anunciaria snapshot completo com carga parcial
@@ -211,4 +249,17 @@ def _salvar_precos(snapshot_id, resumo, resultados):
 
 
 if __name__ == "__main__":
-    main()
+    _run = _run_start()
+    try:
+        main()
+    except SystemExit as e:
+        if e.code:
+            _run_end(_run, "failed", error=f"abortado com exit {e.code}")
+        else:
+            _run_end(_run, "published")
+        raise
+    except Exception as e:
+        _run_end(_run, "failed", error=e)
+        raise
+    else:
+        _run_end(_run, "published")
