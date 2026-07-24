@@ -38,22 +38,44 @@ function num(txt: string): number | null {
   return isNaN(v) ? null : v
 }
 
+type PontoCapital = { data: string; capital: string; valor: number }
+type Parsed = { pontos: { data: string; valor: number }[]; porCapital: PontoCapital[] }
+
 // A resposta é uma tabela: 1ª linha = capitais, demais = "MM-AAAA" + um valor
-// por capital. Devolve a mediana das capitais com dado em cada mês.
-function parseTabela(html: string): { data: string; valor: number }[] {
+// por capital. Devolve a mediana nacional por mês (leitura vigente,
+// inalterada) E o valor de cada capital (Fase 3, LAB-016: o painel de
+// capitais que respondem muda no tempo — perder isso mistura variação de
+// preço com variação de composição da amostra).
+export function parseTabela(html: string): Parsed {
   const tabela = html.match(/<table[\s\S]*?<\/table>/i)
-  if (!tabela) return []
+  if (!tabela) return { pontos: [], porCapital: [] }
   const linhas = tabela[0].match(/<tr[\s\S]*?<\/tr>/gi) ?? []
-  const out: { data: string; valor: number }[] = []
+  const pontos: { data: string; valor: number }[] = []
+  const porCapital: PontoCapital[] = []
+  let capitais: string[] | null = null
   for (const linha of linhas) {
     const cels = (linha.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) ?? []).map(c => semTags(c.replace(/<t[dh][^>]*>/i, '').replace(/<\/t[dh]>/i, '')))
     if (!cels.length) continue
     const m = cels[0].match(/^(\d{2})[-/](\d{4})$/)
-    if (!m) continue                                   // cabeçalho ou linha de nota
-    const vals = cels.slice(1).map(num).filter((v): v is number => v != null && v > 0)
-    if (vals.length) out.push({ data: `${m[2]}-${m[1]}-01`, valor: Math.round(mediana(vals) * 100) / 100 })
+    if (!m) {
+      // primeira linha sem data no formato esperado = cabeçalho com os nomes
+      // das capitais (uma vez só; ignora eventuais linhas de nota depois)
+      if (!capitais && cels.length > 1) capitais = cels.slice(1)
+      continue
+    }
+    const data = `${m[2]}-${m[1]}-01`
+    const brutos = cels.slice(1)
+    const vals: number[] = []
+    brutos.forEach((txt, i) => {
+      const v = num(txt)
+      if (v == null || v <= 0) return
+      vals.push(v)
+      const nomeCap = capitais?.[i] || `col${i}`
+      porCapital.push({ data, capital: nomeCap, valor: Math.round(v * 100) / 100 })
+    })
+    if (vals.length) pontos.push({ data, valor: Math.round(mediana(vals) * 100) / 100 })
   }
-  return out
+  return { pontos, porCapital }
 }
 
 async function importarProduto(cod: number, serie: string, de: string): Promise<number> {
@@ -67,7 +89,7 @@ async function importarProduto(cod: number, serie: string, de: string): Promise<
     body, signal: AbortSignal.timeout(45_000),
   })
   if (!res.ok) throw new Error(`DIEESE ${serie} HTTP ${res.status}`)
-  const pontos = parseTabela(await res.text())
+  const { pontos, porCapital } = parseTabela(await res.text())
   // 0 linhas = markup mudou ou resposta vazia; nunca é sucesso (Fase 0D)
   if (pontos.length < FONTE_DIEESE.minMesesPorProduto)
     throw new Error(`DIEESE ${serie}: ${pontos.length} linha(s) no HTML — markup mudado ou resposta vazia`)
@@ -81,6 +103,18 @@ async function importarProduto(cod: number, serie: string, de: string): Promise<
     if (error) throw new Error(`upsert ${serie}: ${error.message}`)
     total += lote.length
   }
+
+  // Fase 3 (LAB-016): preserva cada capital além da mediana nacional. Melhor
+  // esforço — falha aqui não derruba o cron (a leitura vigente não depende
+  // disso); erro fica no log para investigação.
+  const rowsCap = porCapital.map(p => ({ serie, capital: p.capital, data: p.data, valor: p.valor }))
+  for (let i = 0; i < rowsCap.length; i += 500) {
+    const lote = rowsCap.slice(i, i + 500)
+    const { error } = await db.from('dieese_capital_observations')
+      .upsert(lote, { onConflict: 'serie,capital,data,valor', ignoreDuplicates: true })
+    if (error) console.error(`[importar-dieese] capitais ${serie}:`, error.message)
+  }
+
   return total
 }
 
