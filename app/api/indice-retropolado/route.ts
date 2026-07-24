@@ -233,6 +233,12 @@ export async function GET(req: NextRequest) {
   }
 
   const corpo = {
+    // Backcast da cesta atual: ancora no ÚLTIMO ponto medido e projeta para
+    // trás com a cesta/receitas de hoje. Nunca é "extensão histórica" de uma
+    // série medida contínua — decisão padrão da auditoria docs/014 §12.
+    // (productKind=historical_extension não existe: exigiria uma série medida
+    // ancorada no PRIMEIRO ponto do regime canônico, que não é construída aqui.)
+    productKind: 'current_basket_backcast' as const,
     ancora: { ym: ymAncora, data: ancora.data, snapshotId: ancora.id },
     gate: { versao: GATE_ANCORA.versao, rejeitados },
     confianca: [...conf],

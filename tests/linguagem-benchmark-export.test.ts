@@ -68,6 +68,7 @@ describe('golden da exportação da reconstrução', () => {
       confianca: 'alta,media', coberturaPct: 89.7,
     })
     const meta = Object.fromEntries(abas[1].linhas.map(l => [l.Campo, l.Valor]))
+    expect(meta.productKind).toBe('current_basket_backcast')
     expect(meta.method).toBe('ipca_by_ingredient')
     expect(String(meta.deflator)).not.toMatch(/dieese/i)
     expect(meta.ancora).toBe('2026-07')

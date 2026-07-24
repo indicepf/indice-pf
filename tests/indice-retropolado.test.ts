@@ -92,6 +92,7 @@ describe('contrato ok', () => {
     expect(res.status).toBe(200)
     const j = await res.json()
     expect(j.status).toBe('ok')
+    expect(j.productKind).toBe('current_basket_backcast')
     expect(j.ancora).toMatchObject({ ym: '2026-07', snapshotId: 2 })
     expect(j.serie.map((p: { ym: string }) => p.ym)).toEqual(['2026-05', '2026-06', '2026-07'])
     expect(j.serie[2].indice).toBe(10)   // no mês da âncora reproduz o medido
@@ -110,6 +111,7 @@ describe('gaps (DATA_INCOMPLETE)', () => {
     const j = await res.json()
     expect(j.status).toBe('incomplete')
     expect(j.code).toBe('DATA_INCOMPLETE')
+    expect(j.productKind).toBe('current_basket_backcast')
     expect(j.gaps).toContainEqual({ series: 'ipca_item_a', month: '2026-07', reason: 'sem variação do item nem do grupo no mês' })
     // nenhum ponto além do primeiro gap: junho não é reconstruído igual à âncora
     expect(j.serie.map((p: { ym: string }) => p.ym)).toEqual(['2026-07'])

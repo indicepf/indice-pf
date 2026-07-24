@@ -294,7 +294,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
       <div className="panel p-5 overflow-visible">
         <div className="flex items-start justify-between gap-3 mb-1">
           <p className="text-sm font-medium">Índice PF reconstruído — quanto custaria no passado
-            <InfoTip texto="Ancora no primeiro mês com coleta real e projeta para trás pela variação do deflator escolhido. Linha sólida = medido; tracejada = estimado." />
+            <InfoTip texto="Cenário de backcast: ancora na cesta e nos preços ATUAIS e projeta para trás pela variação do deflator escolhido. Não é uma série medida contínua desde o passado. Linha sólida = medido; tracejada = estimado (productKind=current_basket_backcast)." />
           </p>
           {reconstrucao.length > 0 && (
             <BotaoExportar nome="indice-pf-reconstruido" abas={() => abasReconstrucao({
