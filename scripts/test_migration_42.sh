@@ -43,7 +43,9 @@ create table snapshots (
 create table pratos (id bigint primary key, nome text, regiao text, ativo boolean);
 create table ingredientes (id bigint primary key, nome text, custo_fixo numeric, preco_manual numeric, ativo boolean);
 create table receitas (id bigint generated always as identity primary key, prato_id bigint, ingrediente_id bigint, qtd_g numeric);
-create table precos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, mediana_normalizada numeric, unique (snapshot_id, ingrediente_id));
+-- sem unique (snapshot_id, ingrediente_id): produção NÃO tem essa constraint
+-- (duplicatas reais encontradas nos snapshots 33/34 — docs/018)
+create table precos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, mediana_normalizada numeric);
 create table custos_pratos (id bigint generated always as identity primary key, snapshot_id bigint, prato_id bigint, custo_total numeric, ingredientes_cobertos int, ingredientes_estimados int, ingredientes_total int, unique (snapshot_id, prato_id));
 
 -- fixtures: 2 pratos ativos; online (0.005/g), manual (20 R$/kg), custo fixo (0.50)
@@ -58,11 +60,15 @@ insert into precos (snapshot_id, ingrediente_id, mediana_normalizada) values (1,
 -- legado calculado à mão: P1 = 1.00+2.00+0.50 = 3.50 ; P2 = 1.50+0.50 = 2.00 ; mediana 2.75
 insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobertos, ingredientes_estimados, ingredientes_total)
 values (1,1,3.50,3,0,3),(1,2,2.00,2,0,2);
+-- regressão da migração 43: custo de OUTRO snapshot não pode vazar na paridade
+insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobertos, ingredientes_estimados, ingredientes_total)
+values (999,1,42.00,1,0,1);
 SQL
 
-echo "2/6 aplica a migração 42 (e reaplica: idempotência)"
+echo "2/6 aplica as migrações 42 (2x: idempotência) e 43"
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_42.sql
+PSQL < supabase/migrations/supabase_migration_43.sql
 
 echo "3/6 backfill de status + publicação shadow com paridade zero"
 PSQL <<'SQL'
@@ -75,6 +81,7 @@ begin
   assert (m->>'mediana')::numeric = (select custo_total_pf from snapshots where id = 1), 'mediana shadow != legado';
   assert (m->>'pratosCalculados')::int = 2, 'pratos calculados != 2';
   assert (select count(*) from verificar_paridade_shadow(1) where diff <> 0) = 0, 'paridade por prato deveria ser zero';
+  assert (select count(*) from verificar_paridade_shadow(1)) = 2, 'paridade vazou custos de outro snapshot (regressão da 43)';
   assert (select status from pipeline_runs where kind = 'shadow_publish' and snapshot_id = 1) = 'published', 'run não registrado';
 end $$;
 SQL
@@ -126,6 +133,21 @@ begin
     if sqlerrm = 'NAO_DEVERIA_PUBLICAR' then raise; end if;
     assert sqlerrm like '%incompleto%', 'erro inesperado: ' || sqlerrm;
   end;
+end $$;
+-- preço duplicado no snapshot (caso real dos snapshots 33/34) → recusa e rollback
+insert into snapshots (data) values ('2026-08-01');
+insert into precos (snapshot_id, ingrediente_id, mediana_normalizada) values (3,10,0.005),(3,10,0.006);
+do $$
+begin
+  begin
+    perform publicar_snapshot_shadow(3);
+    raise exception 'NAO_DEVERIA_PUBLICAR';
+  exception when others then
+    if sqlerrm = 'NAO_DEVERIA_PUBLICAR' then raise; end if;
+    assert sqlerrm like '%duplicate key%', 'erro inesperado: ' || sqlerrm;
+  end;
+  assert (select count(*) from dish_cost_components where snapshot_id = 3) = 0, 'rollback deixou componentes (dup)';
+  assert (select count(*) from pipeline_runs where snapshot_id = 3) = 0, 'rollback deixou run (dup)';
 end $$;
 SQL
 
