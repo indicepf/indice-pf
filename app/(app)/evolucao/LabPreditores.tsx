@@ -54,6 +54,7 @@ type PontoConf = { ym: string; nosso: number | null; dieese: number | null; raza
 type ItemConf = {
   id: number; nome: string; unidade: string | null
   comparabilidade: 'direta' | 'aproximada'; nota: string | null
+  nossoMediana: number | null; dieeseMediana: number | null; nossoAtual: number | null
   razaoMediana: number | null; nMeses: number; pontos: PontoConf[]
 }
 
@@ -101,15 +102,23 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
   const ehPorIngrediente = metodo === 'ingrediente'
   const deflator = ehPorIngrediente ? 'dieese_cesta' : metodo
 
-  // busca os deflatores e as séries do DIEESE (histórico longo)
+  // Carrega só as séries em uso, sob demanda — buscar as 18 de uma vez trazia
+  // ~5 mil linhas e travava a abertura. Necessário: os deflatores (reconstrução
+  // + banda) e o que estiver marcado no gráfico DIEESE (começa só com a cesta).
+  const precisaSeries = useMemo(
+    () => [...new Set([...DEFLATORES.map(d => d.key), ...vistaDieese])],
+    [vistaDieese])
   useEffect(() => {
-    const keys = [...new Set([...DEFLATORES.map(d => d.key), ...SERIES_DIEESE.map(s => s.key)])]
+    const faltam = precisaSeries.filter(k => !series[k])
+    if (!faltam.length) return
     setCarregando(true)
-    fetch(`/api/preditores?vars=${keys.join(',')}&de=1994-01-01`)
-      .then(r => r.json()).then(j => setSeries(j || {}))
-      .catch(() => setSeries({}))
+    fetch(`/api/preditores?vars=${faltam.join(',')}&de=1994-01-01`)
+      .then(r => r.json())
+      .then(j => setSeries(prev => ({ ...prev, ...(j || {}) })))
+      .catch(() => {})
       .finally(() => setCarregando(false))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [precisaSeries])
 
   // confiabilidade: nosso preço × preço do DIEESE
   useEffect(() => {
@@ -274,11 +283,21 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
             </select>
           </label>
         )}
-        <label className="text-dim">Desde
-          <input type="month" value={desde} min="1994-07" max={primeiroReal?.ym ?? '2026-12'}
-            onChange={e => e.target.value && setDesde(e.target.value)}
-            className="block mt-1 bg-surface-2 border border-border rounded-md px-2.5 py-[7px] text-sm text-ink focus:outline-none focus:border-accent" />
-        </label>
+        <div className="text-dim">Desde
+          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+            <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface">
+              {['1994-07', '2000-01', '2010-01', '2015-01', '2020-01', '2024-01'].map(d => (
+                <button key={d} onClick={() => setDesde(d)}
+                  className={`px-2.5 py-1.5 text-xs transition-colors ${desde === d ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>
+                  {d === '1994-07' ? 'Tudo' : d.slice(0, 4)}
+                </button>
+              ))}
+            </div>
+            <input type="date" value={`${desde}-01`} min="1994-07-01" max={primeiroReal ? `${primeiroReal.ym}-01` : '2026-12-01'}
+              onChange={e => e.target.value && setDesde(e.target.value.slice(0, 7))}
+              className="bg-surface-2 border border-border rounded-md px-2 py-1 text-sm text-ink focus:outline-none focus:border-accent" />
+          </div>
+        </div>
       </div>
       <p className="text-xs text-dim -mt-4">
         {ehPorIngrediente
@@ -313,7 +332,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
               Âncora: {primeiroReal ? `${primeiroReal.ym.split('-').reverse().join('/')} = ${brl(primeiroReal.valor)}` : '—'}
               {maisAntigo && <> · estimativa mais antiga: {maisAntigo.ym.split('-').reverse().join('/')} = <strong className="text-ink">{brl(maisAntigo.estimado!)}</strong></>}
               {' '}· método: {ehPorIngrediente ? 'por ingrediente (IPCA item a item)' : `agregado por ${def.label}`}
-              {temBanda && <> · <span className="text-est" style={{ color: COR.est }}>faixa sombreada</span> = margem entre métodos independentes (medida de robustez, não IC estatístico)</>}
+              {temBanda && <> · <span style={{ color: COR.ind }}>faixa sombreada</span> = margem entre métodos independentes (medida de robustez, não IC estatístico)</>}
             </>
           )}
         </p>
@@ -337,7 +356,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
               {primeiroReal && <ReferenceLine x={tsYM(primeiroReal.ym)} stroke={COR.muted} strokeDasharray="4 4"
                 label={{ value: 'início da coleta real', fontSize: 11, fill: COR.muted, position: 'insideTopLeft' }} />}
               {temBanda && <Area type="monotone" dataKey="faixa" name="Faixa entre métodos" stroke="none"
-                fill={COR.est} fillOpacity={0.12} connectNulls />}
+                fill={COR.ind} fillOpacity={0.14} connectNulls />}
               <Area type="monotone" dataKey="estimado" name="Estimado (reconstruído)" stroke={COR.est}
                 strokeWidth={2} strokeDasharray="5 4" dot={false} fill="url(#grad-est)" connectNulls />
               <Line type="monotone" dataKey="real" name="Medido (coleta real)" stroke={COR.ind}
@@ -378,18 +397,18 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
               <YAxis tick={{ fontSize: 12, fill: COR.muted }} width={56} tickFormatter={v => `R$${v}`} />
               <Tooltip formatter={(v: any, n: any) => [fmtValorPreditor(Number(v), 'moeda'), n]} labelFormatter={(t: any) => fmtYM(Number(t))} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              {/* uma série só → área com gradiente, igual ao gráfico da reconstrução;
-                  várias → linhas para não empastar */}
-              {[...vistaDieese].map((k, idx) => {
+              {/* sempre área sombreada: 1 série usa o gradiente cheio; com várias,
+                  cada uma leva um preenchimento leve na própria cor */}
+              {[...vistaDieese].map(k => {
                 const i = SERIES_DIEESE.findIndex(s => s.key === k)
                 const nome = SERIES_DIEESE[i]?.label ?? k
                 const cor = CHART_SERIES[i % CHART_SERIES.length]
-                if (vistaDieese.size === 1) return (
+                const solo = vistaDieese.size === 1
+                return (
                   <Area key={k} type="monotone" dataKey={k} name={nome} stroke={cor}
-                    strokeWidth={2.5} dot={{ r: 3 }} fill="url(#grad-dieese)" connectNulls />
+                    strokeWidth={solo ? 2.5 : 2} dot={solo ? { r: 3 } : false}
+                    fill={solo ? 'url(#grad-dieese)' : cor} fillOpacity={solo ? 1 : 0.08} connectNulls />
                 )
-                return <Line key={k} type="monotone" dataKey={k} name={nome}
-                  stroke={cor} strokeWidth={2} dot={false} connectNulls />
               })}
             </ComposedChart>
           </ResponsiveContainer>
@@ -402,8 +421,10 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
           <InfoTip texto="Duas medições independentes do mesmo produto. Razão = nosso preço ÷ preço do DIEESE. Perto de 1,00 significa que as duas fontes concordam; divergência grande em item de comparação direta é sinal para investigar nossa coleta." />
         </p>
         <p className="text-xs text-dim mb-3">
-          Razão = nosso ÷ DIEESE · mediana dos meses com as duas medições · comparação <strong>direta</strong> = mesmo
-          produto e unidade; <strong>aproximada</strong> = produto ou ponto de venda diferem, divergência esperada.
+          <strong>Nosso</strong> e <strong>DIEESE</strong> = medianas dos meses em que os dois têm dado (o DIEESE sai com
+          ~1 mês de atraso); <strong>Atual</strong> = nossa coleta mais recente. Razão = nosso ÷ DIEESE. Só a coleta
+          estruturada (com id de ingrediente) entra — a antiga misturava embalagens de tamanhos diferentes.
+          Comparação <strong>direta</strong> = mesmo produto e unidade; <strong>aproximada</strong> = produto ou ponto de venda diferem.
         </p>
         {!conf ? <p className="text-sm text-dim py-4">Carregando…</p> : !conf.length ? (
           <p className="text-sm text-dim py-4">Sem pares comparáveis.</p>
@@ -418,6 +439,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
                     <th className="px-3 py-2 text-right">Nosso</th>
                     <th className="px-3 py-2 text-right">DIEESE</th>
                     <th className="px-3 py-2 text-right">Razão</th>
+                    <th className="px-3 py-2 text-right">Atual</th>
                     <th className="px-3 py-2 text-right">Meses</th>
                     <th className="px-3 py-2">Comparação</th>
                     <th className="px-3 py-2"></th>
@@ -425,7 +447,6 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
                 </thead>
                 <tbody>
                   {[...conf].sort((a, b) => (a.razaoMediana ?? 9) - (b.razaoMediana ?? 9)).map(it => {
-                    const ult = [...it.pontos].reverse().find(p => p.razao != null)
                     const r = it.razaoMediana
                     const ok = r != null && r >= 0.85 && r <= 1.15
                     return (
@@ -435,11 +456,12 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
                           {it.nota && <span className="block text-[0.65rem] text-dim">{it.nota}</span>}
                         </td>
                         <td className="px-3 py-1.5 text-dim">{it.unidade ?? '—'}</td>
-                        <td className="px-3 py-1.5 text-right tnum">{ult?.nosso != null ? brl(ult.nosso) : '—'}</td>
-                        <td className="px-3 py-1.5 text-right tnum text-dim">{ult?.dieese != null ? brl(ult.dieese) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right tnum">{it.nossoMediana != null ? brl(it.nossoMediana) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right tnum text-dim">{it.dieeseMediana != null ? brl(it.dieeseMediana) : '—'}</td>
                         <td className={`px-3 py-1.5 text-right tnum font-medium ${r == null ? 'text-dim' : ok ? 'text-ok' : 'text-accent'}`}>
                           {r != null ? r.toFixed(2) : '—'}
                         </td>
+                        <td className="px-3 py-1.5 text-right tnum text-dim">{it.nossoAtual != null ? brl(it.nossoAtual) : '—'}</td>
                         <td className="px-3 py-1.5 text-right tnum text-dim">{it.nMeses}</td>
                         <td className="px-3 py-1.5 text-xs text-dim">{it.comparabilidade}</td>
                         <td className="px-3 py-1.5 text-right">
