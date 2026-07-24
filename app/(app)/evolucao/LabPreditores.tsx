@@ -7,6 +7,7 @@ import {
 import { getEntradasIngrediente, excluirEntradaERecalcular, getIngredientes, type Evolucao, type EntradaBruta } from '@/lib/queries'
 import type { Ing } from '@/lib/types'
 import { capturarContexto } from '@/lib/contexto'
+import { fetchAdmin } from '@/lib/fetch-admin'
 import { Modal } from '@/components/ui'
 import { brl } from '@/lib/format'
 import { ACCENT, BRAND, CHART_SERIES, DIM, INK } from '@/lib/theme'
@@ -118,7 +119,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
     const faltam = precisaSeries.filter(k => !series[k])
     if (!faltam.length) return
     setCarregando(true)
-    fetch(`/api/preditores?vars=${faltam.join(',')}&de=1994-01-01`)
+    fetchAdmin(`/api/preditores?vars=${faltam.join(',')}&de=1994-01-01`)
       .then(r => r.json())
       .then(j => setSeries(prev => ({ ...prev, ...(j || {}) })))
       .catch(() => {})
@@ -129,7 +130,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
   // confiabilidade: nosso preço × preço do DIEESE
   useEffect(() => {
     let vivo = true
-    fetch('/api/confiabilidade').then(r => r.json())
+    fetchAdmin('/api/confiabilidade').then(r => r.json())
       .then(j => { if (vivo && Array.isArray(j.itens)) setConf(j.itens) })
       .catch(() => { if (vivo) setConf([]) })
     return () => { vivo = false }
@@ -140,7 +141,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
     if (!ehPorIngrediente) return
     let vivo = true
     setErroIng('')
-    fetch(`/api/indice-retropolado?desde=${desde}&confianca=${confianca}`)
+    fetchAdmin(`/api/indice-retropolado?desde=${desde}&confianca=${confianca}`)
       .then(r => r.json())
       .then(j => { if (vivo) { if (j.error) setErroIng(j.error); else setPorIng(j) } })
       .catch(e => { if (vivo) setErroIng(String(e)) })

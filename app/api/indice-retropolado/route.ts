@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { exigirAdmin, SEM_CACHE } from '@/lib/server/autorizar'
 import { todasLinhas } from '@/lib/server/paginar'
 import { mediana } from '@/lib/stats'
 import { MAPA_INGREDIENTE_IPCA, type Confianca } from '@/lib/mapa-ingredientes'
@@ -26,18 +27,28 @@ export const maxDuration = 60
 const GRUPO_FALLBACK = 'ipca_7171'   // Alimentação no domicílio
 
 
+const CONFIANCAS_VALIDAS = new Set(['alta', 'media', 'baixa'])
+
 export async function GET(req: NextRequest) {
+  const auth = await exigirAdmin(req, 'api/indice-retropolado')
+  if ('resposta' in auth) return auth.resposta
+
   const url = new URL(req.url)
   const desde = url.searchParams.get('desde') || '2015-01'
-  const conf = new Set((url.searchParams.get('confianca') || 'alta,media,baixa')
-    .split(',').map(s => s.trim()).filter(Boolean) as Confianca[])
+  if (!/^\d{4}-\d{2}$/.test(desde))
+    return NextResponse.json({ error: 'desde deve usar o formato AAAA-MM', code: 'INVALID_DATE' }, { status: 400, headers: SEM_CACHE })
+  const confPedidas = (url.searchParams.get('confianca') || 'alta,media,baixa')
+    .split(',').map(s => s.trim()).filter(Boolean)
+  if (confPedidas.some(c => !CONFIANCAS_VALIDAS.has(c)))
+    return NextResponse.json({ error: 'confianca aceita apenas alta, media e baixa', code: 'INVALID_PARAM' }, { status: 400, headers: SEM_CACHE })
+  const conf = new Set(confPedidas as Confianca[])
 
   const db = supabaseAdmin()
 
   // 1. âncora: preços da coleta mais recente
   const { data: snaps, error: eSnap } = await db.from('snapshots')
     .select('id, data').order('data', { ascending: false }).limit(1)
-  if (eSnap || !snaps?.length) return NextResponse.json({ error: 'sem coletas' }, { status: 500 })
+  if (eSnap || !snaps?.length) return NextResponse.json({ error: 'sem coletas', code: 'NO_SNAPSHOT' }, { status: 500, headers: SEM_CACHE })
   const ancora = snaps[0]
   const ymAncora = ancora.data.slice(0, 7)
 
@@ -93,13 +104,13 @@ export async function GET(req: NextRequest) {
   // linha reta inventada para trás. Corta no 1º mês com dado do grupo.
   const mesesGrupo = [...(varPorSerie.get(GRUPO_FALLBACK)?.keys() ?? [])].sort()
   const inicioDado = mesesGrupo[0]
-  if (!inicioDado) return NextResponse.json({ error: 'sem dados do deflator' }, { status: 400 })
+  if (!inicioDado) return NextResponse.json({ error: 'sem dados do deflator', code: 'NO_DEFLATOR_DATA' }, { status: 400, headers: SEM_CACHE })
   const inicioEfetivo = desde > inicioDado ? desde : inicioDado
 
   const meses: string[] = []
   for (let d = new Date(`${inicioEfetivo}-01T00:00:00Z`); d.toISOString().slice(0, 7) <= ymAncora; d.setUTCMonth(d.getUTCMonth() + 1))
     meses.push(d.toISOString().slice(0, 7))
-  if (!meses.length) return NextResponse.json({ error: 'período vazio' }, { status: 400 })
+  if (!meses.length) return NextResponse.json({ error: 'período vazio', code: 'EMPTY_PERIOD' }, { status: 400, headers: SEM_CACHE })
 
   // 5. desfaz a inflação mês a mês, de trás para frente:
   //    preco(m-1) = preco(m) / (1 + variação_do_mês_m / 100)
@@ -161,5 +172,5 @@ export async function GET(req: NextRequest) {
     // a série é cortada em vez de extrapolada
     periodo: { pedido: desde, efetivo: inicioEfetivo, deflatorDesde: inicioDado },
     serie,
-  })
+  }, { headers: SEM_CACHE })
 }
