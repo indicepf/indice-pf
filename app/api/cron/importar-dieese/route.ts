@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { FONTE_DIEESE } from '@/lib/server/fontes-config'
 import { mediana } from '@/lib/stats'
 
 // Cesta básica do DIEESE (Pesquisa Nacional da Cesta Básica de Alimentos):
@@ -67,7 +68,9 @@ async function importarProduto(cod: number, serie: string, de: string): Promise<
   })
   if (!res.ok) throw new Error(`DIEESE ${serie} HTTP ${res.status}`)
   const pontos = parseTabela(await res.text())
-  if (!pontos.length) return 0
+  // 0 linhas = markup mudou ou resposta vazia; nunca é sucesso (Fase 0D)
+  if (pontos.length < FONTE_DIEESE.minMesesPorProduto)
+    throw new Error(`DIEESE ${serie}: ${pontos.length} linha(s) no HTML — markup mudado ou resposta vazia`)
 
   const db = supabaseAdmin()
   const rows = pontos.map(p => ({ serie, data: p.data, valor: p.valor, fonte: 'dieese_cesta_basica' }))
@@ -94,7 +97,9 @@ export async function GET(req: NextRequest) {
   const so = url.searchParams.get('serie')          // ?serie=dieese_tomate para testar uma só
 
   const alvos = so ? PRODUTOS.filter(([, s]) => s === so) : PRODUTOS
-  const meta: Record<string, number | string> = {}
+  // Diagnóstico estruturado por série (Fase 0D): a fonte é essencial — qualquer
+  // produto com falha/0 linhas derruba o job com 500, sem sucesso parcial.
+  const fontes: Record<string, { ok: boolean; linhas?: number; erro?: string }> = {}
   let temErro = false
 
   for (let i = 0; i < alvos.length; i++) {
@@ -109,11 +114,15 @@ export async function GET(req: NextRequest) {
           de = mmaaaa(d)
         }
       }
-      meta[serie] = await importarProduto(cod, serie, de)
+      const linhas = await importarProduto(cod, serie, de)
+      fontes[serie] = { ok: true, linhas }
     } catch (err) {
-      meta[`${serie}_erro`] = String(err); temErro = true
+      fontes[serie] = { ok: false, erro: String(err) }; temErro = true
     }
     if (i < alvos.length - 1) await new Promise(r => setTimeout(r, CRAWL_DELAY_MS))
   }
-  return NextResponse.json({ status: temErro ? 'parcial' : 'ok', ...meta })
+  const falha = temErro && FONTE_DIEESE.essencial
+  const status = falha ? 'failed' : temErro ? 'parcial' : 'ok'
+  if (temErro) console.error(`[cron/importar-dieese] status=${status}`, JSON.stringify(fontes))
+  return NextResponse.json({ status, configVersao: FONTE_DIEESE.versao, fontes }, { status: falha ? 500 : 200 })
 }

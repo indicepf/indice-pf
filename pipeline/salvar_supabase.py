@@ -1,6 +1,7 @@
 import json
 import os
 import math
+import sys
 import requests
 from datetime import datetime
 
@@ -72,7 +73,7 @@ def main():
             snapshot = json.load(f)
     except FileNotFoundError:
         print(f"❌ Arquivo {SNAPSHOT_FILE} não encontrado. Rode o scraper primeiro.")
-        return
+        sys.exit(1)
 
     data       = snapshot["data"]
     resumo     = snapshot["resumo"]
@@ -87,7 +88,7 @@ def main():
     if resumo and com_preco == 0:
         print("🛑 Abortado: nenhum ingrediente veio com preço (falha de API/rede?). "
               "Nada foi apagado nem gravado.")
-        return
+        sys.exit(1)
 
     # modo merge: atualiza só os ingredientes raspados no ÚLTIMO snapshot,
     # sem apagar os demais preços (usado com SCRAPE_ONLY para correções pontuais).
@@ -97,15 +98,18 @@ def main():
     if MERGE:
         ult = supabase_get("snapshots", "select=id,data&order=id.desc&limit=1")
         if not ult:
-            print("❌ Nenhum snapshot existente para fazer merge."); return
+            print("❌ Nenhum snapshot existente para fazer merge."); sys.exit(1)
         snapshot_id = ult[0]["id"]
         print(f"\n🔀 Modo merge: atualizando {len(resumo)} ingrediente(s) no snapshot id={snapshot_id} ({ult[0]['data']})")
         ids_csv = ",".join(str(r["ingrediente_id"]) for r in resumo)
         if not supabase_delete(f"precos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})"):
-            print("🛑 Abortado: limpeza dos preços do merge falhou."); return
+            print("🛑 Abortado: limpeza dos preços do merge falhou."); sys.exit(1)
         if not supabase_delete(f"resultados_brutos?snapshot_id=eq.{snapshot_id}&ingrediente_id=in.({ids_csv})"):
-            print("🛑 Abortado: limpeza dos resultados brutos do merge falhou."); return
-        _salvar_precos(snapshot_id, resumo, resultados)
+            print("🛑 Abortado: limpeza dos resultados brutos do merge falhou."); sys.exit(1)
+        falhas = _salvar_precos(snapshot_id, resumo, resultados)
+        if falhas:
+            print(f"\n❌ Merge com {falhas} falha(s) de gravação — snapshot pode estar parcial.")
+            sys.exit(1)
         print(f"\n✅ Merge concluído. Rode calcular_custos_pratos.py para recalcular os custos.")
         return
 
@@ -120,18 +124,25 @@ def main():
             "custo_total_pf": snapshot.get("custo_total_pf"),
         })
         if not snap_resp:
-            return
+            sys.exit(1)
         snapshot_id = snap_resp[0]["id"]
         print(f"\n✅ Snapshot criado (id={snapshot_id})")
 
     # ── 2-4. Limpa tudo do snapshot e regrava (run completo) ──────────────────
     print(f"\n🗑️  Limpando preços e resultados anteriores do snapshot {snapshot_id}...")
     if not supabase_delete(f"precos?snapshot_id=eq.{snapshot_id}"):
-        print("🛑 Abortado: limpeza dos preços falhou."); return
+        print("🛑 Abortado: limpeza dos preços falhou."); sys.exit(1)
     if not supabase_delete(f"resultados_brutos?snapshot_id=eq.{snapshot_id}"):
-        print("🛑 Abortado: limpeza dos resultados brutos falhou."); return
-    _salvar_precos(snapshot_id, resumo, resultados)
+        print("🛑 Abortado: limpeza dos resultados brutos falhou."); sys.exit(1)
+    falhas = _salvar_precos(snapshot_id, resumo, resultados)
 
+    # falha em qualquer preço/lote NÃO pode terminar como sucesso com exit 0:
+    # o workflow seguiria e anunciaria snapshot completo com carga parcial
+    if falhas:
+        print(f"\n{'='*50}")
+        print(f"❌ Snapshot de {data} gravado com {falhas} falha(s) — carga PARCIAL.")
+        print(f"{'='*50}")
+        sys.exit(1)
     print(f"\n{'='*50}")
     print(f"✅ Snapshot de {data} salvo com sucesso!")
     print(f"{'='*50}")
@@ -139,7 +150,9 @@ def main():
 
 def _salvar_precos(snapshot_id, resumo, resultados):
     """Insere preços (resumo) e resultados brutos no snapshot. Não apaga nada —
-    a limpeza (total ou por ingrediente) é responsabilidade do chamador."""
+    a limpeza (total ou por ingrediente) é responsabilidade do chamador.
+    Retorna o número de gravações que falharam (0 = tudo gravado)."""
+    falhas = 0
     brutos = {}
     for r in resultados:
         iid = r.get("ingrediente_id")
@@ -168,6 +181,8 @@ def _salvar_precos(snapshot_id, resumo, resultados):
             "qtd_resultados":      r["qtd_resultados"],
         }
         resp   = supabase_post("precos", dados)
+        if resp is None:
+            falhas += 1
         status = "✅" if (resp is not None) else "❌"
         print(f"  {status} {r['ingrediente']:<30} mediana={dados['mediana_exibicao']}/{label} "
               f"n={r['qtd_resultados']}")
@@ -189,7 +204,10 @@ def _salvar_precos(snapshot_id, resumo, resultados):
     for i in range(0, len(payload), LOTE):
         lote = payload[i:i+LOTE]
         resp = supabase_post("resultados_brutos", lote)
+        if resp is None:
+            falhas += 1
         print(f"  {'✅' if resp else '❌'} Lote {i//LOTE + 1}: {len(lote)} registros")
+    return falhas
 
 
 if __name__ == "__main__":

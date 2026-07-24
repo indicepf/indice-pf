@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { FONTES_PREDITORES } from '@/lib/server/fontes-config'
 
 // Coleta das variáveis econômicas preditoras (adaptado do projeto megamistico).
 // Todas as fontes são públicas e sem API key: BCB (SGS/PTAX), SIDRA/IBGE,
@@ -221,7 +222,10 @@ async function importarSidraCompleto(db: DB): Promise<number> {
     }
   }
   const cat = Array.from(catalogo.values())
-  for (let i = 0; i < cat.length; i += 500) await db.from('fatores_catalogo').upsert(cat.slice(i, i + 500), { onConflict: 'serie' })
+  for (let i = 0; i < cat.length; i += 500) {
+    const { error } = await db.from('fatores_catalogo').upsert(cat.slice(i, i + 500), { onConflict: 'serie' })
+    if (error) throw new Error(`catálogo: ${error.message}`)
+  }
   return upsert(db, rows)
 }
 
@@ -246,12 +250,25 @@ export async function GET(req: NextRequest) {
   ]
   const resultados = await Promise.allSettled(tarefas.map(t => t[1]))
 
-  const meta: Record<string, number | string> = {}
-  let temErro = false
+  // Diagnóstico estruturado por fonte (Fase 0D): fonte essencial que falha ou
+  // fica abaixo do mínimo derruba o job com 500 — nunca sucesso parcial
+  // silencioso (o Vercel não faz retry; o 5xx é o que torna a falha visível).
+  const fontes: Record<string, { ok: boolean; essencial: boolean; linhas?: number; erro?: string }> = {}
+  let falhaEssencial = false, falhaQualquer = false
   resultados.forEach((res, i) => {
     const nome = tarefas[i][0]
-    if (res.status === 'fulfilled') meta[nome] = res.value
-    else { meta[`${nome}_erro`] = String(res.reason); temErro = true }
+    const cfg = FONTES_PREDITORES.fontes[nome]
+    if (res.status === 'fulfilled') {
+      const ok = res.value >= cfg.minLinhas
+      fontes[nome] = { ok, essencial: cfg.essencial, linhas: res.value, ...(ok ? {} : { erro: `abaixo do mínimo de ${cfg.minLinhas} linha(s)` }) }
+      if (!ok) { falhaQualquer = true; falhaEssencial ||= cfg.essencial }
+    } else {
+      fontes[nome] = { ok: false, essencial: cfg.essencial, erro: String(res.reason) }
+      falhaQualquer = true
+      falhaEssencial ||= cfg.essencial
+    }
   })
-  return NextResponse.json({ status: temErro ? 'parcial' : 'ok', ...meta })
+  const status = falhaEssencial ? 'failed' : falhaQualquer ? 'parcial' : 'ok'
+  if (falhaQualquer) console.error(`[cron/importar-preditores] status=${status}`, JSON.stringify(fontes))
+  return NextResponse.json({ status, configVersao: FONTES_PREDITORES.versao, fontes }, { status: falhaEssencial ? 500 : 200 })
 }
