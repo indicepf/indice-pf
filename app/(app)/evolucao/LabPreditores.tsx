@@ -12,6 +12,8 @@ import { Modal } from '@/components/ui'
 import { brl } from '@/lib/format'
 import { ACCENT, BRAND, CHART_SERIES, DIM, INK } from '@/lib/theme'
 import { PREDITORES, fmtValorPreditor } from '@/lib/preditores'
+import { classificarBenchmark, N_MIN_BENCHMARK } from '@/lib/benchmark'
+import { abasReconstrucao } from '@/lib/export-reconstrucao'
 import BotaoExportar from './BotaoExportar'
 import ModalMetodologia from './ModalMetodologia'
 import InfoTip from '../../InfoTip'
@@ -40,6 +42,7 @@ type PontoConf = { ym: string; nosso: number | null; dieese: number | null; raza
 type ItemConf = {
   id: number; nome: string; unidade: string | null
   comparabilidade: 'direta' | 'aproximada'; nota: string | null
+  periodo: { ini: string; fim: string } | null
   nossoMediana: number | null; dieeseMediana: number | null; nossoAtual: number | null
   razaoMediana: number | null; nMeses: number; pontos: PontoConf[]
 }
@@ -294,10 +297,16 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
             <InfoTip texto="Ancora no primeiro mês com coleta real e projeta para trás pela variação do deflator escolhido. Linha sólida = medido; tracejada = estimado." />
           </p>
           {reconstrucao.length > 0 && (
-            <BotaoExportar nome="indice-pf-reconstruido" abas={() => [{
-              nome: 'Reconstrução',
-              linhas: reconstrucao.map(p => ({ Mes: p.ym, Estimado: p.estimado, Medido: p.real, Deflator: def.label })),
-            }]} />
+            <BotaoExportar nome="indice-pf-reconstruido" abas={() => abasReconstrucao({
+              serie: reconstrucao.map(p => ({ ym: p.ym, estimado: p.estimado, real: p.real })),
+              metodo,
+              deflatorLabel: ehPorIngrediente ? null : def.label,
+              ancoraYm: ehPorIngrediente ? porIng?.ancora.ym ?? null : primeiroReal?.ym ?? null,
+              desde,
+              efetivo: ehPorIngrediente ? porIng?.periodo.efetivo ?? null : reconstrucao[0]?.ym ?? null,
+              confianca: ehPorIngrediente ? confianca : null,
+              coberturaPct: ehPorIngrediente ? porIng?.cobertura.por_item_pct ?? null : null,
+            })} />
           )}
         </div>
         <p className="text-xs text-dim mb-4">
@@ -337,8 +346,8 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
 
       {/* séries DIEESE — preço real, histórico longo */}
       <div className="panel p-5 overflow-visible">
-        <p className="text-sm font-medium mb-1">Preço real dos alimentos — cesta básica DIEESE
-          <InfoTip texto="Preço médio em R$ medido nas capitais pelo DIEESE (mediana entre elas), mensal desde jul/1994. Dado medido por fonte independente — diferente da reconstrução acima." />
+        <p className="text-sm font-medium mb-1">Preço nominal observado — cesta básica DIEESE
+          <InfoTip texto="Preço em R$ correntes de cada mês, medido nas capitais pelo DIEESE (mediana entre elas), mensal desde jul/1994. Valor nominal, sem deflação. Dado medido por fonte independente — diferente da reconstrução acima." />
         </p>
         <p className="text-xs text-dim mb-3">Mediana das capitais · mensal · fonte independente do IPCA</p>
         <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap mb-4">
@@ -384,16 +393,19 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
         </div>
       </div>
 
-      {/* confiabilidade: nossa medição × DIEESE */}
+      {/* benchmark preliminar: nossa medição × DIEESE */}
       <div className="panel p-5 overflow-visible">
-        <p className="text-sm font-medium mb-1">Confiabilidade — nosso preço × preço do DIEESE
-          <InfoTip texto="Duas medições independentes do mesmo produto. Razão = nosso preço ÷ preço do DIEESE. Perto de 1,00 significa que as duas fontes concordam; divergência grande em item de comparação direta é sinal para investigar nossa coleta." />
+        <p className="text-sm font-medium mb-1">Benchmark preliminar — nosso preço × preço do DIEESE
+          <InfoTip texto={`Duas medições do mesmo produto por metodologias diferentes. Razão = mediana das razões mensais (nosso ÷ DIEESE). Não é medida de confiabilidade: só recebe leitura qualitativa com pelo menos ${N_MIN_BENCHMARK} meses comparáveis e comparação direta.`} />
         </p>
         <p className="text-xs text-dim mb-3">
           <strong>Nosso</strong> e <strong>DIEESE</strong> = medianas dos meses em que os dois têm dado (o DIEESE sai com
-          ~1 mês de atraso); <strong>Atual</strong> = nossa coleta mais recente. Razão = nosso ÷ DIEESE. Só a coleta
-          estruturada (com id de ingrediente) entra — a antiga misturava embalagens de tamanhos diferentes.
-          Comparação <strong>direta</strong> = mesmo produto e unidade; <strong>aproximada</strong> = produto ou ponto de venda diferem.
+          ~1 mês de atraso); <strong>Atual</strong> = nossa coleta mais recente. Razão = mediana das razões mensais
+          nosso ÷ DIEESE. Só a coleta estruturada (com id de ingrediente) entra — a antiga misturava embalagens de
+          tamanhos diferentes. Comparação <strong>direta</strong> = mesmo produto e unidade; <strong>aproximada</strong> =
+          produto ou ponto de venda diferem. A razão só ganha cor com N ≥ {N_MIN_BENCHMARK} meses e comparação
+          direta; abaixo disso é registro, não julgamento — os universos (online × campo DIEESE) também não são
+          equivalentes.
         </p>
         {!conf ? <p className="text-sm text-dim py-4">Carregando…</p> : !conf.length ? (
           <p className="text-sm text-dim py-4">Sem pares comparáveis.</p>
@@ -409,7 +421,8 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
                     <th className="px-3 py-2 text-right">DIEESE</th>
                     <th className="px-3 py-2 text-right">Razão</th>
                     <th className="px-3 py-2 text-right">Atual</th>
-                    <th className="px-3 py-2 text-right">Meses</th>
+                    <th className="px-3 py-2 text-right">N (meses)</th>
+                    <th className="px-3 py-2">Período</th>
                     <th className="px-3 py-2">Comparação</th>
                     <th className="px-3 py-2"></th>
                   </tr>
@@ -417,7 +430,11 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
                 <tbody>
                   {[...conf].sort((a, b) => (a.razaoMediana ?? 9) - (b.razaoMediana ?? 9)).map(it => {
                     const r = it.razaoMediana
-                    const ok = r != null && r >= 0.85 && r <= 1.15
+                    // semáforo só com N >= nMin e comparação direta (ADR 0C);
+                    // abaixo disso a razão aparece neutra, sem julgamento
+                    const classe = classificarBenchmark(r, it.nMeses, it.comparabilidade)
+                    const corRazao = classe === 'ok' ? 'text-ok' : classe === 'divergente' ? 'text-accent' : 'text-dim'
+                    const fmtYmCurto = (ym: string) => ym.split('-').reverse().join('/')
                     return (
                       <tr key={`${it.id}-${it.nome}`} className={`border-t border-border/60 cursor-pointer hover:bg-surface-2 ${itemConf === it.id ? 'bg-surface-2' : ''}`}
                         onClick={() => setItemConf(itemConf === it.id ? null : it.id)}>
@@ -427,11 +444,13 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
                         <td className="px-3 py-1.5 text-dim">{it.unidade ?? '—'}</td>
                         <td className="px-3 py-1.5 text-right tnum">{it.nossoMediana != null ? brl(it.nossoMediana) : '—'}</td>
                         <td className="px-3 py-1.5 text-right tnum text-dim">{it.dieeseMediana != null ? brl(it.dieeseMediana) : '—'}</td>
-                        <td className={`px-3 py-1.5 text-right tnum font-medium ${r == null ? 'text-dim' : ok ? 'text-ok' : 'text-accent'}`}>
+                        <td className={`px-3 py-1.5 text-right tnum font-medium ${corRazao}`}>
                           {r != null ? r.toFixed(2) : '—'}
+                          {r != null && classe === 'sem_classificacao' && <span className="block text-[0.6rem] font-normal text-dim">sem classificação{it.nMeses < N_MIN_BENCHMARK ? ` (N<${N_MIN_BENCHMARK})` : ''}</span>}
                         </td>
                         <td className="px-3 py-1.5 text-right tnum text-dim">{it.nossoAtual != null ? brl(it.nossoAtual) : '—'}</td>
                         <td className="px-3 py-1.5 text-right tnum text-dim">{it.nMeses}</td>
+                        <td className="px-3 py-1.5 text-xs text-dim whitespace-nowrap">{it.periodo ? `${fmtYmCurto(it.periodo.ini)}–${fmtYmCurto(it.periodo.fim)}` : '—'}</td>
                         <td className="px-3 py-1.5 text-xs text-dim">{it.comparabilidade}</td>
                         <td className="px-3 py-1.5 text-right">
                           <button onClick={ev => { ev.stopPropagation(); abrirAuditoria(it.id, it.nome) }}
@@ -505,7 +524,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
                 ? ' Como superusuário, você pode excluir a entrada ruim: a mediana e o índice são recalculados e a ação fica registrada.'
                 : ' Só superusuário pode excluir; aqui é leitura.'}
             </p>
-            {auditMsg && <p className="text-xs text-ok">{auditMsg}</p>}
+            {auditMsg && <p className={`text-xs ${auditMsg.startsWith('Erro') ? 'text-danger' : 'text-ok'}`} aria-live="polite">{auditMsg}</p>}
             {entradas == null ? <p className="text-sm text-dim py-4">Carregando…</p>
               : !entradas.length ? <p className="text-sm text-dim py-4">Sem entradas online nesta coleta.</p> : (
               <div className="space-y-2">

@@ -109,7 +109,11 @@ export function regressaoLinear(
   const n = y.length
   const k = xs.length
   const p = k + 1   // + intercepto
-  if (n < p + 1) return { erro: `Poucas observações: ${n} coletas para ${k} preditor(es). Precisa de pelo menos ${p + 1}.` }
+  // Gate prudencial da Fase 0 (docs/014 §12): OLS exploratória exige pelo
+  // menos max(30, 10 × parâmetros) observações. Abaixo disso o modelo NÃO é
+  // gerado — amostra curta produz associação espúria com cara de resultado.
+  const nMin = Math.max(30, 10 * p)
+  if (n < nMin) return { erro: `Amostra insuficiente para associação exploratória: ${n} observações para ${k} preditor(es); o mínimo prudencial é ${nMin}. O modelo não é gerado com a base atual.` }
   for (const x of xs) if (x.valores.length !== n) return { erro: `Preditor "${x.nome}" com tamanho diferente de y.` }
 
   // X (n×p): coluna 1 = intercepto

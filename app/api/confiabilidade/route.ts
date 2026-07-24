@@ -89,6 +89,8 @@ export async function GET(req: NextRequest) {
       id: m.id, nome: m.nome, serie: m.serie,
       comparabilidade: m.comparabilidade, nota: m.nota ?? null,
       unidade: unidade.get(m.id) ?? null,
+      // período efetivamente comparado (meses com as duas medições)
+      periodo: comparaveis.length ? { ini: comparaveis[0].ym, fim: comparaveis[comparaveis.length - 1].ym } : null,
       nossoMediana: med(comparaveis.map(p => p.nosso)),
       dieeseMediana: med(comparaveis.map(p => p.dieese)),
       nossoAtual,
