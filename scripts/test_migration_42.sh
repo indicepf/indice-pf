@@ -29,7 +29,7 @@ else
   exit 2
 fi
 
-echo "1/11 stub mínimo do schema de produção (docs/016)"
+echo "1/12 stub mínimo do schema de produção (docs/016)"
 PSQL <<'SQL'
 -- roles do Supabase referenciados pelos revokes da migração
 do $$ begin
@@ -45,7 +45,7 @@ create table ingredientes (id bigint primary key, nome text, custo_fixo numeric,
 create table receitas (id bigint generated always as identity primary key, prato_id bigint, ingrediente_id bigint, qtd_g numeric);
 -- sem unique (snapshot_id, ingrediente_id): produção NÃO tem essa constraint
 -- (duplicatas reais encontradas nos snapshots 33/34 — docs/018)
-create table precos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, mediana_normalizada numeric);
+create table precos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, mediana_normalizada numeric, qtd_resultados int);
 create table custos_pratos (id bigint generated always as identity primary key, snapshot_id bigint, prato_id bigint, custo_total numeric, ingredientes_cobertos int, ingredientes_estimados int, ingredientes_total int, unique (snapshot_id, prato_id));
 create table audit_log (id bigint generated always as identity primary key, tabela text, registro_id text, acao text, ator uuid, dados_antes jsonb, dados_depois jsonb, criado_em timestamptz default now());
 create table resultados_brutos (id bigint generated always as identity primary key, snapshot_id bigint, ingrediente_id bigint, nome_ingrediente text, titulo text, preco_bruto numeric, preco_normalizado numeric, exibicao text, loja text, link text, criado_em timestamptz default now());
@@ -68,7 +68,7 @@ insert into custos_pratos (snapshot_id, prato_id, custo_total, ingredientes_cobe
 values (999,1,42.00,1,0,1);
 SQL
 
-echo "2/11 aplica as migrações 42 (2x: idempotência) e 43"
+echo "2/12 aplica as migrações 42 (2x: idempotência) e 43"
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_42.sql
 PSQL < supabase/migrations/supabase_migration_43.sql
@@ -76,7 +76,7 @@ PSQL < supabase/migrations/supabase_migration_43.sql
 PSQL -c "create or replace function public.refresh_precos_manuais() returns void language sql as \$\$ select 1 \$\$;"
 PSQL < supabase/migrations/supabase_migration_44.sql
 
-echo "3/11 backfill de status + publicação shadow com paridade zero"
+echo "3/12 backfill de status + publicação shadow com paridade zero"
 PSQL <<'SQL'
 do $$
 declare m jsonb;
@@ -92,7 +92,7 @@ begin
 end $$;
 SQL
 
-echo "4/11 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
+echo "4/12 imutabilidade: editar cadastro não muda versão publicada; nova versão preserva a anterior"
 PSQL <<'SQL'
 update ingredientes set preco_manual = 99 where id = 11;
 do $$
@@ -109,7 +109,7 @@ begin
 end $$;
 SQL
 
-echo "5/11 falha injetada faz rollback total (custo zero e conjunto incompleto)"
+echo "5/12 falha injetada faz rollback total (custo zero e conjunto incompleto)"
 PSQL <<'SQL'
 -- prato ativo cujo único ingrediente não tem preço nenhum → custo 0 → não publica
 insert into pratos values (3,'P3','norte',true);
@@ -157,7 +157,7 @@ begin
 end $$;
 SQL
 
-echo "6/11 append-only: UPDATE/DELETE em fato publicado são bloqueados"
+echo "6/12 append-only: UPDATE/DELETE em fato publicado são bloqueados"
 PSQL <<'SQL'
 do $$
 begin
@@ -178,7 +178,7 @@ begin
 end $$;
 SQL
 
-echo "7/11 integração com shadow no momento certo (migração 44)"
+echo "7/12 integração com shadow no momento certo (migração 44)"
 PSQL <<'SQL'
 update pratos set ativo = false where id = 3;   -- prato sem receita sai do universo esperado
 -- sucesso: integrar publica shadow com paridade zero por construção
@@ -206,7 +206,7 @@ begin
 end $$;
 SQL
 
-echo "8/11 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
+echo "8/12 supersessão e dedup (migração 45), aplicada sobre duplicatas preexistentes"
 PSQL <<'SQL'
 -- duplicata no padrão real de produção (33/34): linha original sem mediana +
 -- linha regravada com valor, ANTES da migração 45 existir
@@ -253,7 +253,7 @@ begin
 end $$;
 SQL
 
-echo "9/11 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
+echo "9/12 observações imutáveis (migração 46): backfill idempotente, dedup e append-only"
 PSQL <<'SQL'
 insert into resultados_brutos (snapshot_id, ingrediente_id, titulo, preco_bruto, preco_normalizado, loja, exibicao) values
   (1, 10, 'Arroz 5kg', 25.00, 0.005, 'Loja A', 'R$ 5,00/kg'),
@@ -299,7 +299,7 @@ begin
 end $$;
 SQL
 
-echo "10/11 fontes manuais e evidência de descarte (migração 47)"
+echo "10/12 fontes manuais e evidência de descarte (migração 47)"
 PSQL <<'SQL'
 -- duas leituras manuais IGUAIS em datas diferentes = dois fatos; e uma linha
 -- só de custo_fixo, que não é observação de preço
@@ -338,7 +338,7 @@ begin
 end $$;
 SQL
 
-echo "11/11 DAG estimativa/resolução e RLS (migração 48)"
+echo "11/12 DAG estimativa/resolução e RLS (migração 48)"
 PSQL <<'SQL'
 -- observações do snapshot 6 (ing 10): mediana(0.007, 0.009) = 0.008 = precos → reconcilia
 insert into price_observations (fonte, snapshot_id, ingrediente_id, titulo, loja, preco_bruto, preco_normalizado, status)
@@ -394,4 +394,54 @@ begin
 end $$;
 SQL
 
-echo "PASS: migrações 42/43/44/45/46/47/48 — todos os testes passaram"
+echo "12/12 QC na autoaprovação e coleta manual vinculada (migração 49)"
+PSQL < supabase/migrations/supabase_migration_49.sql
+PSQL < supabase/migrations/supabase_migration_49.sql
+PSQL <<'SQL'
+-- limiares de teste (versão maior vence a default)
+-- cobertura possível aqui: snapshot sem precos = 67% (manual+fixo de 3 ingredientes);
+-- com precos = 100%. Limiar 70 separa os dois casos.
+insert into qc_config (versao, limiares) values (2, jsonb_build_object(
+  'min_ingredientes_com_preco', 1, 'min_cobertura_fontes_pct', 70, 'min_resultados_por_ingrediente', 1))
+on conflict (versao) do nothing;
+do $$
+declare antes int; obs int;
+begin
+  -- 1. leitura manual nova vira observação automaticamente (com legacy_id)
+  select count(*) into antes from price_observations where fonte = 'manual_hist';
+  insert into precos_manuais_hist (ingrediente_id, nome, preco_manual, loja) values (11, 'Manual', 30.00, 'Feira Z');
+  select count(*) into obs from price_observations where fonte = 'manual_hist';
+  assert obs = antes + 1, 'trigger não criou observação manual';
+  assert (select preco_normalizado from price_observations where fonte = 'manual_hist' and preco_bruto = 30.00) = 0.030000, 'normalização do trigger errada';
+  assert (select legacy_id from price_observations where fonte = 'manual_hist' and preco_bruto = 30.00) is not null, 'legacy_id ausente no trigger';
+  -- linha só de custo fixo não vira observação de preço
+  insert into precos_manuais_hist (ingrediente_id, nome, custo_fixo) values (12, 'Fixo', 0.7);
+  assert (select count(*) from price_observations where fonte = 'manual_hist') = obs, 'custo_fixo virou observação indevidamente';
+end $$;
+-- 2. QC bloqueia snapshot ruim e integra o bom
+update snapshots set data = current_date + 30 where id in (2, 3);   -- pendentes antigos fora do teste
+insert into snapshots (data) values (current_date - 10);            -- id 7: SEM precos → QC reprova
+insert into snapshots (data) values (current_date - 9);             -- id 8: com preço → QC aprova
+insert into precos (snapshot_id, ingrediente_id, mediana_normalizada, qtd_resultados) values (8, 10, 0.004, 5);
+do $$
+declare n int;
+begin
+  n := aprovar_coletas_pendentes(0);
+  assert n = 1, 'esperava exatamente 1 snapshot autoaprovado, veio ' || n;
+  -- reprovado: continua pendente, com checks e falha registradas
+  assert (select count(*) from custos_pratos where snapshot_id = 7) = 0, 'snapshot reprovado foi integrado';
+  assert (select count(*) from data_quality_checks where snapshot_id = 7 and severidade = 'bloqueante' and resultado is false) = 2,
+    'checks bloqueantes do snapshot 7 não registrados';
+  assert (select count(*) from pipeline_runs where snapshot_id = 7 and kind = 'auto_approval_qc' and status = 'failed') = 1,
+    'falha de QC não registrada no ledger';
+  -- aprovado: integrado com shadow e mediana correta (P1 11.20, P2 1.70 → 6.45)
+  assert (select custo_total_pf from snapshots where id = 8) = 6.45, 'mediana do snapshot 8 != 6.45';
+  assert (select count(*) from shadow_publicacoes where snapshot_id = 8) = 1, 'shadow não publicado na autoaprovação';
+  assert (select count(*) from data_quality_checks where snapshot_id = 8 and severidade = 'bloqueante' and resultado is true) = 2,
+    'checks do snapshot 8 não registrados';
+  assert (select resultado from data_quality_checks where snapshot_id = 8 and regra = 'ingredientes_amostra_baixa') is true,
+    'aviso de amostra deveria passar (qtd_resultados=5)';
+end $$;
+SQL
+
+echo "PASS: migrações 42/43/44/45/46/47/48/49 — todos os testes passaram"
