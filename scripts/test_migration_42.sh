@@ -446,7 +446,7 @@ begin
 end $$;
 SQL
 
-echo "13/13 registry de fatores e vintage (migração 50)"
+echo "13/14 registry de fatores e vintage (migração 50)"
 PSQL <<'SQL'
 insert into fatores_catalogo (serie, label, categoria, granularidade, unidade) values ('ipca_1101', 'Arroz', 'Cereais', 'mensal', '%');
 insert into fatores_preditores (serie, data, valor, fonte) values
@@ -489,4 +489,45 @@ begin
 end $$;
 SQL
 
-echo "PASS: migrações 42/43/44/45/46/47/48/49/50 — todos os testes passaram"
+echo "14/14 DIEESE por capital (migração 51)"
+PSQL < supabase/migrations/supabase_migration_51.sql
+PSQL < supabase/migrations/supabase_migration_51.sql
+PSQL <<'SQL'
+do $$
+begin
+  -- inserção normal
+  insert into dieese_capital_observations (serie, capital, data, valor) values
+    ('dieese_cesta', 'SP', '2026-07-01', 860.00),
+    ('dieese_cesta', 'RJ', '2026-07-01', 840.00);
+  assert (select count(*) from dieese_capital_observations) = 2, 'inserção de capitais falhou';
+  -- reingestão idêntica não duplica
+  insert into dieese_capital_observations (serie, capital, data, valor) values ('dieese_cesta', 'SP', '2026-07-01', 860.00)
+  on conflict (serie, capital, data, valor) do nothing;
+  assert (select count(*) from dieese_capital_observations) = 2, 'reingestão idêntica duplicou';
+  -- revisão do DIEESE (valor muda): novo fato, o antigo sobrevive
+  insert into dieese_capital_observations (serie, capital, data, valor) values ('dieese_cesta', 'SP', '2026-07-01', 862.50)
+  on conflict (serie, capital, data, valor) do nothing;
+  assert (select count(*) from dieese_capital_observations where serie = 'dieese_cesta' and capital = 'SP' and data = '2026-07-01') = 2,
+    'revisão não preservou o valor antigo';
+  -- painel de capitais visível por mês
+  assert (select n_capitais from dieese_cobertura_capitais where serie = 'dieese_cesta' and data = '2026-07-01') = 3,
+    'view de cobertura não reflete os 3 fatos (SP antigo+novo, RJ)';
+  -- append-only
+  begin
+    delete from dieese_capital_observations where capital = 'RJ';
+    raise exception 'DELETE_PASSOU';
+  exception when others then
+    if sqlerrm = 'DELETE_PASSOU' then raise; end if;
+    assert sqlerrm like '%append-only%', 'erro inesperado: ' || sqlerrm;
+  end;
+  -- FK exige série registrada (a rota real usa séries já no seed da 50)
+  begin
+    insert into dieese_capital_observations (serie, capital, data, valor) values ('serie_inexistente', 'SP', '2026-07-01', 1);
+    raise exception 'FK_PASSOU';
+  exception when others then
+    if sqlerrm = 'FK_PASSOU' then raise; end if;
+  end;
+end $$;
+SQL
+
+echo "PASS: migrações 42/43/44/45/46/47/48/49/50/51 — todos os testes passaram"
