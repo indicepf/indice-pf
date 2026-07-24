@@ -285,8 +285,9 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   function textoModelo(m: ResultadoRegressao): string {
     const p = (v: number) => isNaN(v) ? '—' : v < 0.001 ? '<0,001' : v.toFixed(3)
     return [
-      `Modelo de regressão — Índice PF (${nacional ? 'mediana nacional' : 'blend do prato'})`,
+      `Associação exploratória (OLS na amostra) — Índice PF (${nacional ? 'mediana nacional' : 'blend do prato'})`,
       `R² ${m.r2.toFixed(3)} · R² ajust. ${m.r2Ajustado.toFixed(3)} · F ${m.f.toFixed(2)} (p ${p(m.fP)}) · n ${m.n} · gl ${m.gl}`,
+      'Exploratório: sem validação temporal, sem correção de múltiplos testes. Não é previsão nem causalidade.',
       '',
       'Variável\tCoef.\tErro-padrão\tt\tp-valor',
       ...m.coeficientes.map(c => `${c.nome}\t${c.coef.toFixed(4)}\t${c.erroPadrao.toFixed(4)}\t${isNaN(c.t) ? '—' : c.t.toFixed(2)}\t${p(c.p)}`),
@@ -628,7 +629,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       </div>
 
       {admin && modalAberto && modelo && (
-        <Modal title="Modelo de regressão temporal" onClose={() => setModalAberto(false)} wide>
+        <Modal title="Associação exploratória (OLS na amostra)" onClose={() => setModalAberto(false)} wide>
           {'erro' in modelo ? (
             <p className="text-sm text-accent">{modelo.erro}</p>
           ) : (
@@ -657,13 +658,13 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                         <td className="px-3 py-1.5 text-right tnum">{c.coef.toFixed(4)}</td>
                         <td className="px-3 py-1.5 text-right tnum text-dim">{c.erroPadrao.toFixed(4)}</td>
                         <td className="px-3 py-1.5 text-right tnum">{isNaN(c.t) ? '—' : c.t.toFixed(2)}</td>
-                        <td className={`px-3 py-1.5 text-right tnum ${c.p < 0.05 ? 'text-ok font-medium' : 'text-dim'}`}>{isNaN(c.p) ? '—' : c.p < 0.001 ? '<0,001' : c.p.toFixed(3)}</td>
+                        <td className="px-3 py-1.5 text-right tnum text-dim">{isNaN(c.p) ? '—' : c.p < 0.001 ? '<0,001' : c.p.toFixed(3)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-dim">p-valor &lt; 0,05 (verde) = preditor significativo. Preditores alinhados por carry-forward à data de cada coleta.</p>
+              <p className="text-xs text-dim">Associação exploratória na amostra: os p-valores não têm correção para múltiplos testes nem para autocorrelação temporal — não indicam significância confirmada, causalidade ou capacidade de previsão. Preditores alinhados por carry-forward à data de cada coleta.</p>
               <div style={{ width: '100%', height: 240 }}>
                 <ResponsiveContainer>
                   <ComposedChart data={modelo.observado.map((o, i) => ({ i: i + 1, obs: o, prev: modelo.previsto[i] }))} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
@@ -673,7 +674,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                     <Tooltip formatter={(v: any) => `R$ ${Number(v).toFixed(2)}`} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Line type="monotone" dataKey="obs" name="Observado" stroke={COR.paprika} strokeWidth={2} dot={{ r: 2 }} />
-                    <Line type="monotone" dataKey="prev" name="Previsto" stroke={COR.azul} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2 }} />
+                    <Line type="monotone" dataKey="prev" name="Ajustado na amostra" stroke={COR.azul} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
