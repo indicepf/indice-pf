@@ -288,6 +288,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       `Associação exploratória (OLS na amostra) — Índice PF (${nacional ? 'mediana nacional' : 'blend do prato'})`,
       `R² ${m.r2.toFixed(3)} · R² ajust. ${m.r2Ajustado.toFixed(3)} · F ${m.f.toFixed(2)} (p ${p(m.fP)}) · n ${m.n} · gl ${m.gl}`,
       'Exploratório: sem validação temporal, sem correção de múltiplos testes. Não é previsão nem causalidade.',
+      ...(m.avisoAmostra ? [m.avisoAmostra] : []),
       '',
       'Variável\tCoef.\tErro-padrão\tt\tp-valor',
       ...m.coeficientes.map(c => `${c.nome}\t${c.coef.toFixed(4)}\t${c.erroPadrao.toFixed(4)}\t${isNaN(c.t) ? '—' : c.t.toFixed(2)}\t${p(c.p)}`),
@@ -634,6 +635,9 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
             <p className="text-sm text-accent">{modelo.erro}</p>
           ) : (
             <div className="space-y-4">
+              {modelo.avisoAmostra && (
+                <p className="text-xs text-accent bg-accent/5 border border-accent/30 rounded-md px-3 py-2">{modelo.avisoAmostra}</p>
+              )}
               <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
                 <span className="text-dim">R² <strong className="text-ink tnum">{modelo.r2.toFixed(3)}</strong></span>
                 <span className="text-dim">R² ajust. <strong className="text-ink tnum">{modelo.r2Ajustado.toFixed(3)}</strong></span>

@@ -6,24 +6,46 @@ import { regressaoLinear } from '@/lib/regressao'
 import { classificarBenchmark, N_MIN_BENCHMARK } from '@/lib/benchmark'
 import { abasReconstrucao } from '@/lib/export-reconstrucao'
 
-describe('gate prudencial da regressão', () => {
-  it('bloqueia amostra abaixo de max(30, 10×parâmetros)', () => {
-    const y = Array.from({ length: 23 }, (_, i) => i + 1)
-    const r = regressaoLinear(y, [{ nome: 'x', valores: y.map(v => v * 2) }])
+// Fase 3: por decisão explícita do responsável (24/07/2026, ciente das
+// limitações), o gate prudencial (max(30, 10×parâmetros)) deixou de bloquear
+// a geração — só o piso MATEMÁTICO bloqueia (gl>=1, senão sigma²=rss/gl vira
+// NaN/Infinity). Abaixo do prudencial, o modelo é gerado com avisoAmostra
+// preenchido; a rotulagem exploratória (docs/014 princípio 8) não muda.
+describe('regressão: piso matemático bloqueia, prudencial só avisa', () => {
+  it('abaixo do piso matemático (n < p+1) bloqueia com erro', () => {
+    // p = 2 (intercepto + 1 preditor); precisa de n >= 3 para gl >= 1
+    const r = regressaoLinear([1, 2], [{ nome: 'x', valores: [1, 2] }])
     expect('erro' in r).toBe(true)
-    if ('erro' in r) expect(r.erro).toContain('mínimo prudencial é 30')
+    if ('erro' in r) expect(r.erro).toContain('matematicamente insuficiente')
   })
 
-  it('com 3 preditores o mínimo sobe para 40', () => {
+  it('amostra pequena (abaixo do prudencial, acima do matemático) é gerada com aviso', () => {
+    const y = Array.from({ length: 23 }, (_, i) => i + 1)
+    const r = regressaoLinear(y, [{ nome: 'x', valores: y.map(v => v * 2) }])
+    expect('erro' in r).toBe(false)
+    if (!('erro' in r)) {
+      expect(r.n).toBe(23)
+      expect(r.gl).toBe(21)
+      expect(r.avisoAmostra).toContain('Amostra pequena')
+      expect(r.avisoAmostra).toContain('mínimo prudencial seria 30')
+      expect(r.coeficientes[1].coef).toBeCloseTo(0.5, 6)   // y = 0 + 0.5·x exatamente (x=2y)
+      expect(r.r2).toBeCloseTo(1, 6)
+    }
+  })
+
+  it('com 3 preditores e n=35 (abaixo do prudencial 40) também gera, com aviso', () => {
     const n = 35
     const y = Array.from({ length: n }, (_, i) => i + 1)
     const xs = [1, 2, 3].map(k => ({ nome: `x${k}`, valores: y.map(v => v * k + (k % 2 ? 0.1 : -0.1) * (v % 5)) }))
     const r = regressaoLinear(y, xs)
-    expect('erro' in r).toBe(true)
-    if ('erro' in r) expect(r.erro).toContain('mínimo prudencial é 40')
+    expect('erro' in r).toBe(false)
+    if (!('erro' in r)) {
+      expect(r.avisoAmostra).toContain('mínimo prudencial seria 40')
+      expect(Number.isFinite(r.r2Ajustado)).toBe(true)   // gl=31>=1: sem NaN/Infinity
+    }
   })
 
-  it('com amostra suficiente ajusta y = 2x + 1 exatamente', () => {
+  it('com amostra suficiente (>= prudencial) ajusta y = 2x + 1 exatamente, sem aviso', () => {
     const x = Array.from({ length: 40 }, (_, i) => i + 1)
     const y = x.map(v => 2 * v + 1)
     const r = regressaoLinear(y, [{ nome: 'x', valores: x }])
@@ -32,6 +54,7 @@ describe('gate prudencial da regressão', () => {
       expect(r.coeficientes[0].coef).toBeCloseTo(1, 6)
       expect(r.coeficientes[1].coef).toBeCloseTo(2, 6)
       expect(r.r2).toBeCloseTo(1, 9)
+      expect(r.avisoAmostra).toBeNull()
     }
   })
 })
