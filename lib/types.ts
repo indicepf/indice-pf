@@ -29,7 +29,7 @@ export type Fonte = { titulo: string; loja: string; preco_bruto: number; exibica
 
 export type Profile = { id: string; nome: string | null; telefone: string | null; regiao: string | null; is_admin: boolean | null; sexo: string | null; data_nascimento: string | null; avatar_url: string | null }
 
-export type Ing = { id: number; nome: string; categoria: string | null; unidade: string | null; peso_ref_g: number | null }
+export type Ing = { id: number; nome: string; categoria: string | null; unidade: string | null; peso_ref_g: number | null; ativo?: boolean | null }
 
 export type Contribuicao = {
   id: number

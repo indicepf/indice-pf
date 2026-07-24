@@ -86,7 +86,8 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
   const [ings, setIngs] = useState<Ing[]>([])
   const [buscaIng, setBuscaIng] = useState('')
 
-  useEffect(() => { getIngredientes().then(setIngs) }, [])
+  // só ativos — os inativos não entram no índice, não faz sentido auditar
+  useEffect(() => { getIngredientes().then(l => setIngs(l.filter(i => i.ativo !== false))) }, [])
 
   async function abrirAuditoria(id: number, nome: string) {
     setAuditar({ id, nome }); setEntradas(null); setAuditMsg('')
@@ -514,7 +515,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
           <p className="text-sm font-medium mb-1">Auditar qualquer ingrediente</p>
           <p className="text-xs text-dim mb-2">
             O DIEESE só mede 13 alimentos básicos, então a tabela acima compara só esses. Mas você pode
-            inspecionar a coleta de qualquer um dos {ings.length || 139} ingredientes do índice.
+            inspecionar a coleta de qualquer um dos {ings.length || '125'} ingredientes ativos do índice.
           </p>
           <input value={buscaIng} onChange={e => setBuscaIng(e.target.value)} placeholder="Buscar ingrediente… (ex.: carne de sol, pintado, camarão)"
             className="bg-surface-2 border border-border rounded-md px-3 py-1.5 text-sm w-full sm:w-96 focus:outline-none focus:border-accent" />
