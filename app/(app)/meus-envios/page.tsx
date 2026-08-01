@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic'
 import { supabase, usuarioDoStorage } from '@/lib/supabase'
 import { getMinhasContribuicoes, excluirContribuicao, comRetry } from '@/lib/queries'
 import type { Contribuicao } from '@/lib/types'
+import { rotuloMotivo } from '@/lib/format'
 import { Badge, type BadgeTone } from '@/components/ui'
 import { chip } from '../../BotaoInicio'
 
@@ -74,6 +75,11 @@ export default function MeusEnviosPage() {
                     <p className="text-xs text-dim truncate">
                       {i.preco != null ? `R$ ${Number(i.preco).toFixed(2)} · ` : ''}{new Date(i.criado_em).toLocaleDateString('pt-BR')}{i.cidade ? ` · ${i.cidade}` : ''}
                     </p>
+                    {i.status === 'rejeitada' && i.motivo_categoria && (
+                      <p className="text-xs text-danger mt-1 leading-snug">
+                        {rotuloMotivo(i.motivo_categoria)}{i.motivo_detalhe ? ` — ${i.motivo_detalhe}` : ''}
+                      </p>
+                    )}
                   </div>
                   <Badge tone={s.tone} className="shrink-0">{s.txt}</Badge>
                   {i.status === 'pendente' && (

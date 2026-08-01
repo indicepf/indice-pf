@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getIngredientes, getProfile, comRetry } from '@/lib/queries'
@@ -9,9 +9,10 @@ import { rotuloQtd, exemploQtd } from '@/lib/format'
 import type { Ing } from '@/lib/types'
 import { Button, Input, Select } from '@/components/ui'
 import BotaoInicio from '../../BotaoInicio'
+import Camera from './Camera'
+import { salvarRascunho, lerRascunho, limparRascunho, type Rascunho } from '@/lib/rascunho'
 
 const TIPOS_LOJA = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência']
-const MAX_FOTOS = 10
 
 type Modo = 'single' | 'lote'
 type FotoItem = { file: File; preview: string }
@@ -68,6 +69,9 @@ export default function ContribuirPage() {
 
   // modo lote (várias fotos)
   const [fotos, setFotos] = useState<FotoItem[]>([])
+  const [camAberta, setCamAberta] = useState(false)
+  const [avisoRascunho, setAvisoRascunho] = useState(false)
+  const galeriaRef = useRef<HTMLInputElement>(null)
 
   const [busy, setBusy] = useState(false)
   const [progresso, setProgresso] = useState('')
@@ -87,6 +91,63 @@ export default function ContribuirPage() {
   }, [router])
 
   useEffect(() => { getIngredientes().then(setIngs) }, [])
+
+  // ── rascunho ─────────────────────────────────────────────────────────────
+  // snapshot do formulário num ref: o listener de saída precisa do valor mais
+  // recente sem se re-registrar a cada tecla (mesmo truque de useDialogo)
+  const dadosRef = useRef<Omit<Rascunho, 'em'> | null>(null)
+  dadosRef.current = userId ? {
+    userId, modo, tipoLoja, mercado, cidade, bairro, uf, endereco, coord,
+    ingredienteId, marca, preco, pesoG,
+    fotos: fotos.map(f => f.file), fotoUnica,
+  } : null
+  const pronto = useRef(false)   // só grava depois de tentar restaurar, senão apaga o rascunho
+
+  useEffect(() => {
+    if (!userId) return
+    lerRascunho(userId).then(r => {
+      pronto.current = true
+      if (!r) return
+      setModo(r.modo); setTipoLoja(r.tipoLoja); setMercado(r.mercado); setCidade(r.cidade)
+      setBairro(r.bairro); setUf(r.uf); setEndereco(r.endereco); setCoord(r.coord)
+      setIngredienteId(r.ingredienteId); setMarca(r.marca); setPreco(r.preco); setPesoG(r.pesoG)
+      setFotos(r.fotos.map((b, i) => {
+        const f = new File([b], `foto-${i}.jpg`, { type: 'image/jpeg' })
+        return { file: f, preview: URL.createObjectURL(f) }
+      }))
+      if (r.fotoUnica) {
+        const f = new File([r.fotoUnica], 'produto.jpg', { type: 'image/jpeg' })
+        setFotoUnica(f); setPreview(URL.createObjectURL(f))
+      }
+      // avisa só quando havia foto: restaurar apenas a localização é silencioso
+      setAvisoRascunho(r.fotos.length > 0 || !!r.fotoUnica)
+    })
+  }, [userId])
+
+  useEffect(() => {
+    const d = dadosRef.current
+    // nada a guardar num formulário vazio — evita regravar logo após um envio
+    if (!pronto.current || !d || (!d.fotos.length && !d.fotoUnica && !d.coord)) return
+    const t = setTimeout(() => salvarRascunho(d), 800)
+    return () => clearTimeout(t)
+  }, [modo, tipoLoja, mercado, cidade, bairro, uf, endereco, coord,
+      ingredienteId, marca, preco, pesoG, fotos, fotoUnica])
+
+  // o iOS descarta a aba sem aviso: os 800 ms do debounce podem não chegar
+  useEffect(() => {
+    const flush = () => { if (pronto.current && dadosRef.current) salvarRascunho(dadosRef.current) }
+    const onVis = () => { if (document.visibilityState === 'hidden') flush() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pagehide', flush)
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', flush) }
+  }, [])
+
+  function descartarRascunho() {
+    fotos.forEach(f => URL.revokeObjectURL(f.preview))
+    if (preview) URL.revokeObjectURL(preview)
+    setFotos([]); setFotoUnica(null); setPreview('')
+    setAvisoRascunho(false); limparRascunho()
+  }
 
   function pegarLocal() {
     setGeoMsg('')
@@ -163,6 +224,7 @@ export default function ContribuirPage() {
       if (r === 'dup') { setErro('Você já enviou esta mesma foto.'); return }
       if (r === 'falha') { setErro('Falha ao enviar. Tente novamente.'); return }
       setFotoUnica(null); setPreview(''); setIngredienteId(''); setPreco(''); setPesoG(''); setMarca('')
+      await limparRascunho(); setAvisoRascunho(false)
       setResultado({ enviadas: 1, dups: 0, falhas: 0 }); window.scrollTo(0, 0)
     } finally { setBusy(false) }
   }
@@ -172,16 +234,12 @@ export default function ContribuirPage() {
     setErro('')
     const files = Array.from(e.target.files || [])
     e.target.value = ''
-    if (!files.length) return
-    const espaco = MAX_FOTOS - fotos.length
-    if (espaco <= 0) { setErro(`Limite de ${MAX_FOTOS} fotos por lote.`); return }
-    const aceitar = files.slice(0, espaco)
-    if (files.length > espaco) setErro(`Limite de ${MAX_FOTOS} por lote — ${files.length - espaco} não adicionada(s).`)
-    const novas = await Promise.all(aceitar.map(async f => {
+    // sequencial: sem teto de fotos, comprimir tudo em paralelo estoura a
+    // memória no celular. Cada preview aparece assim que fica pronto.
+    for (const f of files) {
       const c = await comprimirImagem(f)
-      return { file: c, preview: URL.createObjectURL(c) } as FotoItem
-    }))
-    setFotos(prev => [...prev, ...novas])
+      setFotos(prev => [...prev, { file: c, preview: URL.createObjectURL(c) }])
+    }
   }
   function removerFoto(idx: number) {
     setFotos(prev => { const f = prev[idx]; if (f) URL.revokeObjectURL(f.preview); return prev.filter((_, i) => i !== idx) })
@@ -190,7 +248,13 @@ export default function ContribuirPage() {
   async function enviarLote() {
     setErro('')
     if (!fotos.length) { setErro('Adicione ao menos uma foto.'); return }
-    if (!coord) { setErro('Registre sua localização — ela é obrigatória para validar onde o preço foi coletado.'); return }
+    // fecha a câmera antes de barrar: o aviso e o botão de localização ficam na
+    // página, e sob o overlay o toque em Enviar pareceria não fazer nada
+    if (!coord) {
+      setCamAberta(false)
+      setErro('Registre sua localização — ela é obrigatória para validar onde o preço foi coletado.')
+      return
+    }
     setBusy(true)
     let enviadas = 0, dups = 0, falhas = 0
     const vistos = new Set<string>()
@@ -200,9 +264,14 @@ export default function ContribuirPage() {
         setProgresso(`Enviando ${idx + 1} de ${fotos.length}…`)
         const f = fotos[idx]
         const r = await gravarUma(f.file, vazio, `produto-${idx}`, vistos)
-        if (r === 'ok') enviadas++; else if (r === 'dup') dups++; else falhas++
+        if (r === 'ok') enviadas++; else if (r === 'dup') dups++; else { falhas++; continue }
+        // sai do lote assim que gravada: se a aba morrer no meio, o rascunho já
+        // não a contém e retomar não reenvia. Falhas ficam para nova tentativa.
+        URL.revokeObjectURL(f.preview)
+        setFotos(prev => prev.filter(x => x !== f))
       }
-      fotos.forEach(f => URL.revokeObjectURL(f.preview)); setFotos([])
+      if (!falhas) await limparRascunho()
+      setCamAberta(false)
       setResultado({ enviadas, dups, falhas }); window.scrollTo(0, 0)
     } finally { setBusy(false); setProgresso('') }
   }
@@ -241,12 +310,19 @@ export default function ContribuirPage() {
             {/* seletor de modo */}
             <div className="inline-flex border border-border rounded-[var(--r-sm)] overflow-hidden bg-surface text-sm mb-5">
               {([['single', 'Uma foto'], ['lote', 'Lote (várias)']] as [Modo, string][]).map(([k, label]) => (
-                <button key={k} onClick={() => { setModo(k); setErro('') }}
+                <button key={k} onClick={() => { setModo(k); setErro(''); setCamAberta(false) }}
                   className={`px-4 py-1.5 transition-colors cursor-pointer ${modo === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>
                   {label}
                 </button>
               ))}
             </div>
+
+            {avisoRascunho && (
+              <p className="text-xs text-dim mb-4">
+                Rascunho restaurado.{' '}
+                <button onClick={descartarRascunho} className="text-accent hover:underline cursor-pointer">Descartar</button>
+              </p>
+            )}
 
             {modo === 'single' ? (
               <>
@@ -303,8 +379,9 @@ export default function ContribuirPage() {
             ) : (
               <>
                 <p className="text-sm text-dim mb-4">
-                  Anexe <strong>todas as fotos de uma vez</strong> (como no WhatsApp). Registre a localização, o mercado e o
-                  tipo <strong>uma vez</strong> — valem para todas. Ingrediente e preço ficam para a moderação. Cada foto vira uma contribuição.
+                  Abra a câmera e fotografe <strong>quantos produtos quiser em sequência</strong> — o envio é um só, no fim.
+                  Registre a localização, o mercado e o tipo <strong>uma vez</strong> — valem para todas.
+                  Ingrediente e preço ficam para a moderação. Cada foto vira uma contribuição.
                 </p>
 
                 {fotos.length > 0 && (
@@ -319,15 +396,17 @@ export default function ContribuirPage() {
                   </div>
                 )}
 
-                {fotos.length < MAX_FOTOS && (
-                  <label className="block">
-                    <div className="rounded-[var(--r)] border-2 border-dashed border-border-2 bg-surface py-6 grid place-items-center cursor-pointer hover:border-accent transition-colors text-center">
-                      <p className="font-medium text-ink text-sm">+ Anexar fotos</p>
-                      <p className="text-xs text-dim mt-1">Selecione várias de uma vez — até {MAX_FOTOS} por lote ({fotos.length}/{MAX_FOTOS})</p>
-                    </div>
-                    <input type="file" accept="image/*" multiple className="hidden" onChange={adicionarFotos} />
-                  </label>
-                )}
+                <Button full onClick={() => setCamAberta(true)}>Abrir câmera</Button>
+
+                <label className="block mt-3">
+                  <div className="rounded-[var(--r)] border-2 border-dashed border-border-2 bg-surface py-6 grid place-items-center cursor-pointer hover:border-accent transition-colors text-center">
+                    <p className="font-medium text-ink text-sm">+ Anexar da galeria</p>
+                    <p className="text-xs text-dim mt-1">
+                      Selecione várias de uma vez, sem limite{fotos.length ? ` (${fotos.length} já anexada${fotos.length === 1 ? '' : 's'})` : ''}
+                    </p>
+                  </div>
+                  <input ref={galeriaRef} type="file" accept="image/*" multiple className="hidden" onChange={adicionarFotos} />
+                </label>
 
                 <div className="mt-6 border-t border-border pt-5">
                   <p className="text-xs uppercase tracking-wide text-dim mb-3">Vale para todas as fotos</p>
@@ -358,6 +437,17 @@ export default function ContribuirPage() {
           </>
         )}
       </div>
+
+      {camAberta && (
+        <Camera
+          fotos={fotos} busy={busy} progresso={progresso}
+          onCapturar={f => setFotos(prev => [...prev, { file: f, preview: URL.createObjectURL(f) }])}
+          onRemover={removerFoto}
+          onGaleria={() => galeriaRef.current?.click()}
+          onEnviar={enviarLote}
+          onFechar={() => setCamAberta(false)}
+        />
+      )}
     </main>
   )
 }

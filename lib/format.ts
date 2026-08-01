@@ -133,6 +133,33 @@ export function unidadeCurta(unidade?: string | null) {
 	}
 }
 
+// unidade "grande" para a moderação digitar 1 kg em vez de 1000 g. Só massa e
+// volume têm múltiplo; unidade/maço são contagem. null = sem toggle.
+export function unidadeMil(unidade?: string | null) {
+	switch (unidade) {
+		case "unidade": case "maco": return null;
+		case "ml": return "L";
+		default: return "kg";
+	}
+}
+
+// vocabulário de recusa da moderação — grava a chave em
+// contribuicoes.motivo_categoria (migração 52) e exibe o rótulo nas duas
+// pontas: moderador (/admin) e contribuinte (/meus-envios).
+export const MOTIVOS_REJEICAO: { chave: string; rotulo: string }[] = [
+	{ chave: "foto_ilegivel", rotulo: "Foto ilegível ou desfocada" },
+	{ chave: "preco_ausente", rotulo: "Preço não visível na foto" },
+	{ chave: "qtd_ausente", rotulo: "Peso/quantidade não visível" },
+	{ chave: "produto_fora_catalogo", rotulo: "Produto fora do catálogo do índice" },
+	{ chave: "duplicada", rotulo: "Foto repetida" },
+	{ chave: "nao_e_produto", rotulo: "Foto não mostra o produto com a etiqueta" },
+	{ chave: "outro", rotulo: "Outro" },
+];
+
+export function rotuloMotivo(chave?: string | null) {
+	return MOTIVOS_REJEICAO.find(m => m.chave === chave)?.rotulo ?? chave ?? "";
+}
+
 // (XX) XXXXX-XXXX
 export function mascararTel(v: string) {
 	const d = v.replace(/\D/g, "").slice(0, 11);
