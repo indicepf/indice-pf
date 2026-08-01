@@ -636,7 +636,7 @@ export async function getProfile(uid: string): Promise<Profile | null> {
 
 export async function getMinhasContribuicoes(uid: string): Promise<Contribuicao[]> {
   const { data, error } = await supabase.from('contribuicoes')
-    .select('id,produto,preco,status,foto_url,criado_em,cidade,endereco,lat,lng,ingredientes(nome)')
+    .select('id,produto,preco,status,foto_url,criado_em,cidade,endereco,lat,lng,motivo_categoria,motivo_detalhe,ingredientes(nome)')
     .eq('user_id', uid).order('criado_em', { ascending: false })
   if (error) throw error
   return (data as unknown as Contribuicao[]) || []

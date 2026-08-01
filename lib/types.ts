@@ -43,6 +43,8 @@ export type Contribuicao = {
   lat: number | null
   lng: number | null
   ingredientes: { nome: string } | null
+  motivo_categoria?: string | null
+  motivo_detalhe?: string | null
 }
 
 export type ContribuicaoFull = {

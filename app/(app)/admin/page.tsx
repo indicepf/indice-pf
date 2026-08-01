@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { inputBase } from '@/components/ui'
+import { inputBase, Modal, Select } from '@/components/ui'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, limparSessaoLocal, usuarioDoStorage } from '@/lib/supabase'
 import {
@@ -12,7 +12,7 @@ import {
   superExcluir, superEditarSaque,
   type IngManual, type PrecoManualHist,
 } from '@/lib/queries'
-import { brl, cpfParcial, unidadeCurta, VALOR_POR_FOTO } from '@/lib/format'
+import { brl, cpfParcial, unidadeCurta, unidadeMil, MOTIVOS_REJEICAO, VALOR_POR_FOTO } from '@/lib/format'
 import { capturarContexto, resumoDispositivo } from '@/lib/contexto'
 import type { ContribuicaoFull, Ing } from '@/lib/types'
 import BotaoInicio, { chip } from '../../BotaoInicio'
@@ -80,6 +80,12 @@ function AdminInner() {
   const [visiveisPrecos, setVisiveisPrecos] = useState(20)
   const [precoAberto, setPrecoAberto] = useState<number | null>(null)
   const [visiveisMod, setVisiveisMod] = useState(20)
+  // unidade de digitação da qtd na moderação: com o toggle ligado, "1" vale 1 kg
+  // (ou 1 L). Fica grudado entre os cards — a fila costuma ser toda do mesmo
+  // tipo, e o ponto é não redigitar "1000" item a item.
+  const [escalaMil, setEscalaMil] = useState(false)
+  const [rejeitando, setRejeitando] = useState<ContribuicaoFull | null>(null)
+  const [motivoCat, setMotivoCat] = useState(''); const [motivoDet, setMotivoDet] = useState('')
   const [addAberto, setAddAberto] = useState(false)
 
   const [uid, setUid] = useState<string | null | undefined>(undefined)
@@ -263,16 +269,38 @@ function AdminInner() {
     setPrecoMsg(error ? `Erro ao recalcular: ${error.message}` : 'Custos do índice recalculados.')
   }
 
-  async function moderar(c: ContribuicaoFull, status: 'aprovada' | 'rejeitada') {
-    if (status === 'aprovada') {
-      // aprova + registra a leitura de campo (calibra o índice) + recalcula
-      const ctx = await capturarContexto()
-      await aprovarContribuicao(c.id, c.ingrediente_id, parseNum(c.preco), parseNum(c.peso_g), c.marca, ctx)
-      await recalcularCustos()
-    } else {
-      await moderarContribuicao(c.id, { status: 'rejeitada' })
-    }
+  // unidade base do ingrediente + o múltiplo que o toggle oferece (kg/L ou nenhum)
+  function unidadeDe(c: ContribuicaoFull) { return ings.find(i => i.id === c.ingrediente_id)?.unidade ?? null }
+  // qtd em unidade base (g/ml/un) — é o que peso_g guarda e o pipeline consome
+  function pesoBase(c: ContribuicaoFull) {
+    const p = parseNum(c.peso_g)
+    if (p == null) return null
+    return escalaMil && unidadeMil(unidadeDe(c)) ? p * 1000 : p
+  }
+
+  async function aprovar(c: ContribuicaoFull) {
+    // a descrição do produto não passa pela RPC de aprovação — grava antes, no
+    // mesmo UPDATE genérico da moderação (a RPC só lê marca e loja)
+    await moderarContribuicao(c.id, { produto: c.produto?.trim() || null })
+    // aprova + registra a leitura de campo (calibra o índice) + recalcula
+    const ctx = await capturarContexto()
+    await aprovarContribuicao(c.id, c.ingrediente_id, parseNum(c.preco), pesoBase(c), c.marca, ctx)
+    await recalcularCustos()
     setItens(prev => prev.filter(i => i.id !== c.id))
+  }
+
+  // rejeita com motivo: o contribuinte lê em /meus-envios e o trigger trg_audit
+  // arquiva o diff em audit_log (visível na aba Auditoria) sem código extra
+  async function rejeitar() {
+    const c = rejeitando
+    if (!c || !motivoCat) return
+    const { error } = await moderarContribuicao(c.id, {
+      status: 'rejeitada', motivo_categoria: motivoCat, motivo_detalhe: motivoDet.trim() || null,
+      rejeitado_por: uid, rejeitado_em: new Date().toISOString(),
+    })
+    if (error) { alert('Erro ao rejeitar: ' + error.message); return }
+    setItens(prev => prev.filter(i => i.id !== c.id))
+    setRejeitando(null)
   }
 
   function patch(id: number, campo: keyof ContribuicaoFull, valor: any) {
@@ -346,7 +374,11 @@ function AdminInner() {
       {aba === 'mod' ? (
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6" key="mod">
         {!itens.length && <p className="text-sm text-dim text-center py-10">Nenhuma contribuição pendente.</p>}
-        {itens.slice(0, visiveisMod).map(c => (
+        {itens.slice(0, visiveisMod).map(c => {
+        const un = unidadeDe(c)
+        const mil = unidadeMil(un)            // 'kg' | 'L' | null (contagem não tem múltiplo)
+        const usaMil = escalaMil && !!mil
+        return (
           <div key={c.id} className="border border-border rounded-lg bg-surface overflow-hidden sm:flex">
             <a href={c.foto_url || undefined} target="_blank" rel="noopener noreferrer" className="sm:w-56 shrink-0 block">
               {c.foto_url
@@ -358,7 +390,6 @@ function AdminInner() {
                 {c.tipo_loja || '—'}{c.mercado ? ` · ${c.mercado}` : ''}{c.cidade ? ` · ${c.cidade}` : ''}
                 {c.lat ? ` · ${c.lat}, ${c.lng}` : ''} · {new Date(c.criado_em).toLocaleString('pt-BR')}
               </p>
-              {c.produto && <p className="text-sm mb-2">“{c.produto}”</p>}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                 <label>Ingrediente
                   <select value={c.ingrediente_id ?? ''} onChange={e => patch(c.id, 'ingrediente_id', e.target.value ? Number(e.target.value) : null)}
@@ -371,19 +402,37 @@ function AdminInner() {
                   <input value={c.preco ?? ''} onChange={e => patch(c.id, 'preco', e.target.value.replace(/[^\d.,]/g, ''))}
                     inputMode="decimal" className={inputCls} />
                 </label>
-                <label>Qtd ({unidadeCurta(ings.find(i => i.id === c.ingrediente_id)?.unidade)})
+                {/* div em vez de label: o toggle de unidade é um botão e, dentro
+                    de um label, o clique também ativaria o campo */}
+                <div>
+                  <span className="flex items-center gap-1.5">Qtd
+                    {mil ? (
+                      <button type="button" onClick={() => setEscalaMil(v => !v)} title="Alternar a unidade de digitação"
+                        className="border border-border rounded px-1.5 py-px text-[0.65rem] text-dim hover:text-ink hover:bg-surface-2 transition cursor-pointer">
+                        {usaMil ? mil : unidadeCurta(un)} ⇄
+                      </button>
+                    ) : <>({unidadeCurta(un)})</>}
+                  </span>
                   <input value={c.peso_g ?? ''} onChange={e => patch(c.id, 'peso_g', e.target.value.replace(/[^\d.,]/g, ''))}
                     inputMode="decimal" className={inputCls} />
-                </label>
+                  {/* valor efetivo: tira a ambiguidade de alternar o toggle depois de digitar */}
+                  {usaMil && pesoBase(c) != null && (
+                    <p className="text-[0.65rem] text-dim mt-0.5">= {pesoBase(c)} {unidadeCurta(un)}</p>
+                  )}
+                </div>
                 <label className="col-span-2 sm:col-span-3">Marca (opcional — deixe vazio p/ itens sem marca)
                   <input value={c.marca ?? ''} onChange={e => patch(c.id, 'marca', e.target.value || null)}
                     placeholder="ex: Ancelli" className={inputCls} />
                 </label>
+                <label className="col-span-2 sm:col-span-3">Produto (descrição)
+                  <input value={c.produto ?? ''} onChange={e => patch(c.id, 'produto', e.target.value || null)}
+                    placeholder="opcional — o que está escrito na embalagem" className={inputCls} />
+                </label>
               </div>
               <div className="flex gap-2 mt-3">
-                <button onClick={() => moderar(c, 'aprovada')}
+                <button onClick={() => aprovar(c)}
                   className="text-sm bg-ok text-white px-4 py-1.5 rounded-md hover:brightness-95 transition">Aprovar</button>
-                <button onClick={() => moderar(c, 'rejeitada')}
+                <button onClick={() => { setRejeitando(c); setMotivoCat(''); setMotivoDet('') }}
                   className="text-sm border border-border text-dim px-4 py-1.5 rounded-md hover:bg-surface-2 transition">Rejeitar</button>
                 {souSuper && (
                   <button onClick={() => excluirSuper('contribuicoes', c.id, () => setItens(prev => prev.filter(i => i.id !== c.id)))}
@@ -393,12 +442,37 @@ function AdminInner() {
               </div>
             </div>
           </div>
-        ))}
+        )})}
         {itens.length > visiveisMod && (
           <button onClick={() => setVisiveisMod(v => v + 20)}
             className={`${chip} w-full justify-center py-2`}>
             Carregar mais ({itens.length - visiveisMod} restantes)
           </button>
+        )}
+
+        {rejeitando && (
+          <Modal title={`Rejeitar contribuição #${rejeitando.id}`} onClose={() => setRejeitando(null)}>
+            <p className="text-sm text-dim mb-4">O motivo aparece para quem enviou, em “Meus envios”, e fica registrado na auditoria.</p>
+            <label className="text-xs text-dim block">Motivo
+              <Select value={motivoCat} onChange={e => setMotivoCat(e.target.value)}>
+                <option value="">Selecione…</option>
+                {MOTIVOS_REJEICAO.map(m => <option key={m.chave} value={m.chave}>{m.rotulo}</option>)}
+              </Select>
+            </label>
+            <label className="text-xs text-dim block mt-3">
+              Observação {motivoCat === 'outro' ? '(obrigatória)' : '(opcional)'}
+              <textarea value={motivoDet} onChange={e => setMotivoDet(e.target.value)} rows={3}
+                placeholder="ex: a etiqueta está cortada, não dá para ler o preço"
+                className={`${inputCls} resize-none`} />
+            </label>
+            <div className="flex gap-2 mt-5">
+              <button onClick={rejeitar} disabled={!motivoCat || (motivoCat === 'outro' && !motivoDet.trim())}
+                className="text-sm bg-danger text-white px-4 py-1.5 rounded-md hover:brightness-95 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                Confirmar rejeição
+              </button>
+              <button onClick={() => setRejeitando(null)} className={chip}>Cancelar</button>
+            </div>
+          </Modal>
         )}
       </div>
       ) : aba === 'aprovadas' ? (
