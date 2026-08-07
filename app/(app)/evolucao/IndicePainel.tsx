@@ -23,6 +23,7 @@ const FONTES: [FonteKey, string][] = [['blend', 'Blend'], ['online', 'Online'], 
 const fmt = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
 const fmtDia = (d: string) => d.split('-').reverse().join('/')   // DD/MM/AAAA
 const ts = (d: string) => new Date(d + 'T00:00:00Z').getTime()
+const mesBR = (d: string) => d.slice(0, 7).split('-').reverse().join('/')   // AAAA-MM-DD → MM/AAAA
 const r2 = (n: number) => Math.round(n * 100) / 100
 const ORDEM_REG = ['Norte', 'Nordeste', 'Centro-oeste', 'Sudeste', 'Sul']
 
@@ -254,18 +255,32 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     })
   }, [pontosMensais, overlaySeriesM, overlayKeysM.join(','), zAtivoM])
 
-  // até que mês os preditores selecionados estão publicados. Manda o mais
+  // o que o painel mensal consegue de fato comparar. Manda o preditor mais
   // atrasado: é ele que define a partir de onde o gráfico fica incompleto.
-  const mesPublicado = useMemo(() => {
+  // 'pares' = meses com índice e ao menos um preditor; sem eles não há o que
+  // desenhar, e é melhor dizer isso do que exibir duas séries que não se tocam.
+  const janelaM = useMemo(() => {
     const ultimos = overlayKeysM
       .map(k => (overlaySeriesM[k] || []).reduce((mx, p) => (p.data > mx ? p.data : mx), ''))
       .filter(Boolean)
-    if (!ultimos.length || !pontosMensais.length) return null
-    const atrasado = ultimos.reduce((mn, d) => (d < mn ? d : mn))
-    return atrasado < pontosMensais[pontosMensais.length - 1].data
-      ? atrasado.slice(0, 7).split('-').reverse().join('/')
+    const atrasado = ultimos.length ? ultimos.reduce((mn, d) => (d < mn ? d : mn)) : null
+    const ultimoMes = pontosMensais.length ? pontosMensais[pontosMensais.length - 1].data : null
+    const pares = overlayKeysM.length
+      ? (dadosMes as any[]).filter(r => r.indice != null && overlayKeysM.some(k => r[`raw_${k}`] != null)).length
       : null
-  }, [overlayKeysM.join(','), overlaySeriesM, pontosMensais])
+    // z-score precisa de 2 pontos; com 1 a função devolve 0 e a série apareceria
+    // deitada na linha zero, fingindo estar na média
+    const semZ = zAtivoM
+      ? overlayKeysM.filter(k => (dadosMes as any[]).filter(r => r[`raw_${k}`] != null).length < 2)
+      : []
+    return {
+      defasado: atrasado && ultimoMes && atrasado < ultimoMes ? mesBR(atrasado) : null,
+      ultimoPreditor: atrasado ? mesBR(atrasado) : null,
+      primeiroIndice: pontosMensais.find(p => p.indice != null)?.data ?? null,
+      pares, semZ,
+    }
+  }, [overlayKeysM.join(','), overlaySeriesM, pontosMensais, dadosMes, zAtivoM])
+  const desenhaveisM = overlayKeysM.filter(k => !janelaM.semZ.includes(k))
 
   // séries dos preditores sobrepostos (eixo direito), limitadas à janela das coletas
   const varsQS = [...overlayVars].sort().join(',')
@@ -522,8 +537,8 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
               <div>
                 <p className="text-sm font-medium">Índice mensal × preditores mensais (admin)
                   <InfoTip texto="Índice agregado por mês para casar com as variáveis mensais do IPCA/juros/salário. Em 'variação %' as duas curvas têm a mesma natureza (quanto mudou no mês), que é o que torna a leitura comparável — o nível em R$ não compara com um percentual. Cada preditor mensal aparece só nos meses já publicados: IPCA e DIEESE saem com defasagem, e o mês sem publicação fica vazio em vez de repetir o valor anterior." /></p>
-                {mesPublicado && (
-                  <p className="text-xs text-dim">Preditores mensais publicados até {mesPublicado} · meses posteriores ficam vazios até a divulgação (IPCA/DIEESE têm defasagem).</p>
+                {janelaM.defasado && (
+                  <p className="text-xs text-dim">Preditores mensais publicados até {janelaM.defasado} · meses posteriores ficam vazios até a divulgação (IPCA/DIEESE têm defasagem).</p>
                 )}
               </div>
               <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface text-sm">
@@ -549,6 +564,27 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                 </button>
               </div>
             </div>
+            {janelaM.semZ.length > 0 && janelaM.pares !== 0 && (
+              <p className="text-xs text-dim">
+                Fora do gráfico por ter um único mês publicado na janela: {janelaM.semZ.map(k => PREDITOR_POR_KEY[k]?.label || k).join(', ')}.
+                {' '}Com um ponto só não há desvio-padrão para normalizar — desenhar em 0,0σ diria "está na média", que é diferente de "não dá para saber".
+              </p>
+            )}
+            {overlayKeysM.length > 0 && janelaM.pares === 0 ? (
+              <div className="border border-border rounded-lg p-6 text-center space-y-2">
+                <p className="text-sm font-medium">Sem meses em comum para comparar</p>
+                <p className="text-xs text-dim max-w-xl mx-auto">
+                  {janelaM.primeiroIndice
+                    ? `O índice mensal começa em ${mesBR(janelaM.primeiroIndice)}`
+                    : 'O índice mensal ainda não tem nenhum mês completo'}
+                  {janelaM.ultimoPreditor && ` e os preditores selecionados vão até ${janelaM.ultimoPreditor}`}.
+                  {' '}As séries não se sobrepõem em nenhum mês, então não há par para desenhar. O painel volta a comparar quando a próxima divulgação entrar.
+                </p>
+                {mensalEmVariacao && (
+                  <p className="text-xs text-dim">Em "variação %" o primeiro mês fica de fora por não ter mês anterior; em "nível R$" ele aparece.</p>
+                )}
+              </div>
+            ) : (
             <div style={{ width: '100%', height: 320 }}>
               <ResponsiveContainer>
                 <ComposedChart data={dadosMes} margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
@@ -585,18 +621,20 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Area yAxisId="left" type="monotone" dataKey={zAtivoM ? 'z_indice' : 'indice'} name={mensalEmVariacao ? 'Índice (var. % mês)' : 'Índice (mês)'}
                     stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivoM ? 'none' : 'url(#grad-mes)'} />
-                  {overlayKeysM.map((k, i) => (
+                  {desenhaveisM.map(k => (
                     // sem connectNulls: o mês sem publicação tem de aparecer como
                     // buraco, não como reta ligando os meses vizinhos. dot visível
-                    // porque uma série pode sobrar com um único ponto na janela.
+                    // porque uma série pode sobrar com poucos pontos na janela.
+                    // cor pelo índice em overlayKeysM, para casar com os chips.
                     <Line key={k} yAxisId={zAtivoM ? 'left' : 'right'} type="monotone" dataKey={`p_${k}`}
                       name={PREDITOR_POR_KEY[k]?.label || k}
-                      stroke={CHART_SERIES[(i + 1) % CHART_SERIES.length]}
+                      stroke={CHART_SERIES[(overlayKeysM.indexOf(k) + 1) % CHART_SERIES.length]}
                       strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2.5 }} connectNulls={false} />
                   ))}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
+            )}
           </div>
         )}
 
