@@ -37,6 +37,19 @@ const cf = (serie: { data: string; valor: number }[], d: string): number | null 
   return v
 }
 
+// séries mensais casam pelo mês de referência exato (YYYY-MM-01). Sem
+// carry-forward: IPCA/DIEESE saem com defasagem de publicação, e repetir o
+// último mês publicado afirmaria que os meses seguintes tiveram a mesma
+// variação/preço — dado inventado, não lacuna preenchida.
+const noMes = (serie: { data: string; valor: number }[], d: string): number | null =>
+  serie.find(p => p.data === d)?.valor ?? null
+
+// desvio-padrão amostral 0 = série constante na janela
+const constante = (vs: (number | null)[]) => {
+  const ok = vs.filter((v): v is number => v != null)
+  return ok.length < 2 || ok.every(v => v === ok[0])
+}
+
 // Aba "Índice" do histórico, extraída de /evolucao para ser reusada na área do
 // usuário. Autossuficiente: recebe os dados já carregados e mantém o próprio
 // estado de UI (fonte, prato, região, métricas, período, "e se").
@@ -71,6 +84,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   // com um prato selecionado, quais fontes mostrar (antes vinham as 3 sempre)
   const [fontesPrato, setFontesPrato] = useState<Set<FonteKey>>(new Set<FonteKey>(['blend']))
   const [modelo, setModelo] = useState<ResultadoRegressao | { erro: string } | null>(null)
+  const [avisoDescarte, setAvisoDescarte] = useState<string | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
   const [calculando, setCalculando] = useState(false)
   const [copiado, setCopiado] = useState(false)
@@ -223,7 +237,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       return (v: number | null) => v == null ? null : s > 0 ? (v - m) / s : 0
     }
     const brutos: Record<string, (number | null)[]> = {}
-    for (const k of overlayKeysM) brutos[k] = pontosMensais.map(p => cf(overlaySeriesM[k], p.data))
+    for (const k of overlayKeysM) brutos[k] = pontosMensais.map(p => noMes(overlaySeriesM[k], p.data))
     const zDe: Record<string, (v: number | null) => number | null> = {}
     for (const k of overlayKeysM) zDe[k] = z(brutos[k])
     const zInd = zAtivoM ? z(pontosMensais.map(p => p.indice ?? null)) : null
@@ -239,6 +253,19 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       return row
     })
   }, [pontosMensais, overlaySeriesM, overlayKeysM.join(','), zAtivoM])
+
+  // até que mês os preditores selecionados estão publicados. Manda o mais
+  // atrasado: é ele que define a partir de onde o gráfico fica incompleto.
+  const mesPublicado = useMemo(() => {
+    const ultimos = overlayKeysM
+      .map(k => (overlaySeriesM[k] || []).reduce((mx, p) => (p.data > mx ? p.data : mx), ''))
+      .filter(Boolean)
+    if (!ultimos.length || !pontosMensais.length) return null
+    const atrasado = ultimos.reduce((mn, d) => (d < mn ? d : mn))
+    return atrasado < pontosMensais[pontosMensais.length - 1].data
+      ? atrasado.slice(0, 7).split('-').reverse().join('/')
+      : null
+  }, [overlayKeysM.join(','), overlaySeriesM, pontosMensais])
 
   // séries dos preditores sobrepostos (eixo direito), limitadas à janela das coletas
   const varsQS = [...overlayVars].sort().join(',')
@@ -260,20 +287,34 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     return () => { vivo = false }
   }, [admin, varsQSM, rangeQS])
 
-  async function gerarModelo(keys: string[], pontos: { data: string; y: number }[]) {
+  async function gerarModelo(keys: string[], pontos: { data: string; y: number }[], mensal = false) {
     if (!keys.length) return
     setCalculando(true)
+    setAvisoDescarte(null)
     try {
       const j = await fetchAdmin(`/api/preditores?vars=${keys.join(',')}${rangeQS}`).then(r => r.json())
+      const ler = mensal ? noMes : cf
       const y: number[] = []
       const cols: number[][] = keys.map(() => [])
       pontos.forEach(pt => {
-        const xs = keys.map(k => cf(j[k] || [], pt.data))
+        const xs = keys.map(k => ler(j[k] || [], pt.data))
         if (pt.y != null && xs.every(v => v != null)) {
           y.push(pt.y); keys.forEach((k, ki) => cols[ki].push(xs[ki] as number))
         }
       })
-      setModelo(regressaoLinear(y, keys.map((k, ki) => ({ nome: PREDITOR_POR_KEY[k].label, valores: cols[ki] }))))
+      // regressor sem variação na janela é colinear com o intercepto: não
+      // informa nada e ainda deixa a matriz singular. Sai do modelo, mas o
+      // usuário precisa saber qual saiu e por quê.
+      const mantidos = keys.map((k, ki) => ({ k, valores: cols[ki] })).filter(c => !constante(c.valores))
+      const fora = keys.filter(k => !mantidos.some(c => c.k === k))
+      if (fora.length) setAvisoDescarte(
+        `Fora do modelo por não variar na janela analisada: ${fora.map(k => PREDITOR_POR_KEY[k]?.label || k).join(', ')}. `
+        + 'Um preditor constante é colinear com o intercepto — não explica nada e torna a matriz singular.')
+      if (!mantidos.length) {
+        setModelo({ erro: 'Nenhum preditor varia na janela analisada. Amplie o período ou espere a publicação dos dados mensais.' })
+        return
+      }
+      setModelo(regressaoLinear(y, mantidos.map(c => ({ nome: PREDITOR_POR_KEY[c.k].label, valores: c.valores }))))
     } catch (err) {
       setModelo({ erro: `Falha ao buscar preditores: ${String(err)}` })
     } finally {
@@ -478,8 +519,13 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         {admin && (
           <div className="panel p-5 overflow-visible space-y-3">
             <div className="flex items-start justify-between gap-3 flex-wrap">
-              <p className="text-sm font-medium">Índice mensal × preditores mensais (admin)
-                <InfoTip texto="Índice agregado por mês para casar com as variáveis mensais do IPCA/juros/salário. Em 'variação %' as duas curvas têm a mesma natureza (quanto mudou no mês), que é o que torna a leitura comparável — o nível em R$ não compara com um percentual." /></p>
+              <div>
+                <p className="text-sm font-medium">Índice mensal × preditores mensais (admin)
+                  <InfoTip texto="Índice agregado por mês para casar com as variáveis mensais do IPCA/juros/salário. Em 'variação %' as duas curvas têm a mesma natureza (quanto mudou no mês), que é o que torna a leitura comparável — o nível em R$ não compara com um percentual. Cada preditor mensal aparece só nos meses já publicados: IPCA e DIEESE saem com defasagem, e o mês sem publicação fica vazio em vez de repetir o valor anterior." /></p>
+                {mesPublicado && (
+                  <p className="text-xs text-dim">Preditores mensais publicados até {mesPublicado} · meses posteriores ficam vazios até a divulgação (IPCA/DIEESE têm defasagem).</p>
+                )}
+              </div>
               <div className="inline-flex border border-border rounded-md overflow-hidden bg-surface text-sm">
                 {([[true, 'variação %'], [false, 'nível R$']] as const).map(([v, label]) => (
                   <button key={label} onClick={() => setMensalEmVariacao(v)}
@@ -497,7 +543,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                   cor={() => COR.muted} />
                 <button onClick={() => gerarModelo([...regVarsM], pontosMensais
                   .filter((p): p is typeof p & { indice: number } => p.indice != null)   // 1º mês não tem variação
-                  .map(p => ({ data: p.data, y: p.indice })))}
+                  .map(p => ({ data: p.data, y: p.indice })), true)}
                   disabled={!regVarsM.size || calculando} className="btn-mk sm mt-2">
                   {calculando ? 'Calculando…' : 'Gerar modelo mensal'}
                 </button>
@@ -540,10 +586,13 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                   <Area yAxisId="left" type="monotone" dataKey={zAtivoM ? 'z_indice' : 'indice'} name={mensalEmVariacao ? 'Índice (var. % mês)' : 'Índice (mês)'}
                     stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivoM ? 'none' : 'url(#grad-mes)'} />
                   {overlayKeysM.map((k, i) => (
+                    // sem connectNulls: o mês sem publicação tem de aparecer como
+                    // buraco, não como reta ligando os meses vizinhos. dot visível
+                    // porque uma série pode sobrar com um único ponto na janela.
                     <Line key={k} yAxisId={zAtivoM ? 'left' : 'right'} type="monotone" dataKey={`p_${k}`}
                       name={PREDITOR_POR_KEY[k]?.label || k}
                       stroke={CHART_SERIES[(i + 1) % CHART_SERIES.length]}
-                      strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls />
+                      strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2.5 }} connectNulls={false} />
                   ))}
                 </ComposedChart>
               </ResponsiveContainer>
@@ -632,9 +681,15 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       {admin && modalAberto && modelo && (
         <Modal title="Associação exploratória (OLS na amostra)" onClose={() => setModalAberto(false)} wide>
           {'erro' in modelo ? (
-            <p className="text-sm text-accent">{modelo.erro}</p>
+            <div className="space-y-3">
+              <p className="text-sm text-accent">{modelo.erro}</p>
+              {avisoDescarte && <p className="text-xs text-dim">{avisoDescarte}</p>}
+            </div>
           ) : (
             <div className="space-y-4">
+              {avisoDescarte && (
+                <p className="text-xs text-accent bg-accent/5 border border-accent/30 rounded-md px-3 py-2">{avisoDescarte}</p>
+              )}
               {modelo.avisoAmostra && (
                 <p className="text-xs text-accent bg-accent/5 border border-accent/30 rounded-md px-3 py-2">{modelo.avisoAmostra}</p>
               )}
