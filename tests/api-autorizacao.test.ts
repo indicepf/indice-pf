@@ -115,6 +115,13 @@ describe('/api/preditores com admin', () => {
     expect(await res.json()).toEqual({})
     expect(res.headers.get('cache-control')).toBe('private, no-store')
   })
+  it('aceita as séries da PNAD, que a aba "PF como moeda" usa para converter', async () => {
+    // ficaram fora do catálogo na v1 e a rota só serve chave conhecida; sem
+    // isto o tempo de trabalho não vira série e a PNAD não entra no overlay
+    const res = await getPreditores(req('/api/preditores?vars=pnad_renda,pnad_horas_nordeste', 't'))
+    expect(res.status).toBe(200)
+    expect(Object.keys(await res.json()).sort()).toEqual(['pnad_horas_nordeste', 'pnad_renda'])
+  })
 })
 
 describe('/api/indice-retropolado com admin', () => {
