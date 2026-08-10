@@ -24,6 +24,7 @@ export const PREDITORES: readonly SeriePreditor[] = [
   { key: 'euro',             label: 'Euro',                  unidade: 'R$',  formato: 'moeda',      granularidade: 'diario' , grupo: 'Câmbio e mercado' },
   { key: 'bitcoin',          label: 'Bitcoin',               unidade: 'R$',  formato: 'moeda',      granularidade: 'diario' , grupo: 'Câmbio e mercado' },
   { key: 'ibovespa',         label: 'Ibovespa',              unidade: 'pts', formato: 'numero',     granularidade: 'diario' , grupo: 'Câmbio e mercado' },
+  { key: 'ouro',             label: 'Ouro (R$/g)',           unidade: 'R$',  formato: 'moeda',      granularidade: 'diario' , grupo: 'Câmbio e mercado' },
   // mensais — vão para o gráfico mensal (variação % do IPCA, juros, salário)
   { key: 'selic',            label: 'SELIC (% a.a.)',        unidade: '%',   formato: 'percentual', granularidade: 'mensal' , grupo: 'Juros e inflação' },
   { key: 'ipca',             label: 'IPCA (% mês)',          unidade: '%',   formato: 'percentual', granularidade: 'mensal' , grupo: 'Juros e inflação' },

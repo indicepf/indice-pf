@@ -10,12 +10,12 @@ import 'server-only'
 export type FonteConfig = {
   essencial: boolean
   minLinhas: number       // mínimo de linhas recebidas por execução
-  frequencia: 'diaria' | 'mensal'
+  frequencia: 'diaria' | 'mensal' | 'trimestral'
   lagDias: number         // atraso oficial esperado da publicação
 }
 
 export const FONTES_PREDITORES: { versao: number; fontes: Record<string, FonteConfig> } = {
-  versao: 1,
+  versao: 2,
   fontes: {
     // essenciais: alimentam retropolação, Laboratório e benchmark
     ipca:             { essencial: true,  minLinhas: 1,   frequencia: 'mensal', lagDias: 15 },
@@ -29,6 +29,10 @@ export const FONTES_PREDITORES: { versao: number; fontes: Record<string, FonteCo
     salario_minimo:   { essencial: false, minLinhas: 1, frequencia: 'mensal', lagDias: 30 },
     bitcoin:          { essencial: false, minLinhas: 1, frequencia: 'diaria', lagDias: 1 },
     ibovespa:         { essencial: false, minLinhas: 1, frequencia: 'diaria', lagDias: 1 },
+    // aba "PF como moeda": conversores. PNAD sai ~45 dias após o fim do trimestre
+    ouro:             { essencial: false, minLinhas: 1, frequencia: 'diaria',     lagDias: 1 },
+    pnad_renda:       { essencial: false, minLinhas: 1, frequencia: 'trimestral', lagDias: 60 },
+    pnad_horas:       { essencial: false, minLinhas: 1, frequencia: 'trimestral', lagDias: 60 },
   },
 }
 

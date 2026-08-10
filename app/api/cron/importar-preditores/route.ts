@@ -168,6 +168,81 @@ async function importarIbovespa(db: DB): Promise<number> {
   return upsert(db, rows)
 }
 
+// Ouro (Yahoo Finance GC=F, futuro em US$/onça troy) gravado em R$/grama: o
+// fechamento do pregão × PTAX do mesmo dia ÷ 31,1035. Pregão em NY sem PTAX
+// (feriado bancário só aqui) usa a última cotação anterior; dia anterior ao
+// 1º PTAX conhecido é descartado. Roda depois do dólar.
+const ONCA_TROY_G = 31.1035
+
+async function importarOuro(db: DB): Promise<number> {
+  const ult = await ultimaData(db, 'ouro')
+  const range = ult ? '3mo' : '2y'
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=${range}`
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (IndicePF)' }, signal: AbortSignal.timeout(20_000) })
+  if (!res.ok) throw new Error(`Yahoo ouro ${res.status}`)
+  const json = await res.json() as {
+    chart: { result: { timestamp: number[]; indicators: { quote: { close: (number | null)[] }[] } }[] }
+  }
+  const r0 = json.chart?.result?.[0]
+  if (!r0?.timestamp?.length) return 0
+  const closes = r0.indicators.quote[0].close
+  const pregoes = r0.timestamp
+    .map((ts, i) => ({ data: new Date(ts * 1000).toISOString().split('T')[0], usd: closes[i] }))
+    .filter(x => x.usd != null && !isNaN(x.usd as number))
+    .sort((a, b) => a.data.localeCompare(b.data)) as { data: string; usd: number }[]
+  if (!pregoes.length) return 0
+
+  // PTAX da janela + 10 dias de folga atrás, para cobrir o carry-back
+  const folga = new Date(pregoes[0].data + 'T12:00:00Z')
+  folga.setUTCDate(folga.getUTCDate() - 10)
+  const { data: ptax } = await db.from('fatores_preditores')
+    .select('data, valor').eq('serie', 'dolar')
+    .gte('data', folga.toISOString().split('T')[0])
+    .lte('data', pregoes[pregoes.length - 1].data)
+    .order('data', { ascending: true })
+  if (!ptax?.length) throw new Error('ouro: sem PTAX na janela')
+
+  const rows: Row[] = []
+  let i = 0, vigente: number | null = null
+  for (const p of pregoes) {
+    while (i < ptax.length && ptax[i].data <= p.data) vigente = Number(ptax[i++].valor)
+    if (vigente == null) continue
+    rows.push({ serie: 'ouro', data: p.data, valor: Math.round((p.usd * vigente / ONCA_TROY_G) * 100) / 100, fonte: 'yahoo_gcf' })
+  }
+  return upsert(db, rows)
+}
+
+// PNAD Contínua trimestral (SIDRA), Brasil + 5 Grandes Regiões: rendimento
+// médio mensal NOMINAL habitual (6472/5929) e horas habitualmente trabalhadas
+// por semana (6371/8186). Insumo do tempo de trabalho por PF — nominal, não a
+// variável "real", que vem deflacionada a preços do trimestre de referência e
+// não casa com um custo de PF corrente. Trimestre gravado no dia 01 do seu
+// primeiro mês (202601 → 2026-01-01).
+const PNAD_REGIAO: Record<string, string> = {
+  '1': 'norte', '2': 'nordeste', '3': 'sudeste', '4': 'sul', '5': 'centro_oeste',
+}
+
+async function importarPnad(db: DB, prefixo: string, tabela: number, variavel: number, classif = ''): Promise<number> {
+  const ult = await ultimaData(db, prefixo)
+  const periodo = ult ? 'last%208' : 'all'
+  const url = `https://apisidra.ibge.gov.br/values/t/${tabela}/n1/1/n2/all/v/${variavel}/p/${periodo}${classif}?formato=json`
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) throw new Error(`SIDRA ${prefixo} ${res.status}`)
+  const linhas = (await res.json() as { NC: string; D1C: string; D3C: string; V: string }[]).slice(1)
+  const rows: Row[] = linhas.map(r => {
+    const val = parseFloat(r.V)
+    if (isNaN(val)) return null
+    const regiao = r.NC === '1' ? '' : PNAD_REGIAO[r.D1C]
+    if (regiao === undefined) return null
+    const mes = String((Number(r.D3C.slice(4, 6)) - 1) * 3 + 1).padStart(2, '0')
+    return {
+      serie: regiao ? `${prefixo}_${regiao}` : prefixo,
+      data: `${r.D3C.slice(0, 4)}-${mes}-01`, valor: val, fonte: `sidra_${tabela}`,
+    }
+  }).filter(Boolean) as Row[]
+  return upsert(db, rows)
+}
+
 // IPCA por grupo (SIDRA/IBGE tabela 7060, variável 63 = variação mensal %).
 // categoria: c315 — 7170 Alimentação e bebidas; 7432 Alimentação fora do domicílio.
 async function importarIpcaSidra(db: DB, serie: string, categoria: number): Promise<number> {
@@ -236,8 +311,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const db = supabaseAdmin()
+  const pDolar = importarDolar(db)   // o ouro lê a PTAX do banco; precisa dela gravada antes
   const tarefas: [string, Promise<number>][] = [
-    ['dolar', importarDolar(db)],
+    ['dolar', pDolar],
     ['euro', importarSgsDiario(db, 'euro', 21620, 2010)],
     ['selic', importarSgsMensal(db, 'selic', 432, 2010)],
     ['ipca', importarSgsMensal(db, 'ipca', 433, 2010)],
@@ -247,6 +323,9 @@ export async function GET(req: NextRequest) {
     ['ipca_alimentacao', importarIpcaSidra(db, 'ipca_alimentacao', 7170)],
     ['ipca_alim_fora', importarIpcaSidra(db, 'ipca_alim_fora', 7432)],
     ['sidra_itens', importarSidraCompleto(db)],
+    ['ouro', pDolar.then(() => importarOuro(db))],
+    ['pnad_renda', importarPnad(db, 'pnad_renda', 6472, 5929)],
+    ['pnad_horas', importarPnad(db, 'pnad_horas', 6371, 8186, '/c2/6794')],
   ]
   const resultados = await Promise.allSettled(tarefas.map(t => t[1]))
 
