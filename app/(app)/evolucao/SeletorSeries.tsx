@@ -14,6 +14,10 @@ export default function SeletorSeries({ titulo, opcoes, selecionadas, onToggle, 
   cor: (key: string) => string
 }) {
   const [aberto, setAberto] = useState<string | null>(null)
+  // O ref segue o grupo ABERTO, não o componente inteiro: `contains` testa
+  // descendência no DOM, então um ref no wrapper faria a linha do título, o
+  // espaço à direita dos botões (que ocupa a largura toda) e a linha dos chips
+  // contarem como "dentro" — clicar ali não fechava o painel.
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -29,14 +33,14 @@ export default function SeletorSeries({ titulo, opcoes, selecionadas, onToggle, 
   const escolhidas = opcoes.filter(o => selecionadas.has(o.key))
 
   return (
-    <div className="space-y-2" ref={ref}>
+    <div className="space-y-2">
       <p className="text-xs text-dim">{titulo}</p>
       <div className="flex gap-2 flex-wrap">
         {grupos.map(g => {
           const doGrupo = opcoes.filter(o => o.grupo === g)
           const nSel = doGrupo.filter(o => selecionadas.has(o.key)).length
           return (
-            <div key={g} className="relative">
+            <div key={g} className="relative" ref={aberto === g ? ref : undefined}>
               <button type="button" onClick={() => setAberto(aberto === g ? null : g)}
                 className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border transition ${
                   nSel ? 'border-accent/50 bg-accent/10 text-ink' : 'border-border bg-surface-2 text-ink-2 hover:border-accent'}`}>
