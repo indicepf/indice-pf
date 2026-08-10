@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Índice PF — O PF como numerário (análogo ao Big Mac Index)</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #1a1a1a;
+    margin: 0;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.6rem; font-weight: normal; margin-bottom: 4px; }
+  .subtitle { color: #555; margin-top: 0; margin-bottom: 36px; font-size: 0.95rem; font-family: Helvetica, Arial, sans-serif; }
+  h2 {
+    font-size: 1.15rem; font-weight: bold; margin-top: 48px;
+    padding-bottom: 4px; border-bottom: 1px solid #ccc;
+  }
+  h3 { font-size: 1rem; font-weight: bold; margin-top: 28px; }
+  p { margin: 12px 0; }
+  code {
+    font-family: "Courier New", monospace;
+    background: #f2f2f2; border: 1px solid #ddd;
+    padding: 1px 5px; font-size: 0.9em;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; font-family: Helvetica, Arial, sans-serif; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  th { font-weight: bold; border-bottom: 1px solid #1a1a1a; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 8px 0; }
+  .note { border: 1px solid #1a1a1a; padding: 14px 16px; margin: 20px 0; }
+  .note p:first-child { margin-top: 0; }
+  .toc { border: 1px solid #ccc; padding: 16px 22px; font-family: Helvetica, Arial, sans-serif; font-size: 0.92rem; }
+  .toc a { color: #1a1a1a; text-decoration: none; border-bottom: 1px solid #999; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .toc li { margin: 3px 0; }
+  .p0 { color: #b91c1c; font-weight: bold; }
+  .p1 { color: #b45309; font-weight: bold; }
+  .p2 { color: #555; font-weight: bold; }
+  .ok { color: #15803d; }
+  .no { color: #b91c1c; }
+  footer { margin-top: 56px; color: #777; font-size: 0.8rem; font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Índice PF — O PF como numerário</h1>
+  <p class="subtitle">
+    Análise de viabilidade de uma página que expressa preços de outros bens em unidades de prato feito,
+    no espírito (mas não no mecanismo) do Big Mac Index. Documento de decisão, escrito em 08/08/2026 a partir
+    do estado real do código em <code>main</code>. <strong>Nada aqui foi implementado</strong> — este doc existe
+    para abrir a próxima sessão de trabalho já com o escopo e os riscos definidos.
+  </p>
+
+  <div class="toc">
+    <strong>Sumário</strong>
+    <ol>
+      <li><a href="#conceito">O conceito: o que é e o que não é</a></li>
+      <li><a href="#denominador">O problema central: qual é o denominador</a></li>
+      <li><a href="#fontes">Fontes de dados e automação</a></li>
+      <li><a href="#atratividade">Atratividade e risco</a></li>
+      <li><a href="#emular">Sete usos do Big Mac Index para emular</a></li>
+      <li><a href="#escopo">Escopo proposto (v1) e o que fica fora</a></li>
+      <li><a href="#decisoes">Decisões pendentes do usuário</a></li>
+      <li><a href="#comecar">Como começar a próxima sessão</a></li>
+    </ol>
+  </div>
+
+  <h2 id="conceito">1. O conceito: o que é e o que não é</h2>
+  <p>
+    A ideia é boa, mas precisa de uma correção conceitual antes de qualquer código.
+  </p>
+  <p>
+    <strong>O que foi descrito não é o Big Mac Index.</strong> O Big Mac Index é um teste de
+    <em>paridade do poder de compra</em>: o mesmo bem, em países diferentes, gera uma taxa de câmbio implícita
+    que se compara ao câmbio de mercado. O que se quer aqui é a outra família — <strong>usar o bem como
+    numerário</strong> ("quantos PFs custa uma casa"), a família do "horas de trabalho por Big Mac"
+    (UBS <em>Prices and Earnings</em>).
+  </p>
+  <p>
+    São coisas diferentes e vale nomear certo. O app tem metodologia auditada (Fases 0–3, docs 014–030);
+    chamar de "Big Mac Index brasileiro" algo que não faz PPP é um flanco desnecessário. Nome sugerido para a
+    rota e o material: <strong>"O PF como unidade"</strong> ou <strong>"Quantos PFs cabem em…"</strong>.
+  </p>
+
+  <h2 id="denominador">2. O problema central: qual é o denominador</h2>
+  <div class="note">
+    <p>
+      <strong>Este é o único item capaz de inviabilizar a página.</strong> O índice mede
+      <strong>custo de insumo</strong> — mediana do custo de ingredientes de 100 pratos, a preço de varejo
+      (online/mercado/atacarejo). <strong>Não é</strong> o preço do PF servido no restaurante.
+    </p>
+    <p>
+      Um apartamento de R$ 400 mil dividido por um PF de insumo (~R$ 12–18) dá um número; dividido por um PF
+      de restaurante (~R$ 25–35) dá quase metade. O leitor tem o segundo na cabeça. Sem rótulo explícito, o
+      número vira ruído e ataca a credibilidade construída nas Fases 0–3.
+    </p>
+  </div>
+  <p>Duas saídas, recomendadas em conjunto:</p>
+  <ul>
+    <li>
+      <strong>Rotular sempre.</strong> "1 PF = custo de ingredientes para produzir um prato feito", com o valor
+      em R$ ao lado de <em>cada</em> conversão. Nunca exibir o múltiplo sozinho, nem em card, nem em imagem OG.
+    </li>
+    <li>
+      <strong>Criar uma segunda unidade, "PF servido".</strong> Ancorada em algo defensável: já existe a série
+      <code>ipca_alim_fora</code> (IPCA alimentação fora do domicílio) e o crowdsourcing em
+      <code>/contribuir</code>. Adicionar um campo "preço do PF no restaurante" na contribuição de campo
+      produz, em alguns meses, a série que torna a página honesta — e é um gancho de engajamento por si só.
+    </li>
+  </ul>
+  <p>
+    Consequência de arquitetura: a página deve ter um seletor de unidade (<em>PF de insumo</em> /
+    <em>PF servido</em>), não um número único. Enquanto a segunda série não existir, o seletor mostra a
+    opção desabilitada com a explicação — o que já educa o leitor sobre a diferença.
+  </p>
+
+  <h3>2.1 Restrição de série histórica</h3>
+  <p>
+    A medição canônica só existe desde <strong>21/06/2026</strong> (<code>CORTE_COLETA</code> em
+    <code>lib/format.ts</code>). Comparações históricas ("quantos PFs o salário mínimo comprava em 2015") só
+    são possíveis via <code>/api/indice-retropolado</code>. Vale a regra já registrada na Fase 3:
+    <strong>a série retropolada serve como contexto visual, nunca como amostra de regressão</strong> — ela é
+    construída aplicando variações de itens do IPCA à cesta-âncora, então regredi-la contra os mesmos itens é
+    circular. Use no gráfico; não use para afirmar relação estimada.
+  </p>
+
+  <h2 id="fontes">3. Fontes de dados e automação</h2>
+  <p>
+    Sim, dá para automatizar — e a maior parte da infraestrutura <strong>já existe</strong>:
+    <code>fatores_preditores</code>, <code>fatores_catalogo</code>, <code>/api/cron/importar-preditores</code>
+    (diário, 06:00 UTC), <code>/api/cron/importar-dieese</code> (mensal, dia 12), rotação de fontes e
+    <em>vintage</em> (migração 50). Cada série nova é uma entrada em <code>PREDITORES</code>
+    (<code>lib/preditores.ts</code>) mais um importador. Isso muda o custo do projeto de "novo subsistema"
+    para "mais algumas séries".
+  </p>
+
+  <table>
+    <tr><th>Item</th><th>Fonte</th><th>Custo</th><th>Nota</th></tr>
+    <tr><td>Dólar, euro</td><td>BCB PTAX / SGS</td><td class="ok">já no ar</td><td>diário</td></tr>
+    <tr><td>Bitcoin, Ibovespa</td><td>CoinGecko / Yahoo Finance</td><td class="ok">já no ar</td><td>diário</td></tr>
+    <tr><td>Salário mínimo</td><td>BCB SGS</td><td class="ok">já no ar</td><td>mensal</td></tr>
+    <tr><td>Cesta básica DIEESE (13 itens)</td><td>DIEESE</td><td class="ok">já no ar</td><td>mensal, por capital (migração 51)</td></tr>
+    <tr><td><strong>Ouro</strong></td><td>Yahoo <code>GC=F</code> × PTAX</td><td>trivial</td><td>mesmo importador do Ibovespa; converter USD/oz para R$/g</td></tr>
+    <tr><td><strong>Custo de construção (R$/m²)</strong></td><td>SIDRA / SINAPI, por UF</td><td>baixo</td><td>substituto honesto de "moradia"; <em>confirmar o código da tabela no SIDRA</em></td></tr>
+    <tr><td><strong>Aluguel</strong></td><td>IPCA aluguel residencial</td><td>baixo</td><td>variação %, não nível</td></tr>
+    <tr><td><strong>Renda por décimo e por UF</strong></td><td>SIDRA / PNAD Contínua</td><td>médio</td><td>trimestral; é o dado correto para "faixas sociais do IBGE"</td></tr>
+    <tr><td><strong>Renda por ocupação</strong></td><td>PNAD Contínua, grupamento ocupacional</td><td>médio</td><td>granularidade de <em>grupamento</em>, não de profissão individual</td></tr>
+    <tr><td><strong>Horas de trabalho por PF</strong></td><td>derivado</td><td>zero</td><td>renda-hora da PNAD ÷ custo do PF; não é coleta, é cálculo</td></tr>
+    <tr><td><strong>Carro</strong></td><td>FIPE (API não-oficial) ou IPCA veículos</td><td>médio</td><td>API não-oficial é frágil; IPCA veículos é estável mas é variação %</td></tr>
+    <tr><td>Imóvel (preço de venda)</td><td>FipeZap</td><td class="no">sem API gratuita</td><td>scraping é área cinzenta; avaliar depois</td></tr>
+    <tr><td>Terreno</td><td>—</td><td class="no">descartar</td><td>não há série nacional gratuita</td></tr>
+    <tr><td>Diamante</td><td>—</td><td class="no">descartar</td><td>não é commodity fungível; não existe preço spot público confiável</td></tr>
+  </table>
+
+  <h3>3.1 Duas armadilhas técnicas</h3>
+  <ul>
+    <li>
+      <strong>Nível vs. variação.</strong> Metade das fontes brasileiras gratuitas entrega apenas variação %
+      (IPCA), não preço em R$. Para dizer "N PFs por carro" é preciso <strong>nível</strong>. Onde só há
+      variação, encadear a partir de uma âncora — mas isso é exatamente o <code>current_basket_backcast</code>
+      já disciplinado na ADR <code>docs/027</code>. <strong>Reusar aquele padrão e o <code>productKind</code></strong>,
+      não inventar um segundo mecanismo de retropolação.
+    </li>
+    <li>
+      <strong>Frescor das séries.</strong> Vale a observação já registrada: IPCA sai por volta do dia 11 do mês
+      seguinte e o DIEESE no início do mês seguinte, então uma página de conversão terá sempre 1–2 meses finais
+      sem dado novo. Definir o comportamento na UI (usar o último mês publicado e datar explicitamente) em vez
+      de deixar aparecer como falha.
+    </li>
+  </ul>
+  <p>
+    Estimativa: ouro + renda PNAD + salário mínimo (já pronto) = <strong>v1 em poucos dias</strong>. O restante
+    é incremental, uma série por vez, sem migração nova além de eventuais linhas de catálogo.
+  </p>
+
+  <h2 id="atratividade">4. Atratividade e risco</h2>
+  <p>
+    Provavelmente o maior ganho de tração disponível hoje no app, por um motivo estrutural: <strong>o número do
+    índice é abstrato, a conversão é visceral.</strong> "O índice está em 14,32" não se compartilha. "Seu
+    salário mínimo compra 106 pratos feitos por mês" se compartilha.
+  </p>
+  <p>O que maximiza isso:</p>
+  <ul>
+    <li><strong>Personalização.</strong> Campo "digite seu salário" com resultado imediato e posição em relação
+      aos décimos da PNAD. Converte visitante em usuário logado melhor que qualquer rota atual.</li>
+    <li><strong>Imagem OG dinâmica</strong> por resultado (Next.js gera nativamente) — é o que faz circular em
+      WhatsApp e X sem esforço de distribuição.</li>
+    <li><strong>Isca de imprensa.</strong> O Big Mac Index dura 40 anos porque é citável. "Um salário mínimo
+      compra X PFs no Norte e Y no Sudeste" é matéria pronta, e o corte regional já existe.</li>
+    <li><strong>Rota pública e indexável</strong>, diferente de <code>/evolucao</code> e <code>/indice</code>
+      (admin/logado) — casa com o GTM/GA4/GSC já configurados.</li>
+  </ul>
+  <p>
+    <strong>Contra:</strong> é a página com maior risco reputacional se o denominador não estiver explícito
+    (seção 2). E não confundir com receita — o Premium é gratuito na fase de lançamento de qualquer forma;
+    isto é topo de funil, não monetização.
+  </p>
+
+  <h2 id="emular">5. Sete usos do Big Mac Index para emular</h2>
+  <p>Ordenados por relação valor/esforço no contexto do Índice PF.</p>
+
+  <h3>5.1 Minutos de trabalho por PF <span class="p0">prioridade máxima</span></h3>
+  <p>
+    Análogo direto do UBS <em>Prices and Earnings</em>. Renda-hora da PNAD por região, décimo e grupamento
+    ocupacional, dividida pelo custo do PF regional. É o melhor recorte único da página: cruza os três eixos
+    que já existem (nacional, regional, por prato) com um eixo social novo. Começar por aqui.
+  </p>
+
+  <h3>5.2 Versão ajustada por renda</h3>
+  <p>
+    O Big Mac ajustado por PIB per capita, que The Economist publica desde 2011. Regride o custo do PF regional
+    contra a renda média regional; o resíduo indica onde o PF está <em>caro para o padrão de vida local</em>.
+    O OLS já existe em <code>lib/regressao.ts</code>, com rotulagem de exploratório — encaixa direto e é
+    analiticamente mais interessante que o índice bruto.
+  </p>
+
+  <h3>5.3 Taxa de câmbio de poder de compra entre regiões</h3>
+  <p>
+    Análogo literal do mecanismo do Big Mac, aplicado internamente: se o PF custa R$ 12 no Nordeste e R$ 16 no
+    Sudeste, R$ 1 nordestino "vale" R$ 1,33 paulista em comida. Comparar com a diferença de renda nominal entre
+    regiões produz o over/undervalued. É o uso mais fiel ao original e não há equivalente publicado no Brasil.
+  </p>
+
+  <h3>5.4 Índice PF vs. IPCA oficial</h3>
+  <p>
+    O uso mais comum do Big Mac fora de PPP: termômetro alternativo de inflação. Os dois lados já estão no
+    banco; falta a versão pública e legível. Alto potencial de imprensa e <strong>alto risco se comunicado
+    mal</strong> — precisa explicar que medem coisas diferentes (insumo de varejo vs. cesta ponderada do
+    consumidor). Não publicar sem esse texto.
+  </p>
+
+  <h3>5.5 PF em dólares ao longo do tempo</h3>
+  <p>
+    Mostra quanto do movimento do custo é câmbio e quanto é doméstico. Barato: as duas séries já existem e são
+    diárias.
+  </p>
+
+  <h3>5.6 Spin-offs por prato</h3>
+  <p>
+    O padrão dos derivados do Big Mac (Latte Index, KFC Index na África, Billy Bookcase da IKEA): qualquer bem
+    padronizado vira índice. Aqui existem <strong>100 pratos</strong>. "Índice Feijoada", "Índice Baião de
+    Dois", "Índice Moqueca" — conteúdo regional recorrente e identitário, custo marginal zero, e resolve o eixo
+    "por tipo de prato".
+  </p>
+
+  <h3>5.7 Convergência de preços entre regiões <span class="p2">roadmap</span></h3>
+  <p>
+    O uso acadêmico do Big Mac (lei do preço único): se o desvio entre regiões cai ao longo do tempo, os
+    mercados regionais convergem. Só faz sentido com 12–18 meses de série. Anotar como roadmap, não v1.
+  </p>
+
+  <h2 id="escopo">6. Escopo proposto (v1) e o que fica fora</h2>
+  <p><strong>Dentro da v1:</strong></p>
+  <ul>
+    <li>Rota pública nova, com seletor de unidade (PF de insumo / PF servido, o segundo desabilitado na
+      estreia) e rótulo em R$ visível em toda conversão.</li>
+    <li>Conversões só com o que já está no banco: <strong>salário mínimo, dólar, euro, cesta DIEESE</strong>,
+      mais <strong>ouro</strong> (importador trivial).</li>
+    <li><strong>Minutos de trabalho por PF</strong> via PNAD Contínua (renda por décimo, UF e grupamento
+      ocupacional).</li>
+    <li>Eixos de corte: nacional, regional (5 regiões) e por prato — todos já disponíveis.</li>
+    <li>Personalização por salário digitado + imagem OG dinâmica.</li>
+  </ul>
+  <p><strong>Fora da v1:</strong> carro, imóvel, aluguel, custo de construção (entram por série, depois),
+    terreno e diamante (descartados de vez), comparação internacional (exigiria coletar preços de ingredientes
+    fora do Brasil, e as 100 receitas são regionais brasileiras — não vale o custo).</p>
+  <p>
+    Isso é pequeno, honesto e entrega a maior parte do apelo. O resto entra uma série por vez, no padrão de
+    importador que já existe.
+  </p>
+
+  <h2 id="decisoes">7. Decisões pendentes do usuário</h2>
+  <table>
+    <tr><th>#</th><th>Decisão</th><th>Impacto</th></tr>
+    <tr>
+      <td>D1</td>
+      <td>Adotar o seletor de duas unidades (insumo / servido) ou publicar só com o PF de insumo bem rotulado?</td>
+      <td>Define se entra ou não o campo novo em <code>/contribuir</code> já nesta fase</td>
+    </tr>
+    <tr>
+      <td>D2</td>
+      <td>Nome público da página e da unidade</td>
+      <td>Afeta rota, SEO, OG e texto da metodologia</td>
+    </tr>
+    <tr>
+      <td>D3</td>
+      <td>A página entra como rota pública nova ou como aba dentro de algo existente?</td>
+      <td>Rota pública é o que dá tração; exige revisão de <code>lib/server/autorizar.ts</code></td>
+    </tr>
+    <tr>
+      <td>D4</td>
+      <td>Publicar o comparativo "Índice PF vs. IPCA" (5.4) na v1 ou segurar?</td>
+      <td>Maior retorno de imprensa e maior risco de leitura errada</td>
+    </tr>
+    <tr>
+      <td>D5</td>
+      <td>Usar a série retropolada como contexto histórico na página pública?</td>
+      <td>Permitido como visual, com rótulo; nunca como base de afirmação estimada</td>
+    </tr>
+  </table>
+
+  <h2 id="comecar">8. Como começar a próxima sessão</h2>
+  <ol>
+    <li>Responder D1–D5 acima. Sem D1 e D3 não dá para desenhar a rota.</li>
+    <li>
+      <strong>Verificar as fontes antes de escrever importador.</strong> Confirmar no SIDRA os códigos das
+      tabelas de PNAD Contínua (rendimento por décimo/UF/grupamento) e de SINAPI, e testar o
+      <code>GC=F</code> no endpoint do Yahoo que já é usado para o Ibovespa. Os códigos citados neste doc
+      são indicativos e não foram validados contra a API.
+      <br><em>Verificação:</em> uma chamada bem-sucedida por fonte, com o período mais recente disponível.
+    </li>
+    <li>
+      <strong>Adicionar as séries novas</strong> em <code>lib/preditores.ts</code> e no importador do cron,
+      seguindo o padrão existente (grupo novo no <code>GrupoPreditor</code>).
+      <br><em>Verificação:</em> linhas em <code>fatores_preditores</code> após disparo manual com
+      <code>Authorization: Bearer &lt;CRON_SECRET&gt;</code>.
+    </li>
+    <li>
+      <strong>Escrever a camada de conversão</strong> (um módulo <code>lib/</code> puro: valor do bem ÷ custo
+      do PF, por região e por prato), com testes vitest cobrindo unidade, arredondamento e ausência de dado.
+      <br><em>Verificação:</em> testes passando antes de qualquer UI.
+    </li>
+    <li>
+      <strong>Só então a UI</strong>, reusando os componentes de gráfico já existentes.
+      <br><em>Verificação:</em> build ok, rota responde anônima, rótulo de unidade visível em toda conversão.
+    </li>
+  </ol>
+  <div class="note">
+    <p>
+      <strong>Regras herdadas que valem aqui:</strong> não reabrir decisões já aprovadas nas Fases 0–3;
+      a série retropolada é contexto visual, nunca amostra de regressão; gates prudenciais viram aviso
+      não-bloqueante, com a rotulagem de exploratório preservada; <code>snapshots</code> e
+      <code>resultados_brutos</code> são append-only.
+    </p>
+  </div>
+
+  <footer>
+    Índice PF — doc 031. Escrito em 08/08/2026. Documento de decisão; nenhuma linha de código foi alterada.
+    Complementa os docs 014–030 (auditoria e Fases 0–3) e 005 (plano de produto).
+  </footer>
+
+</div>
+</body>
+</html>

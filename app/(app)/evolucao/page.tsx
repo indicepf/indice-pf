@@ -13,6 +13,7 @@ import { ACCENT, BRAND, CHART_SERIES, CORES_REGIAO, DIM, INK } from '@/lib/theme
 import { inputBase } from '@/components/ui'
 import type { Fonte } from '@/lib/types'
 import TabelaIngredientes from './TabelaIngredientes'
+import PFComoMoeda from './PFComoMoeda'
 import BotaoExportar from './BotaoExportar'
 import IndicePainel from './IndicePainel'
 import LabPreditores from './LabPreditores'
@@ -38,7 +39,7 @@ export default function EvolucaoPage() {
 }
 
 function EvolucaoInner() {
-  const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes' | 'mapa' | 'calibracao' | 'preditores'>('indice')
+  const [aba, setAba] = useState<'indice' | 'variacao' | 'ingredientes' | 'mapa' | 'calibracao' | 'preditores' | 'numerario'>('indice')
   const [ev, setEv] = useState<Evolucao | null>(null)
   const [calib, setCalib] = useState<Calibracao | null>(null)
   const [calibIni, setCalibIni] = useState(''); const [calibFim, setCalibFim] = useState('')
@@ -137,7 +138,7 @@ function EvolucaoInner() {
       <div className="max-w-6xl mx-auto px-6">
         {/* abas */}
         <div className="flex gap-5 border-b border-border pt-2">
-          {([['indice', 'Índice'], ['variacao', 'Variação'], ['ingredientes', 'Ingredientes'], ['mapa', 'Mapa'], ['calibracao', 'Calibração'], ['preditores', 'Laboratório']] as const).map(([k, label]) => (
+          {([['indice', 'Índice'], ['variacao', 'Variação'], ['ingredientes', 'Ingredientes'], ['mapa', 'Mapa'], ['calibracao', 'Calibração'], ['preditores', 'Laboratório'], ['numerario', 'PF como moeda']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setAba(k)}
               className={`text-sm pb-2 border-b-2 -mb-px transition ${aba === k ? 'border-accent text-ink' : 'border-transparent text-dim hover:text-ink'}`}>
               {label}
@@ -396,6 +397,8 @@ function EvolucaoInner() {
         <p className="max-w-6xl mx-auto px-6 py-10 text-sm text-dim">Carregando…</p>
       ) : aba === 'preditores' ? (
         <LabPreditores ev={ev} souSuper={souSuper} />
+      ) : aba === 'numerario' ? (
+        <PFComoMoeda ev={ev} />
       ) : aba === 'variacao' ? (
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">

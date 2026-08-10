@@ -1,5 +1,5 @@
-// Testes de contrato da Subfase 0A (ADR docs/015): as quatro rotas de
-// preditores/Laboratório são privadas de admin — 401 sem sessão, 403 sem
+// Testes de contrato da Subfase 0A (ADR docs/015): as rotas de preditores,
+// Laboratório e "PF como moeda" são privadas de admin — 401 sem sessão, 403 sem
 // papel, 429 acima do limite, 400 para parâmetro inválido, e toda resposta
 // leva Cache-Control: private, no-store.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -9,6 +9,7 @@ const estado = vi.hoisted(() => ({
   usuario: null as { id: string; email?: string } | null,
   isAdmin: false,
   catalogo: [] as { serie: string; label: string }[],
+  vigente: null as { data: string; valor: number } | null,
 }))
 
 vi.mock('@/lib/server/supabase-admin', () => {
@@ -29,6 +30,7 @@ vi.mock('@/lib/server/supabase-admin', () => {
         builder(() => {
           if (tabela === 'profiles') return { data: { is_admin: estado.isAdmin }, error: null }
           if (tabela === 'fatores_catalogo') return { data: estado.catalogo, error: null }
+          if (tabela === 'fatores_preditores') return { data: estado.vigente, error: null }
           return { data: [], error: null }
         }),
     }),
@@ -40,6 +42,7 @@ import { GET as getPreditores } from '@/app/api/preditores/route'
 import { GET as getCatalogo } from '@/app/api/catalogo-preditores/route'
 import { GET as getRetropolado } from '@/app/api/indice-retropolado/route'
 import { GET as getConfiabilidade } from '@/app/api/confiabilidade/route'
+import { GET as getNumerario } from '@/app/api/numerario/route'
 
 function req(url: string, token?: string) {
   return new NextRequest(`http://localhost${url}`, {
@@ -51,6 +54,7 @@ beforeEach(() => {
   estado.usuario = { id: 'u1' }
   estado.isAdmin = true
   estado.catalogo = [{ serie: 'ipca_x', label: 'IPCA X' }]
+  estado.vigente = null
 })
 
 describe('exigirAdmin', () => {
@@ -80,6 +84,7 @@ describe('rotas anônimas respondem 401 com private/no-store', () => {
     ['/api/catalogo-preditores', getCatalogo, 'catalogo'],
     ['/api/indice-retropolado?desde=2024-01', getRetropolado, 'retropolado'],
     ['/api/confiabilidade', getConfiabilidade, 'confiabilidade'],
+    ['/api/numerario', getNumerario, 'numerario'],
   ]
   for (const [url, handler, nome] of casos) {
     it(nome, async () => {
@@ -122,6 +127,29 @@ describe('/api/indice-retropolado com admin', () => {
     const res = await getRetropolado(req('/api/indice-retropolado?desde=2024-01&confianca=altissima', 't'))
     expect(res.status).toBe(400)
     expect((await res.json()).code).toBe('INVALID_PARAM')
+  })
+})
+
+describe('/api/numerario com admin', () => {
+  it('rejeita data fora de AAAA-MM-DD com 400', async () => {
+    const res = await getNumerario(req('/api/numerario?ate=2026-08', 't'))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('INVALID_DATE')
+  })
+  it('série sem observação na janela vira null, não zero', async () => {
+    const res = await getNumerario(req('/api/numerario?ate=2026-08-10', 't'))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('private, no-store')
+    const body = await res.json()
+    expect(body.ate).toBe('2026-08-10')
+    expect(body.conversores.ouro).toBeNull()
+    expect(body.pnad.centro_oeste).toEqual({ renda: null, horas: null })
+  })
+  it('devolve o valor vigente quando existe', async () => {
+    estado.vigente = { data: '2026-08-07', valor: 812.34 }
+    const body = await (await getNumerario(req('/api/numerario', 't'))).json()
+    expect(body.conversores.ouro).toEqual({ valor: 812.34, data: '2026-08-07' })
+    expect(body.pnad.br.renda).toEqual({ valor: 812.34, data: '2026-08-07' })
   })
 })
 
