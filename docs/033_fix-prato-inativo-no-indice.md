@@ -32,14 +32,18 @@ Ordem obrigatória: `custos_pratos` e `custo_total_pf` antes do shadow, porque a
 
 Snapshots 1–34 têm o prato 63 em `custos_pratos`, mas são anteriores a 12/07/2026, quando ele ainda estava na cesta. Ali a presença é história, não defeito. Reescrevê-los é decisão separada (supersessão de snapshot, Fase 5) e mexeria em período já classificado pela auditoria da Fase 1.
 
-## Isto não destrava o Laboratório
+## Segundo problema: defasagem de publicação na âncora (gate versão 3)
 
-Problema independente, encontrado na mesma investigação: a retropolação caminha do mês da âncora para trás e precisa da variação **do próprio mês da âncora**. O IPCA de um mês só é publicado por volta do dia 11 do mês seguinte, e a âncora é sempre o snapshot mais recente — que é sempre do mês corrente, porque a coleta é semanal.
+Independente do primeiro, encontrado na mesma investigação. A retropolação caminha do mês da âncora para trás e precisa da variação **do próprio mês da âncora**. O IPCA de um mês só é publicado por volta do dia 11 do mês seguinte, e a âncora é sempre o snapshot mais recente — que é sempre do mês corrente, porque a coleta é semanal. A janela em que a reconstrução funcionava era vazia: a aba nunca entregou desde que foi construída.
 
-Depois da migração 54 a âncora passa a ser o snapshot 39 (03/08), e a reconstrução vai pedir o IPCA de 08/2026, que sai ~11/09. Em setembro a âncora vira um snapshot de setembro, e assim por diante. A janela em que funciona é vazia.
+Variação ausente no **fim** da série não é lacuna de dado, é atraso da fonte, e merece tratamento diferente de um buraco no meio. `GATE_ANCORA` foi para a versão 3: o mês do snapshot precisa ter o deflator de grupo publicado, senão o candidato é recusado com motivo próprio e a âncora recua. `maxCandidatos` subiu de 5 para 14 — com coleta semanal, o mês publicado mais recente fica 8 ou 9 coletas atrás e 5 não alcançava.
 
-Uma variação ausente no fim da série não é lacuna de dado: é defasagem de publicação, e merece tratamento diferente de um buraco no meio. Correção proposta (ainda não implementada, decisão pendente): exigir do gate de âncora que o mês do snapshot tenha deflator completo, caindo para o snapshot válido mais recente que satisfaça isso — hoje, um de junho.
+Basta exigir o **grupo** (`ipca_7171`), não todas as séries: item específico que falte no mês cai para o grupo e vira `fallbackUsed`, que é resolução normal e já reportada. Sem o grupo não há para onde cair e o primeiro passo morre. A primeira versão deste gate exigia todas as séries e quebrou justamente o caminho de fallback — os testes pegaram.
+
+Conferido contra a produção em 10/08/2026: os snapshots 40 a 33 são recusados por mês sem deflator e a âncora passa a ser o **snapshot 32 (21/06/2026)**, que reconcilia com o persistido e tem decomposição canônica publicada. A reconstrução volta a sair; o custo é que ela não alcança os 1-2 meses mais recentes — que é exatamente onde a série medida já existe.
 
 ## Verificação
 
-As três queries de conferência estão comentadas no fim do arquivo da migração: nenhuma linha de prato inativo em `custos_pratos` a partir de 12/07, nenhuma publicação shadow com `pratos_calculados <> 100` no mesmo período, e 100 pratos por snapshot com o `custo_total_pf` recalculado.
+Migração 54: as três queries de conferência estão comentadas no fim do arquivo — nenhuma linha de prato inativo em `custos_pratos` a partir de 12/07, nenhuma publicação shadow com `pratos_calculados <> 100` no mesmo período, e 100 pratos por snapshot com o `custo_total_pf` recalculado.
+
+Gate versão 3: `tests/indice-retropolado.test.ts` ganhou o caso do mês da âncora sem deflator publicado (recua para o snapshot anterior, 200 com motivo próprio em `gate.rejeitados`, em vez de 409). O caso antigo que tratava isso como gap saiu — a situação que ele descrevia agora tem contrato diferente; gap interno continua coberto pelo teste vizinho, e o fallback de item para grupo segue passando. Suíte total 95/95, `tsc` sem erro novo, build ok.

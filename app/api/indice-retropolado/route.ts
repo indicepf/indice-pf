@@ -43,9 +43,18 @@ const GRUPO_FALLBACK = 'ipca_7171'   // Alimentação no domicílio
 // sem isso não há componente para projetar — nunca cai para cálculo legado
 // silenciosamente). Candidatos são tentados por DATA decrescente (não por
 // id). Limiares versionados aqui até existir configuração formal (Fase 1).
+//
+// Versão 3 (docs/033): o mês do snapshot também precisa ter deflator completo.
+// A caminhada para trás começa dividindo pela variação DO MÊS DA ÂNCORA, e o
+// IPCA de um mês só sai por volta do dia 11 do mês seguinte — como a coleta é
+// semanal, a âncora seria sempre do mês corrente e a série nunca sairia.
+// Variação ausente no FIM não é lacuna de dado, é defasagem de publicação:
+// em vez de recusar tudo, a âncora recua para o snapshot mais recente cujo mês
+// já tem deflator. maxCandidatos subiu junto, senão não há alcance para chegar
+// lá (com coleta semanal, o mês publicado mais recente fica ~5-9 coletas atrás).
 const GATE_ANCORA = {
-  versao: 2,
-  maxCandidatos: 5,          // snapshots recentes tentados, do mais novo ao mais antigo
+  versao: 3,
+  maxCandidatos: 14,         // snapshots recentes tentados, do mais novo ao mais antigo
   toleranciaMediana: 0.05,   // R$ aceitos entre mediana recalculada e custo_total_pf
 }
 
@@ -81,10 +90,25 @@ export async function GET(req: NextRequest) {
   if (eSnap || !candidatos?.length)
     return NextResponse.json({ error: 'sem coletas', code: 'NO_SNAPSHOT' }, { status: 500, headers: SEM_CACHE })
 
+  // meses em que a caminhada consegue sair da âncora (gate versão 3). Basta o
+  // GRUPO_FALLBACK estar publicado: item específico que falte no mês cai para
+  // o grupo (fallbackUsed), o que é resolução normal, não lacuna. Sem o grupo
+  // não há para onde cair e o primeiro passo já morreria.
+  const mesMaisAntigo = candidatos[candidatos.length - 1].data.slice(0, 7)
+  const mesesComGrupo = new Set((await todasLinhas<{ data: string }>((de, ate) =>
+    db.from('fatores_preditores').select('data').eq('serie', GRUPO_FALLBACK)
+      .gte('data', `${mesMaisAntigo}-01`).range(de, ate))).map(l => l.data.slice(0, 7)))
+
   let ancora: { id: number; data: string } | null = null
   let componentes: Componente[] = []
   const rejeitados: { snapshotId: number; motivo: string }[] = []
   for (const cand of candidatos) {
+    // primeiro check porque é o único que não custa consulta
+    const ymCand = cand.data.slice(0, 7)
+    if (!mesesComGrupo.has(ymCand)) {
+      rejeitados.push({ snapshotId: cand.id, motivo: `mês ${ymCand} ainda sem deflator publicado (defasagem da fonte)` })
+      continue
+    }
     const custos = await todasLinhas<{ prato_id: number; custo_total: number }>((de, ate) =>
       db.from('custos_pratos').select('prato_id, custo_total').eq('snapshot_id', cand.id).range(de, ate))
     const porPrato = new Map<number, number>()
