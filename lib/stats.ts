@@ -53,6 +53,26 @@ export function bootstrapMedianCI(
   return [lo, hi]
 }
 
+// Reescala uma série para caber no mesmo eixo que séries de outra unidade.
+// 'base100' = o primeiro valor observado vira 100 (lê-se como variação
+// acumulada); 'z' = desvios-padrão amostrais em torno da média da janela.
+// Devolve null quando a reescala não é definível — série de um ponto só ou
+// constante em 'z', primeiro valor não-positivo em 'base100'. Nunca 0: desenhar
+// 0σ diria "está na média", que é diferente de "não dá para saber".
+export function escalador(vs: (number | null)[], modo: 'z' | 'base100'): (v: number | null) => number | null {
+  const ok = vs.filter((v): v is number => v != null && isFinite(v))
+  if (modo === 'base100') {
+    const base = ok[0]
+    if (base == null || base === 0) return () => null
+    return v => (v == null ? null : (v / base) * 100)
+  }
+  if (ok.length < 2) return () => null
+  const m = ok.reduce((a, b) => a + b, 0) / ok.length
+  const s = Math.sqrt(ok.reduce((a, b) => a + (b - m) ** 2, 0) / (ok.length - 1))
+  if (s === 0) return () => null
+  return v => (v == null ? null : (v - m) / s)
+}
+
 // PRNG determinístico (mulberry32) — só para dar um `rng` reprodutível aos
 // testes de bootstrapMedianCI; produção nunca importa isto.
 export function mulberry32(seed: number): () => number {

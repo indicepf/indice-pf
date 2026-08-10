@@ -1,7 +1,7 @@
 // Testes dos helpers estatísticos usados no protocolo de benchmark (Fase 3,
 // LAB-019): media, mad, iqr e IC por bootstrap da mediana.
 import { describe, it, expect } from 'vitest'
-import { media, mad, iqr, bootstrapMedianCI, mulberry32, mediana } from '@/lib/stats'
+import { media, mad, iqr, bootstrapMedianCI, mulberry32, mediana, escalador } from '@/lib/stats'
 
 describe('media', () => {
   it('média aritmética simples', () => { expect(media([1, 2, 3, 4])).toBe(2.5) })
@@ -53,5 +53,37 @@ describe('bootstrapMedianCI', () => {
   it('menos de 2 pontos retorna null (amostra insuficiente para reamostrar)', () => {
     expect(bootstrapMedianCI([1])).toBeNull()
     expect(bootstrapMedianCI([])).toBeNull()
+  })
+})
+
+describe('escalador', () => {
+  it('base 100: o primeiro valor observado vira 100', () => {
+    const f = escalador([50, 60, 40], 'base100')
+    expect(f(50)).toBe(100)
+    expect(f(60)).toBe(120)
+    expect(f(40)).toBe(80)
+  })
+  it('base 100 ignora os nulos do começo para achar a base', () => {
+    const f = escalador([null, 50, 75], 'base100')
+    expect(f(75)).toBe(150)
+    expect(f(null)).toBeNull()
+  })
+  it('z-score: média vira 0 e um desvio vira 1', () => {
+    const f = escalador([2, 4, 4, 4, 5, 5, 7, 9], 'z')   // média 5, dp amostral 2,138
+    expect(f(5)).toBeCloseTo(0, 10)
+    expect(f(7.138)).toBeCloseTo(1, 2)
+  })
+  it('série constante ou de um ponto só não tem z-score definido', () => {
+    // desenhar 0σ diria "está na média", que é diferente de "não dá para saber"
+    expect(escalador([3, 3, 3], 'z')(3)).toBeNull()
+    expect(escalador([3], 'z')(3)).toBeNull()
+    expect(escalador([null, 3, null], 'z')(3)).toBeNull()
+  })
+  it('base 100 com primeiro valor zero ou ausente não é definível', () => {
+    expect(escalador([0, 5], 'base100')(5)).toBeNull()
+    expect(escalador([null, null], 'base100')(5)).toBeNull()
+  })
+  it('série constante ainda é desenhável em base 100 (reta em 100)', () => {
+    expect(escalador([3, 3, 3], 'base100')(3)).toBe(100)
   })
 })

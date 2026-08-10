@@ -57,6 +57,64 @@ export function minutosDeTrabalho(custoPF: number | null, rendaMensal: number | 
   return (custoPF / porHora) * 60
 }
 
+// ── unidades em que o índice pode ser lido ──
+// Os reais (o próprio custo), cada conversor e o tempo de trabalho. É a mesma
+// lista dos cards da aba "PF como moeda" e do seletor de unidade do gráfico da
+// aba Índice: as duas abas leem o mesmo índice, só que em numerários diferentes.
+
+export type DefUnidade = {
+  key: string                  // 'reais' | série do conversor | 'tempo'
+  label: string                // rótulo do card / da opção do seletor
+  legenda: string              // rótulo da linha no gráfico, com o sentido explícito
+  unidade: string
+  casas: number
+  series: readonly string[]    // séries de fatores_preditores necessárias
+  inverte: boolean             // sobe quando o PF fica mais BARATO (min e max trocam de lado)
+}
+
+export const UNIDADES: readonly DefUnidade[] = [
+  { key: 'reais', label: 'Custo em reais', legenda: 'Custo do PF (R$)', unidade: 'R$', casas: 2, series: [], inverte: false },
+  ...CONVERSORES.map(c => ({
+    key: c.serie,
+    label: c.label,
+    legenda: c.sentido === 'pfs_por_unidade' ? `PFs por ${c.label.toLowerCase()}` : `${c.unidade} por PF`,
+    unidade: c.unidade,
+    casas: c.casas,
+    series: [c.serie],
+    inverte: c.sentido === 'pfs_por_unidade',
+  })),
+  { key: 'tempo', label: 'Tempo de trabalho', legenda: 'Minutos de trabalho por PF', unidade: 'min', casas: 0,
+    series: ['pnad_renda', 'pnad_horas'], inverte: false },
+] as const
+
+export const UNIDADE_POR_KEY: Record<string, DefUnidade> =
+  Object.fromEntries(UNIDADES.map(u => [u.key, u]))
+
+// Converte um custo de PF para a unidade escolhida. `valores` traz a cotação já
+// resolvida de cada série de `u.series`, na chave canônica (a substituição da
+// série regional da PNAD é responsabilidade de quem busca o dado).
+export function valorNaUnidade(u: DefUnidade, custoPF: number | null, valores: Record<string, number | null>): number | null {
+  if (u.key === 'reais') return positivo(custoPF) ? custoPF : null
+  if (u.key === 'tempo') return minutosDeTrabalho(custoPF, valores.pnad_renda ?? null, valores.pnad_horas ?? null)
+  const conv = CONVERSORES.find(c => c.serie === u.key)
+  if (!conv) return null
+  return converter(custoPF, valores[conv.serie] ?? null, conv.sentido)
+}
+
+export function fmtNaUnidade(u: DefUnidade, v: number | null): string {
+  if (v == null) return '—'
+  if (u.key === 'reais') return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  if (u.key === 'tempo') return fmtTempo(v)
+  return `${fmtQuantidade(v, u.casas)} ${u.unidade}`
+}
+
+// versão curta para o tick do eixo, onde não cabe "2 h 12 min" nem separador
+export function fmtEixo(u: DefUnidade, v: number): string {
+  if (u.key === 'reais') return `R$${Math.round(v)}`
+  if (u.key === 'tempo') return `${Math.round(v)}min`
+  return `${fmtQuantidade(v, Math.abs(v) >= 100 ? 0 : u.casas)}${u.unidade === 'PFs' ? '' : ' ' + u.unidade}`
+}
+
 export function fmtQuantidade(v: number | null, casas: number): string {
   if (v == null) return '—'
   return v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })

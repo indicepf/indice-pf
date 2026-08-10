@@ -10,7 +10,8 @@ import { mediana } from '@/lib/stats'
 import { ACCENT, BRAND, CHART_SERIES, CORES_GRUPO, DIM, INK } from '@/lib/theme'
 import type { ItemDetalhe } from '@/lib/types'
 import { Modal } from '@/components/ui'
-import { PREDITORES_DIARIOS, PREDITORES_MENSAIS, PREDITOR_POR_KEY, fmtValorPreditor } from '@/lib/preditores'
+import { PREDITORES_DIARIOS, PREDITORES_MENSAIS, PREDITOR_POR_KEY, lerNoMes, fmtValorPreditor } from '@/lib/preditores'
+import { UNIDADES, UNIDADE_POR_KEY, valorNaUnidade, seriePnad, fmtNaUnidade, fmtEixo, REGIOES_PNAD } from '@/lib/numerario'
 import { regressaoLinear, type ResultadoRegressao } from '@/lib/regressao'
 import { fetchAdmin } from '@/lib/fetch-admin'
 import SeletorPrato from './SeletorPrato'
@@ -38,12 +39,10 @@ const cf = (serie: { data: string; valor: number }[], d: string): number | null 
   return v
 }
 
-// séries mensais casam pelo mês de referência exato (YYYY-MM-01). Sem
-// carry-forward: IPCA/DIEESE saem com defasagem de publicação, e repetir o
-// último mês publicado afirmaria que os meses seguintes tiveram a mesma
-// variação/preço — dado inventado, não lacuna preenchida.
-const noMes = (serie: { data: string; valor: number }[], d: string): number | null =>
-  serie.find(p => p.data === d)?.valor ?? null
+// leitura mensal por chave: casa pelo mês de referência exato, exceto série
+// trimestral, que vale pelos meses que o trimestre cobre (ver lerNoMes)
+const noMesDe = (k: string) => (serie: { data: string; valor: number }[], d: string) =>
+  lerNoMes(serie, d, PREDITOR_POR_KEY[k]?.granularidade === 'trimestral')
 
 // desvio-padrão amostral 0 = série constante na janela
 const constante = (vs: (number | null)[]) => {
@@ -79,6 +78,10 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   const [overlaySeriesM, setOverlaySeriesM] = useState<Record<string, { data: string; valor: number }[]>>({})
   const [regVarsM, setRegVarsM] = useState<Set<string>>(new Set())
   const [normalizar, setNormalizar] = useState(true)   // z-score quando >1 preditor
+  // unidade em que o eixo do gráfico principal lê o índice: reais ou um dos
+  // numerários da aba "PF como moeda" (mesmo índice, outra unidade de conta)
+  const [unidade, setUnidade] = useState('reais')
+  const [convSeries, setConvSeries] = useState<Record<string, { data: string; valor: number }[]>>({})
   // no painel mensal, mostrar o índice como variação % do mês (mesma natureza
   // dos preditores do IPCA) em vez do nível em R$
   const [mensalEmVariacao, setMensalEmVariacao] = useState(true)
@@ -144,7 +147,6 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   const poucos = ev.serie.length < 2
   const dadosP = dados.filter(d => noPeriodo(new Date(d.ts).toISOString().slice(0, 10)))
   const ticks = dadosP.map(d => d.ts)
-  const mediaIndice = nacional && dadosP.length ? dadosP.reduce((s, d) => s + ((d as any).mediana || 0), 0) / dadosP.length : null
   const regioes = [...new Set(ev.pratos.map(p => p.regiao))].sort((a, b) => ORDEM_REG.indexOf(a) - ORDEM_REG.indexOf(b))
   const pratoSel = nacional ? null : ev.pratos.find(p => p.id === pratoId)
   const nomePrato = pratoSel?.nome ?? 'Prato'
@@ -166,6 +168,66 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         return `&de=${de.toISOString().slice(0, 10)}&ate=${datasColeta[datasColeta.length - 1]}`
       })()
     : ''
+
+  // ── unidade do eixo (admin): o mesmo índice lido noutro numerário ──
+  // Converte cada ponto pela cotação VIGENTE na data da coleta (carry-forward),
+  // que é a regra dos cards da aba "PF como moeda": "quanto valia o salário
+  // mínimo naquele dia", não "qual é o mês de referência". A PNAD segue a região
+  // selecionada (ou a do prato), com queda para o agregado Brasil quando não há
+  // série da região. Regressão e exportação continuam em R$.
+  const uSel = UNIDADE_POR_KEY[unidade] ?? UNIDADE_POR_KEY.reais
+  const regiaoPnad = pratoSel?.regiao || regiao || null
+  const serieReal = (s: string) =>
+    s === 'pnad_renda' || s === 'pnad_horas' ? seriePnad(s, regiaoPnad) : s
+  const seriesUnidadeQS = uSel.series.map(serieReal).sort().join(',')
+  // janela maior que a do overlay: a PNAD é trimestral e o salário mínimo muda
+  // uma vez por ano — com o buffer de 60 dias do overlay, a última observação
+  // anterior à primeira coleta pode ficar de fora e o carry-forward vem vazio.
+  const rangeUnidade = datasColeta.length
+    ? (() => {
+        const de = new Date(datasColeta[0] + 'T00:00:00Z'); de.setDate(de.getDate() - 400)
+        return `&de=${de.toISOString().slice(0, 10)}&ate=${datasColeta[datasColeta.length - 1]}`
+      })()
+    : ''
+  useEffect(() => {
+    if (!admin || !seriesUnidadeQS) { setConvSeries({}); return }
+    let vivo = true
+    fetchAdmin(`/api/preditores?vars=${seriesUnidadeQS}${rangeUnidade}`).then(r => r.json())
+      .then(j => { if (vivo) setConvSeries(j || {}) })
+      .catch(() => { if (vivo) setConvSeries({}) })
+    return () => { vivo = false }
+  }, [admin, seriesUnidadeQS, rangeUnidade])
+
+  const dadosU = useMemo(() => {
+    if (unidade === 'reais' || !uSel.series.length) return dadosP
+    const chaves = nacional ? ['mediana', 'media', 'min', 'max'] : ['blend', 'online', 'manual']
+    return dadosP.map((d: any, i) => {
+      // conversor diário/mensal usa a última cotação anterior à coleta; a PNAD
+      // é trimestral e segue a regra do trimestre vigente (lerNoMes)
+      const vals = Object.fromEntries(uSel.series.map(s => {
+        const serie = convSeries[serieReal(s)] || []
+        return [s, s.startsWith('pnad_') ? lerNoMes(serie, datasColeta[i], true) : cf(serie, datasColeta[i])]
+      }))
+      const row: any = { ts: d.ts }
+      for (const c of chaves) if (d[c] != null) row[c] = valorNaUnidade(uSel, d[c], vals)
+      if (d.faixa) {
+        const a = valorNaUnidade(uSel, d.faixa[0], vals), b = valorNaUnidade(uSel, d.faixa[1], vals)
+        // em "PFs por unidade" a curva sobe quando o PF barateia: o prato mais
+        // barato passa a ser o TOPO da faixa, e trocar a ordem é o que mantém
+        // a área desenhada entre os dois extremos certos
+        if (a != null && b != null) row.faixa = uSel.inverte ? [b, a] : [a, b]
+      }
+      return row
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dadosP, datasColeta, convSeries, unidade, nacional, seriesUnidadeQS])
+
+  const mediaIndice = useMemo(() => {
+    if (!nacional) return null
+    const vs = (dadosU as any[]).map(d => d.mediana).filter((v): v is number => v != null)
+    return vs.length ? vs.reduce((s, v) => s + v, 0) / vs.length : null
+  }, [dadosU, nacional])
+
   // overlay múltiplo: alinha cada série às datas das coletas e, quando há mais
   // de uma (ou escalas muito diferentes), normaliza por z-score para caberem
   // no mesmo eixo direito. Os valores originais seguem no tooltip.
@@ -175,7 +237,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   // as duas curvas passarem pela mesma transformação (eixo único em σ).
   const zAtivo = admin && normalizar && overlayKeys.length > 0
   const dadosChart = useMemo(() => {
-    if (!overlayKeys.length) return dadosP
+    if (!overlayKeys.length) return dadosU
     const z = (vs: (number | null)[]) => {
       const ok = vs.filter((v): v is number => v != null)
       const m = ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : 0
@@ -189,9 +251,9 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     // normalizadores das séries do índice, na mesma janela
     const chaveIndice = nacional ? ['mediana', 'media', 'min', 'max'] : ['blend', 'online', 'manual']
     const zIndice: Record<string, (v: number | null) => number | null> = {}
-    if (zAtivo) for (const c of chaveIndice) zIndice[c] = z(dadosP.map((d: any) => d[c] ?? null))
+    if (zAtivo) for (const c of chaveIndice) zIndice[c] = z(dadosU.map((d: any) => d[c] ?? null))
 
-    return dadosP.map((d: any, i) => {
+    return dadosU.map((d: any, i) => {
       const row: any = { ...d }
       if (zAtivo) {
         for (const c of chaveIndice) if (d[c] != null) { row[`z_${c}`] = zIndice[c](d[c]); row[`raw_${c}`] = d[c] }
@@ -204,7 +266,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       }
       return row
     })
-  }, [dadosP, datasColeta, overlaySeries, overlayKeys.join(','), zAtivo, nacional])
+  }, [dadosU, datasColeta, overlaySeries, overlayKeys.join(','), zAtivo, nacional])
   const pontosDiarios = dadosP.map((d: any, i) => ({ data: datasColeta[i], y: nacional ? d.mediana : d.blend }))
 
   // índice agregado por mês (média da mediana/blend das coletas do mês)
@@ -238,7 +300,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       return (v: number | null) => v == null ? null : s > 0 ? (v - m) / s : 0
     }
     const brutos: Record<string, (number | null)[]> = {}
-    for (const k of overlayKeysM) brutos[k] = pontosMensais.map(p => noMes(overlaySeriesM[k], p.data))
+    for (const k of overlayKeysM) brutos[k] = pontosMensais.map(p => noMesDe(k)(overlaySeriesM[k] || [], p.data))
     const zDe: Record<string, (v: number | null) => number | null> = {}
     for (const k of overlayKeysM) zDe[k] = z(brutos[k])
     const zInd = zAtivoM ? z(pontosMensais.map(p => p.indice ?? null)) : null
@@ -308,11 +370,10 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     setAvisoDescarte(null)
     try {
       const j = await fetchAdmin(`/api/preditores?vars=${keys.join(',')}${rangeQS}`).then(r => r.json())
-      const ler = mensal ? noMes : cf
       const y: number[] = []
       const cols: number[][] = keys.map(() => [])
       pontos.forEach(pt => {
-        const xs = keys.map(k => ler(j[k] || [], pt.data))
+        const xs = keys.map(k => (mensal ? noMesDe(k) : cf)(j[k] || [], pt.data))
         if (pt.y != null && xs.every(v => v != null)) {
           y.push(pt.y); keys.forEach((k, ki) => cols[ki].push(xs[ki] as number))
         }
@@ -396,7 +457,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
           <input type="date" value={ini} onChange={e => setIni(e.target.value)} className="bg-surface-2 border border-border rounded px-2 py-1 focus:outline-none focus:border-accent" />
           <span className="text-dim">até</span>
           <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-surface-2 border border-border rounded px-2 py-1 focus:outline-none focus:border-accent" />
-          {mediaIndice != null && <span className="ml-1 text-dim">Média do índice: <strong className="text-accent tnum">{brl(mediaIndice)}</strong> · {dadosP.length} coleta{dadosP.length === 1 ? '' : 's'}</span>}
+          {mediaIndice != null && <span className="ml-1 text-dim">Média do índice: <strong className="text-accent tnum">{fmtNaUnidade(uSel, mediaIndice)}</strong> · {dadosP.length} coleta{dadosP.length === 1 ? '' : 's'}</span>}
         </div>
 
         {nacional && (
@@ -432,6 +493,17 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
         {admin && (
           <div className="border border-brand-roxo/30 bg-brand-roxo/5 rounded-lg p-4 space-y-3">
             <p className="text-xs font-semibold text-brand-roxo uppercase tracking-wide">Análise (admin) · séries diárias</p>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="text-dim">Unidade do gráfico:</span>
+              <select value={unidade} onChange={e => setUnidade(e.target.value)}
+                className="text-sm border border-border rounded px-2 py-1 bg-surface-2">
+                {UNIDADES.map(u => <option key={u.key} value={u.key}>{u.legenda}</option>)}
+              </select>
+              <InfoTip w="w-80" texto="O mesmo índice lido noutro numerário (aba 'PF como moeda'). Cada ponto é convertido pela cotação vigente na data da coleta; ponto sem cotação some do gráfico em vez de ser estimado. Em 'PFs por …' a curva SOBE quando o PF fica mais barato — a direção da leitura inverte. Vale só para este gráfico: o painel mensal, a regressão e a exportação seguem em R$." />
+              {unidade === 'tempo' && (
+                <span className="text-dim">renda e horas da PNAD {regiaoPnad && REGIOES_PNAD[regiaoPnad] ? regiaoPnad : 'Brasil'}</span>
+              )}
+            </div>
             <SeletorSeries titulo="Sobrepor no gráfico" opcoes={PREDITORES_DIARIOS}
               selecionadas={overlayVars} onToggle={alternar(setOverlayVars)}
               cor={k => CHART_SERIES[([...overlayVars].indexOf(k) + 1) % CHART_SERIES.length]} />
@@ -463,6 +535,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
           </div>
           <p className="text-xs text-dim mb-4">
             {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}` : `${regiaoPrato ? regiaoPrato + ' · ' : ''}${[...fontesPrato].map(k => FONTES.find(f => f[0] === k)![1]).join(' × ') || 'nenhuma fonte marcada'}`}
+            {unidade !== 'reais' && ` · em ${uSel.legenda.toLowerCase()}${uSel.inverte ? ' (sobe quando o PF fica mais barato)' : ''}`}
             {poucos && ' · série curta (poucas coletas) — cresce a cada coleta.'}
           </p>
           <div style={{ width: '100%', height: 360 }}>
@@ -478,8 +551,8 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                 <XAxis dataKey="ts" type="number" scale="time" domain={['dataMin', 'dataMax']}
                   ticks={ticks} tickFormatter={(t: number) => fmt(new Date(t).toISOString().slice(0, 10))}
                   tick={{ fontSize: 13, fill: COR.muted }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 13, fill: COR.muted }} width={zAtivo ? 46 : 48}
-                  tickFormatter={v => zAtivo ? `${Number(v).toFixed(1)}σ` : `R$${v}`} />
+                <YAxis yAxisId="left" tick={{ fontSize: 13, fill: COR.muted }} width={zAtivo ? 46 : 64}
+                  tickFormatter={v => zAtivo ? `${Number(v).toFixed(1)}σ` : fmtEixo(uSel, Number(v))} />
                 {overlayKeys.length > 0 && !zAtivo && (
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 13, fill: COR.muted }} width={64}
                     tickFormatter={v => {
@@ -495,13 +568,13 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                     const info = PREDITOR_POR_KEY[k]
                     return raw == null ? '—' : fmtValorPreditor(Number(raw), info?.formato ?? 'numero')
                   }
-                  if (dk.startsWith('z_')) {                     // índice normalizado: mostra o R$ original
+                  if (dk.startsWith('z_')) {                     // índice normalizado: mostra o valor original
                     const raw = p?.payload?.[`raw_${dk.slice(2)}`]
-                    return raw == null ? '—' : `R$ ${Number(raw).toFixed(2)}`
+                    return raw == null ? '—' : fmtNaUnidade(uSel, Number(raw))
                   }
                   return Array.isArray(v)
-                    ? `R$ ${Number(v[0]).toFixed(2)} – R$ ${Number(v[1]).toFixed(2)}`
-                    : `R$ ${Number(v).toFixed(2)}`
+                    ? `${fmtNaUnidade(uSel, Number(v[0]))} – ${fmtNaUnidade(uSel, Number(v[1]))}`
+                    : fmtNaUnidade(uSel, Number(v))
                 }}
                   labelFormatter={(t: any) => fmtDia(new Date(t).toISOString().slice(0, 10))} />
                 <Legend wrapperStyle={{ fontSize: 13 }} />
@@ -536,7 +609,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <p className="text-sm font-medium">Índice mensal × preditores mensais (admin)
-                  <InfoTip texto="Índice agregado por mês para casar com as variáveis mensais do IPCA/juros/salário. Em 'variação %' as duas curvas têm a mesma natureza (quanto mudou no mês), que é o que torna a leitura comparável — o nível em R$ não compara com um percentual. Cada preditor mensal aparece só nos meses já publicados: IPCA e DIEESE saem com defasagem, e o mês sem publicação fica vazio em vez de repetir o valor anterior." /></p>
+                  <InfoTip texto="Índice agregado por mês para casar com as variáveis mensais do IPCA/juros/salário. Em 'variação %' as duas curvas têm a mesma natureza (quanto mudou no mês), que é o que torna a leitura comparável — o nível em R$ não compara com um percentual. Cada preditor mensal aparece só nos meses já publicados: IPCA e DIEESE saem com defasagem, e o mês sem publicação fica vazio em vez de repetir o valor anterior. A PNAD é a exceção: é trimestral e o valor do trimestre é o nível vigente nos três meses, seguindo válido até o trimestre seguinte sair (limite de 8 meses do carimbo)." /></p>
                 {janelaM.defasado && (
                   <p className="text-xs text-dim">Preditores mensais publicados até {janelaM.defasado} · meses posteriores ficam vazios até a divulgação (IPCA/DIEESE têm defasagem).</p>
                 )}
