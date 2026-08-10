@@ -136,20 +136,6 @@ describe('contrato ok', () => {
 })
 
 describe('gaps (DATA_INCOMPLETE)', () => {
-  it('sem variação do item nem do grupo na transição da âncora: 409 e só o ponto da âncora', async () => {
-    tabelas.dados.fatores_preditores = tabelas.dados.fatores_preditores
-      .filter(l => !(l.data === '2026-07-01' && (l.serie === 'ipca_item_a' || l.serie === 'ipca_7171')))
-    const res = await GET(req('desde=2026-05&confianca=alta,media'))
-    expect(res.status).toBe(409)
-    const j = await res.json()
-    expect(j.status).toBe('incomplete')
-    expect(j.code).toBe('DATA_INCOMPLETE')
-    expect(j.productKind).toBe('current_basket_backcast')
-    expect(j.gaps).toContainEqual({ series: 'ipca_item_a', month: '2026-07', reason: 'sem variação do item nem do grupo no mês' })
-    // nenhum ponto além do primeiro gap: junho não é reconstruído igual à âncora
-    expect(j.serie.map((p: { ym: string }) => p.ym)).toEqual(['2026-07'])
-  })
-
   it('gap interno interrompe a série no mês do gap', async () => {
     tabelas.dados.fatores_preditores = tabelas.dados.fatores_preditores
       .filter(l => !(l.data === '2026-06-01'))
@@ -184,6 +170,23 @@ describe('política de resolução', () => {
 })
 
 describe('gate de âncora', () => {
+  it('mês da âncora sem deflator publicado recua para o snapshot anterior (defasagem, não lacuna)', async () => {
+    // o IPCA de um mês só sai ~dia 11 do mês seguinte: faltar variação no FIM
+    // da série é atraso da fonte, não buraco no dado — recusa a âncora em vez
+    // de recusar a série inteira (gate versão 3, docs/033)
+    tabelas.dados.fatores_preditores = tabelas.dados.fatores_preditores
+      .filter(l => !(l.data === '2026-07-01' && l.serie === 'ipca_7171'))
+    const res = await GET(req('desde=2026-05&confianca=alta,media'))
+    expect(res.status).toBe(200)
+    const j = await res.json()
+    expect(j.ancora.snapshotId).toBe(1)
+    expect(j.ancora.ym).toBe('2026-06')
+    expect(j.gate.rejeitados[0]).toEqual({
+      snapshotId: 2, motivo: 'mês 2026-07 ainda sem deflator publicado (defasagem da fonte)',
+    })
+    expect(j.serie.map((p: { ym: string }) => p.ym)).toEqual(['2026-05', '2026-06'])
+  })
+
   it('snapshot mais novo com conjunto incompleto não ancora; o anterior válido ancora', async () => {
     tabelas.dados.snapshots.push({ id: 3, data: '2026-07-27', custo_total_pf: 11 })   // sem custos
     const res = await GET(req('desde=2026-05&confianca=alta,media'))
