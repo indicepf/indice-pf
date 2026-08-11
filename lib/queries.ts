@@ -899,7 +899,7 @@ export type IngManual = {
 
 export type PrecoManualHist = {
   id: number; preco_manual: number | null; custo_fixo: number | null
-  loja: string | null; link: string | null; tipo_local: string | null; criado_em: string
+  loja: string | null; link: string | null; tipo_local: string | null; marca: string | null; criado_em: string
 }
 
 export async function getIngredientesManuais(): Promise<IngManual[]> {
@@ -911,7 +911,7 @@ export async function getIngredientesManuais(): Promise<IngManual[]> {
 
 // registra uma LEITURA manual (R$/kg) e recalcula o preço efetivo (mediana 5 dias).
 export async function setPrecoManual(id: number, campos: {
-  preco_manual?: number | null; custo_fixo?: number | null; loja?: string; link?: string; tipo?: string
+  preco_manual?: number | null; custo_fixo?: number | null; loja?: string; link?: string; tipo?: string; marca?: string
 }) {
   return supabase.rpc('salvar_leitura_manual', {
     p_id: id,
@@ -920,6 +920,7 @@ export async function setPrecoManual(id: number, campos: {
     p_loja: campos.loja || null,
     p_link: campos.link || null,
     p_tipo: campos.tipo || null,
+    p_marca: campos.marca || null,
   })
 }
 
@@ -941,7 +942,7 @@ export async function getOrigensManuais(): Promise<Record<number, { net: boolean
 
 // edita uma leitura do histórico (tipo/fonte/link/preço) e recalcula o efetivo
 export async function editarLeituraManual(id: number, campos: {
-  preco_manual?: number | null; loja?: string; link?: string; tipo?: string
+  preco_manual?: number | null; loja?: string; link?: string; tipo?: string; marca?: string
 }) {
   return supabase.rpc('editar_leitura_manual', {
     p_id: id,
@@ -949,12 +950,13 @@ export async function editarLeituraManual(id: number, campos: {
     p_loja: campos.loja || null,
     p_link: campos.link || null,
     p_tipo: campos.tipo || null,
+    p_marca: campos.marca || null,
   })
 }
 
 export async function getHistoricoManual(ingredienteId: number): Promise<PrecoManualHist[]> {
   const { data } = await supabase.from('precos_manuais_hist')
-    .select('id,preco_manual,custo_fixo,loja,link,tipo_local,criado_em')
+    .select('id,preco_manual,custo_fixo,loja,link,tipo_local,marca,criado_em')
     .eq('ingrediente_id', ingredienteId).order('criado_em', { ascending: false })
   return (data as PrecoManualHist[]) || []
 }
