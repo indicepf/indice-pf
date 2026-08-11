@@ -9,22 +9,31 @@ import { brl } from '@/lib/format'
 // tipos de local para leituras manuais (pedido de 09/07)
 const TIPOS_LOCAL = ['Mercado', 'Atacarejo', 'Feira', 'Conveniência', 'Hortifruti', 'Açougue', 'Outro'] as const
 
-// unidades de compra aceitas na leitura manual; unidade/maço/dúzia convertem
-// para R$/kg pelo peso de referência do ingrediente (peso_ref_g)
-const UNIDADES = ['kg', 'g', 'unidade', 'maço', 'dúzia'] as const
-type Unidade = typeof UNIDADES[number]
+// unidades de compra aceitas na leitura manual. Ingrediente de volume
+// (unidade 'ml', ex.: óleo de soja, leite, vinagre) é cotado em R$/L; os demais
+// em R$/kg. unidade/maço/dúzia convertem pelo peso de referência (peso_ref_g).
+const UN_MASSA = ['kg', 'g', 'unidade', 'maço', 'dúzia'] as const
+const UN_VOLUME = ['L', 'ml'] as const
+type Unidade = typeof UN_MASSA[number] | typeof UN_VOLUME[number]
+const PESO_REF = ['unidade', 'maço', 'dúzia']
 
-// preço pago + quantidade + unidade → R$/kg (null = falta peso de referência)
-function paraRsKg(preco: number, qtd: number, un: Unidade, pesoRefG: number | null): number | null {
+const ehVolume = (item: ItemColeta) => item.unidade === 'ml'
+const unidadesDe = (item: ItemColeta) => ehVolume(item) ? UN_VOLUME : UN_MASSA
+const baseDe = (item: ItemColeta) => ehVolume(item) ? 'L' : 'kg'      // rótulo do preço efetivo
+const unPadrao = (item: ItemColeta): Unidade => ehVolume(item) ? 'L' : 'kg'
+
+// preço pago + quantidade + unidade → R$ por kg (massa) ou por L (volume);
+// null = falta peso de referência para converter unidade/maço/dúzia
+function paraRsBase(preco: number, qtd: number, un: Unidade, pesoRefG: number | null): number | null {
   if (!(preco > 0) || !(qtd > 0)) return null
-  let gramas: number
-  if (un === 'kg') gramas = qtd * 1000
-  else if (un === 'g') gramas = qtd
+  let base: number   // g ou ml
+  if (un === 'kg' || un === 'L') base = qtd * 1000
+  else if (un === 'g' || un === 'ml') base = qtd
   else {
     if (!pesoRefG || pesoRefG <= 0) return null
-    gramas = qtd * pesoRefG * (un === 'dúzia' ? 12 : 1)
+    base = qtd * pesoRefG * (un === 'dúzia' ? 12 : 1)
   }
-  return preco / (gramas / 1000)
+  return preco / (base / 1000)
 }
 
 const COLUNAS_ENC = [
@@ -51,12 +60,13 @@ export default function StatusColeta() {
   const [valores, setValores] = useState<Record<number, string>>({})
   const [qtds, setQtds] = useState<Record<number, string>>({})
   const [unidades, setUnidades] = useState<Record<number, Unidade>>({})
+  const [marcas, setMarcas] = useState<Record<number, string>>({})
   const [lojas, setLojas] = useState<Record<number, string>>({})
   const [links, setLinks] = useState<Record<number, string>>({})
   const [tipos, setTipos] = useState<Record<number, string>>({})
   const [hist, setHist] = useState<Record<number, PrecoManualHist[]>>({})
   // edição inline de uma leitura do histórico (leituras antigas sem tipo de local)
-  const [editando, setEditando] = useState<{ histId: number; ingId: number; preco: string; tipo: string; loja: string; link: string } | null>(null)
+  const [editando, setEditando] = useState<{ histId: number; ingId: number; preco: string; tipo: string; marca: string; loja: string; link: string } | null>(null)
   const [salvandoEdicao, setSalvandoEdicao] = useState(false)
   const [salvandoId, setSalvandoId] = useState<number | null>(null)
   const [msg, setMsg] = useState('')
@@ -94,18 +104,20 @@ export default function StatusColeta() {
 
   async function salvarManual(item: ItemColeta) {
     const preco = Number((valores[item.id] ?? '').replace(',', '.'))
-    const un = unidades[item.id] ?? 'kg'
-    const qtd = un === 'kg' ? Number((qtds[item.id] || '1').replace(',', '.')) : Number((qtds[item.id] ?? '').replace(',', '.'))
+    const un = unidades[item.id] ?? unPadrao(item)
+    const grande = un === 'kg' || un === 'L'
+    const qtd = grande ? Number((qtds[item.id] || '1').replace(',', '.')) : Number((qtds[item.id] ?? '').replace(',', '.'))
     if (!(preco > 0)) { setMsg(`Informe um preço válido para ${item.nome}.`); return }
-    if (!(qtd > 0)) { setMsg(`Informe a quantidade comprada de ${item.nome} (ex.: 600 para 600 g).`); return }
-    const precoKg = paraRsKg(preco, qtd, un, item.peso_ref_g)
-    if (precoKg == null) { setMsg(`${item.nome} não tem peso de referência cadastrado — não dá para converter ${un} em R$/kg. Use g ou kg.`); return }
+    if (!(qtd > 0)) { setMsg(`Informe a quantidade comprada de ${item.nome} (ex.: ${ehVolume(item) ? '900 para 900 ml' : '600 para 600 g'}).`); return }
+    const base = baseDe(item)
+    const precoBase = paraRsBase(preco, qtd, un, item.peso_ref_g)
+    if (precoBase == null) { setMsg(`${item.nome} não tem peso de referência cadastrado — não dá para converter ${un} em R$/${base}. Use g ou kg.`); return }
     setSalvandoId(item.id); setMsg('')
-    const { error } = await setPrecoManual(item.id, { preco_manual: +precoKg.toFixed(2), loja: lojas[item.id] || '', link: links[item.id] || '', tipo: tipos[item.id] || '' })
+    const { error } = await setPrecoManual(item.id, { preco_manual: +precoBase.toFixed(2), marca: marcas[item.id] || '', loja: lojas[item.id] || '', link: links[item.id] || '', tipo: tipos[item.id] || '' })
     if (error) { setSalvandoId(null); setMsg(`Erro ao salvar ${item.nome}: ${error.message}`); return }
     await recalcularCustos()
     setSalvandoId(null)
-    setValores(v => ({ ...v, [item.id]: '' })); setQtds(q => ({ ...q, [item.id]: '' })); setLojas(l => ({ ...l, [item.id]: '' })); setLinks(l => ({ ...l, [item.id]: '' })); setTipos(t => ({ ...t, [item.id]: '' }))
+    setValores(v => ({ ...v, [item.id]: '' })); setQtds(q => ({ ...q, [item.id]: '' })); setMarcas(m => ({ ...m, [item.id]: '' })); setLojas(l => ({ ...l, [item.id]: '' })); setLinks(l => ({ ...l, [item.id]: '' })); setTipos(t => ({ ...t, [item.id]: '' }))
     if (item.id in hist) { const d = await getHistoricoManual(item.id); setHist(h => ({ ...h, [item.id]: d })) }
     setMsg(`Leitura de ${item.nome} registrada e custos recalculados.`)
     recarregar()
@@ -146,10 +158,10 @@ export default function StatusColeta() {
   async function salvarEdicao() {
     if (!editando) return
     const preco = Number(editando.preco.replace(',', '.'))
-    if (!(preco > 0)) { setMsg('Informe um preço válido (R$/kg).'); return }
+    if (!(preco > 0)) { setMsg('Informe um preço válido.'); return }
     setSalvandoEdicao(true); setMsg('')
     const { error } = await editarLeituraManual(editando.histId, {
-      preco_manual: preco, tipo: editando.tipo, loja: editando.loja, link: editando.link,
+      preco_manual: preco, tipo: editando.tipo, marca: editando.marca, loja: editando.loja, link: editando.link,
     })
     setSalvandoEdicao(false)
     if (error) { setMsg(`Erro ao editar: ${error.message}`); return }
@@ -212,7 +224,7 @@ export default function StatusColeta() {
       {/* não encontrados: define preço manual inline */}
       <div>
         <h3 className="text-sm font-medium mb-1 text-accent">Não encontrados ({status.naoAchados.length})</h3>
-        <p className="text-xs text-dim mb-3">Sem cotação online neste snapshot. Registre uma leitura (R$/kg) com a fonte (loja/link) para cobrir o custo até o scraper encontrá-los. Cada leitura fica arquivada no histórico.</p>
+        <p className="text-xs text-dim mb-3">Sem cotação online neste snapshot. Registre uma leitura (R$/kg, ou R$/L nos líquidos) com a marca e a fonte (loja/link) para cobrir o custo até o scraper encontrá-los. Cada leitura fica arquivada no histórico.</p>
         {msg && <p className="text-xs text-dim mb-3">{msg}</p>}
         {!status.naoAchados.length ? <p className="text-sm text-dim">Todos os itens foram encontrados nesta coleta.</p> : (
           <div className="space-y-2">
@@ -225,7 +237,7 @@ export default function StatusColeta() {
                     {item.nome}
                   </span>
                   <span className={`text-xs ${item.preco_manual != null ? 'text-dim' : 'text-warn font-medium'}`}>
-                    {item.preco_manual != null ? `manual atual: ${brl(Number(item.preco_manual))}/kg` : 'sem manual'}
+                    {item.preco_manual != null ? `manual atual: ${brl(Number(item.preco_manual))}/${baseDe(item)}` : 'sem manual'}
                   </span>
                 </button>
                 {abertosNE.has(item.id) && (
@@ -237,31 +249,35 @@ export default function StatusColeta() {
                   </label>
                   <label>Quantidade
                     <input value={qtds[item.id] ?? ''} inputMode="decimal"
-                      placeholder={['unidade', 'maço', 'dúzia'].includes(unidades[item.id] ?? '') ? 'ex: 1' : 'ex: 600'}
+                      placeholder={PESO_REF.includes(unidades[item.id] ?? '') ? 'ex: 1' : ehVolume(item) ? 'ex: 900' : 'ex: 600'}
                       onChange={e => setQtds(q => ({ ...q, [item.id]: e.target.value }))} className={inputCls} />
                   </label>
                   <label>Unidade
-                    <select value={unidades[item.id] ?? 'kg'}
+                    <select value={unidades[item.id] ?? unPadrao(item)}
                       onChange={e => setUnidades(u => ({ ...u, [item.id]: e.target.value as Unidade }))} className={inputCls}>
-                      {UNIDADES.map(u => (
-                        <option key={u} value={u} disabled={['unidade', 'maço', 'dúzia'].includes(u) && !item.peso_ref_g}>
-                          {u}{['unidade', 'maço', 'dúzia'].includes(u) && !item.peso_ref_g ? ' (sem peso ref.)' : ''}
+                      {unidadesDe(item).map(u => (
+                        <option key={u} value={u} disabled={PESO_REF.includes(u) && !item.peso_ref_g}>
+                          {u}{PESO_REF.includes(u) && !item.peso_ref_g ? ' (sem peso ref.)' : ''}
                         </option>
                       ))}
                     </select>
                   </label>
                   {(() => {
                     const preco = Number((valores[item.id] ?? '').replace(',', '.'))
-                    const un = unidades[item.id] ?? 'kg'
-                    const qtd = un === 'kg' ? Number((qtds[item.id] || '1').replace(',', '.')) : Number((qtds[item.id] ?? '').replace(',', '.'))
-                    const kg = paraRsKg(preco, qtd, un, item.peso_ref_g)
-                    return kg != null ? (
+                    const un = unidades[item.id] ?? unPadrao(item)
+                    const qtd = un === 'kg' || un === 'L' ? Number((qtds[item.id] || '1').replace(',', '.')) : Number((qtds[item.id] ?? '').replace(',', '.'))
+                    const efetivo = paraRsBase(preco, qtd, un, item.peso_ref_g)
+                    return efetivo != null ? (
                       <p className="col-span-2 sm:col-span-3 text-dim -mt-1">
-                        = <strong className="text-ink tnum">{brl(kg)}/kg</strong>
-                        {['unidade', 'maço', 'dúzia'].includes(un) && item.peso_ref_g ? ` (peso de referência: ${item.peso_ref_g} g por ${un === 'dúzia' ? 'unidade' : un})` : ''}
+                        = <strong className="text-ink tnum">{brl(efetivo)}/{baseDe(item)}</strong>
+                        {PESO_REF.includes(un) && item.peso_ref_g ? ` (peso de referência: ${item.peso_ref_g} g por ${un === 'dúzia' ? 'unidade' : un})` : ''}
                       </p>
                     ) : null
                   })()}
+                  <label>Marca
+                    <input value={marcas[item.id] ?? ''} placeholder="ex: Soya"
+                      onChange={e => setMarcas(m => ({ ...m, [item.id]: e.target.value }))} className={inputCls} />
+                  </label>
                   <label>Tipo de local
                     <select value={tipos[item.id] ?? ''}
                       onChange={e => setTipos(t => ({ ...t, [item.id]: e.target.value }))} className={inputCls}>
@@ -295,7 +311,8 @@ export default function StatusColeta() {
                         <thead>
                           <tr className="text-left text-dim">
                             <th className="font-medium py-1">Data</th>
-                            <th className="font-medium py-1 text-right">R$/kg</th>
+                            <th className="font-medium py-1 text-right">R$/{baseDe(item)}</th>
+                            <th className="font-medium py-1">Marca</th>
                             <th className="font-medium py-1">Tipo</th>
                             <th className="font-medium py-1">Fonte</th>
                             <th className="py-1" />
@@ -304,11 +321,15 @@ export default function StatusColeta() {
                         <tbody>
                           {hist[item.id].map(h => editando?.histId === h.id ? (
                             <tr key={h.id} className="border-t border-border/60 bg-surface-2">
-                              <td colSpan={5} className="py-2">
+                              <td colSpan={6} className="py-2">
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                  <label>R$/kg
+                                  <label>R$/{baseDe(item)}
                                     <input value={editando.preco} inputMode="decimal"
                                       onChange={e => setEditando(ed => ed && { ...ed, preco: e.target.value })} className={inputCls} />
+                                  </label>
+                                  <label>Marca
+                                    <input value={editando.marca}
+                                      onChange={e => setEditando(ed => ed && { ...ed, marca: e.target.value })} className={inputCls} />
                                   </label>
                                   <label>Tipo de local
                                     <select value={editando.tipo}
@@ -339,13 +360,14 @@ export default function StatusColeta() {
                             <tr key={h.id} className="border-t border-border/60">
                               <td className="py-1 text-dim">{new Date(h.criado_em).toLocaleString('pt-BR')}</td>
                               <td className="py-1 text-right tnum">{h.preco_manual != null ? brl(Number(h.preco_manual)) : '—'}</td>
+                              <td className="py-1 text-dim">{h.marca || '—'}</td>
                               <td className="py-1 text-dim">{h.tipo_local || '—'}</td>
                               <td className="py-1">{h.loja || (h.link ? <a href={h.link} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">fonte</a> : '—')}</td>
                               <td className="py-1 text-right">
                                 <button onClick={() => setEditando({
                                   histId: h.id, ingId: item.id,
                                   preco: h.preco_manual != null ? String(h.preco_manual).replace('.', ',') : '',
-                                  tipo: h.tipo_local || '', loja: h.loja || '', link: h.link || '',
+                                  tipo: h.tipo_local || '', marca: h.marca || '', loja: h.loja || '', link: h.link || '',
                                 })} className="text-accent hover:underline cursor-pointer">editar</button>
                               </td>
                             </tr>
