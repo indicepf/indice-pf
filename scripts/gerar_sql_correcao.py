@@ -59,7 +59,7 @@ def main():
               ""]
     cache = {}
     for ing in ITENS:
-        resultados = buscar_ingrediente(ing, cache)
+        resultados = buscar_ingrediente(ing, cache) or []   # None = busca falhou (cota/rede)
         norm = [r["preco_normalizado"] for r in resultados if r["preco_normalizado"]]
         med = mediana(norm)
         label = "L" if ing["unidade"] == "ml" else "kg"
