@@ -34,6 +34,13 @@ PALAVRAS_NAO_GLOBAIS = ["gourmet", "premium", "luxo", "importado", "seleção es
                         "cesta", "kit presente", "trufado"]
 # Descarta preços muito fora da mediana do lote (pega erro de vírgula: 40 → 40000).
 LIMITE_RAZAO_MEDIANA = 4.0   # mantém só preços entre mediana/4 e mediana*4
+# Quantas ofertas da busca processar. O crédito da SerpAPI é cobrado por CHAMADA,
+# não por resultado — cortar a lista não economiza nada, só joga fora oferta já
+# paga. Com o corte antigo (15), 89 dos 123 ingredientes da coleta de 10/08
+# pararam exatamente em 15 ofertas, ou seja o limite era do código, não do Google.
+MAX_OFERTAS = int(os.getenv("MAX_OFERTAS", "60"))
+# Amostra mínima da coleta anterior para ela poder servir de teto no anti-alta.
+AMOSTRA_MIN_REF = 4
 
 # ─── Catálogo de ingredientes (vem da tabela 'ingredientes' do Supabase) ──────
 # Cada ingrediente tem: id, nome, busca, unidade, peso_ref_g, palavras_ok, palavras_nao.
@@ -63,8 +70,10 @@ def _ids_coletados_recentes(dias=6):
 
 
 def medianas_coleta_anterior():
-    """Mediana normalizada (R$/g) por ingrediente na coleta mais recente.
-    Usada como referência do filtro anti-alta: preço >50% acima dela é descartado."""
+    """(mediana normalizada em R$/g, qtd_resultados) por ingrediente na coleta
+    mais recente. Referência do filtro anti-alta. O qtd_resultados vem junto
+    porque mediana apurada sobre 1–2 anúncios não é confiável o bastante para
+    virar teto da coleta seguinte (ver AMOSTRA_MIN_REF)."""
     r = requests.get(f"{SUPABASE_URL}/rest/v1/snapshots?select=id&order=data.desc&limit=1",
                      headers=SUPA_HEADERS, timeout=30)
     r.raise_for_status()
@@ -72,10 +81,10 @@ def medianas_coleta_anterior():
     if not snaps:
         return {}
     r = requests.get(f"{SUPABASE_URL}/rest/v1/precos"
-                     f"?select=ingrediente_id,mediana_normalizada&snapshot_id=eq.{snaps[0]['id']}",
+                     f"?select=ingrediente_id,mediana_normalizada,qtd_resultados&snapshot_id=eq.{snaps[0]['id']}",
                      headers=SUPA_HEADERS, timeout=30)
     r.raise_for_status()
-    return {p["ingrediente_id"]: float(p["mediana_normalizada"])
+    return {p["ingrediente_id"]: (float(p["mediana_normalizada"]), p.get("qtd_resultados") or 0)
             for p in r.json()
             if p["ingrediente_id"] is not None and p["mediana_normalizada"] not in (None, 0)}
 
@@ -138,6 +147,13 @@ _UNIDADES_QTD = [
 # "6 garrafas de 900 ml". O total é n × quantidade — usar só a quantidade da
 # embalagem subcontava o anúncio e inflava o preço normalizado (COL-002).
 _MULTIPACK = r'(\d+)\s*(?:[x×]|(?:pacotes?|garrafas?|latas?|caixas?|potes?|unidades?)\s+de)\s*'
+# Açougue e hortifruti cotam o quilo SEM escrever o número: "Matambre bovino kg",
+# "Cebola Nacional Kg", "CARNE DE SIRI LIMPA R$ / KG", "Costela cordeiro kg".
+# O preço do anúncio já é o preço do quilo. Sem esta regra o título não tinha
+# quantidade e a oferta era descartada: 244 das 550 rejeições por
+# "sem_quantidade_no_titulo" da coleta de 10/08 eram deste formato, e é o que
+# zerava o Matambre bovino em todas as coletas desde que ele entrou no catálogo.
+_UNIDADE_SOZINHA = re.compile(r'\b(?:kg|quilos?|kilos?|litros?)\b')
 
 def extrair_quantidade(titulo):
     titulo_lower = titulo.lower()
@@ -152,6 +168,9 @@ def extrair_quantidade(titulo):
         if m:
             valor = float(m.group(1).replace(',', '.'))
             return valor * multiplicador
+    # último recurso, só depois de falharem todos os padrões COM número
+    if _UNIDADE_SOZINHA.search(titulo_lower):
+        return 1000.0
     return None
 
 # ─── Extrator de contagem (ovo: unidades; maço: maços) ───────────────────────
@@ -189,15 +208,25 @@ def limpar_preco(preco_txt):
         return None
 
 # ─── Validação de produto ─────────────────────────────────────────────────────
+def _casa_palavra(termo, texto):
+    """Casamento por palavra inteira. Com substring pura, palavra_nao curta
+    derrubava produto certo por coincidência de letras na coleta de 10/08:
+    'kit' casava Kitano (a marca líder da Pimenta do reino, 3 ofertas),
+    'pimenta' casava Pimentao, 'suco' casava 'Sucos Limão', 'sabor' casava
+    Kisabor. Só o filtro de exclusão usa isto — palavras_ok segue por
+    substring, que é o lado permissivo."""
+    return re.search(rf'(?<![0-9a-zà-ÿ]){re.escape(termo.lower())}(?![0-9a-zà-ÿ])', texto) is not None
+
+
 def produto_valido(titulo, ingrediente):
     titulo_lower = titulo.lower()
     for palavra in PALAVRAS_NAO_GLOBAIS:
-        if palavra in titulo_lower:
+        if _casa_palavra(palavra, titulo_lower):
             return False, f"global '{palavra}'"
     if not any(p.lower() in titulo_lower for p in ingrediente["palavras_ok"]):
         return False, "produto fora do escopo"
     for palavra in ingrediente["palavras_nao"]:
-        if palavra.lower() in titulo_lower:
+        if _casa_palavra(palavra, titulo_lower):
             return False, f"contém '{palavra}'"
     return True, "ok"
 
@@ -262,7 +291,7 @@ def _buscar_serp(query):
     for _ in range(len(SERP_API_KEYS)):
         key = SERP_API_KEYS[_serp_idx]
         params = {
-            "engine": "google_shopping", "q": query,
+            "engine": "google_shopping", "q": query, "num": MAX_OFERTAS,
             "gl": "br", "hl": "pt", "location": "Brazil", "api_key": key,
         }
         try:
@@ -322,14 +351,19 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
     print(f"\n🔍 {ingrediente['nome']} → '{ingrediente['busca']}'")
     dados = _buscar_serp(ingrediente["busca"])
     if dados is None:
-        return []
+        # falha de infraestrutura (cota esgotada/rede), não fato de mercado:
+        # None faz o main() deixar o ingrediente FORA do snapshot, em vez de
+        # gravar qtd_resultados=0 e mandá-lo para a fila de leitura manual
+        print("  ❌ busca falhou (cota/rede) — ingrediente fica FORA deste snapshot")
+        return None
     itens = dados.get("shopping_results", [])
     if not itens:
         print("  ⚠️  Sem resultados")
         return []
+    print(f"  📥 {len(itens)} ofertas devolvidas pela busca (processando até {MAX_OFERTAS})")
 
     resultados, rejeitados, motivos = [], 0, []
-    for item in itens[:15]:
+    for item in itens[:MAX_OFERTAS]:
         titulo    = item.get("title", "")
         preco_txt = item.get("price", "")
         loja      = item.get("source", "N/A")
@@ -368,21 +402,37 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
         })
 
     # anti-alta: descarta preço >50% acima da mediana do ingrediente na coleta
-    # anterior (provável produto errado/embalagem menor inflando o preço)
-    med_ant = (medianas_ant or {}).get(ingrediente["id"])
+    # anterior (provável produto errado/embalagem menor inflando o preço).
+    # Duas travas contra o laço de realimentação que matou a Pimenta do reino:
+    # em 13/07 sobrou 1 anúncio a R$37,98/kg (o preço real é ~R$200/kg), esse
+    # n=1 virou teto de R$56,97 e passou a descartar todas as ofertas boas das
+    # coletas seguintes, congelando a série em 37,98 por 4 coletas até zerar.
+    #   1. referência apurada sobre amostra pequena não vira teto;
+    #   2. o filtro nunca zera o ingrediente — se ele cortaria TUDO, quem está
+    #      errada é a referência, não o mercado.
+    ref = (medianas_ant or {}).get(ingrediente["id"])
+    med_ant, n_ant = ref if ref else (None, 0)
     inflados = 0
-    if med_ant:
+    if med_ant and n_ant >= AMOSTRA_MIN_REF:
         teto = med_ant * 1.5
-        antes_alta = len(resultados)
-        for r in resultados:
-            if r["preco_normalizado"] > teto:
-                _registrar_descarte(descartados_out, ingrediente, r["titulo"], r["loja"], r["link"],
-                                    r["preco_bruto"], r["preco_normalizado"], f"alta_50pct: teto R${teto * 1000:.2f}/kg")
-        resultados = [r for r in resultados if r["preco_normalizado"] <= teto]
-        inflados = antes_alta - len(resultados)
-        if inflados:
-            print(f"  🚫 {inflados} descartado(s) por preço >50% acima da coleta anterior "
-                  f"(teto R${teto * 1000:.2f}/kg)")
+        sobreviventes = [r for r in resultados if r["preco_normalizado"] <= teto]
+        if resultados and not sobreviventes:
+            print(f"  ⚠️  anti-alta cortaria TODAS as {len(resultados)} ofertas "
+                  f"(teto R${teto * 1000:.2f}/kg vindo da coleta anterior) — "
+                  f"referência provavelmente errada, filtro ignorado nesta rodada")
+        else:
+            for r in resultados:
+                if r["preco_normalizado"] > teto:
+                    _registrar_descarte(descartados_out, ingrediente, r["titulo"], r["loja"], r["link"],
+                                        r["preco_bruto"], r["preco_normalizado"], f"alta_50pct: teto R${teto * 1000:.2f}/kg")
+            inflados = len(resultados) - len(sobreviventes)
+            resultados = sobreviventes
+            if inflados:
+                print(f"  🚫 {inflados} descartado(s) por preço >50% acima da coleta anterior "
+                      f"(teto R${teto * 1000:.2f}/kg)")
+    elif med_ant:
+        print(f"  ℹ️  anti-alta desligado: coleta anterior teve só {n_ant} resultado(s) "
+              f"(mínimo {AMOSTRA_MIN_REF} para servir de teto)")
 
     # sanidade (erro de vírgula) → depois outliers (dispersão)
     antes = len(resultados)
@@ -424,9 +474,16 @@ def main():
         medianas_ant = {}
         print(f"⚠️  Filtro anti-alta desativado (falha ao ler a coleta anterior: {e})")
 
-    cache, todos, resumo, descartados = carregar_cache(), [], [], []
+    cache, todos, resumo, descartados, falhas_busca = carregar_cache(), [], [], [], []
     for ing in catalogo:
         resultados = buscar_ingrediente(ing, cache, medianas_ant, descartados)
+        # None = a busca não chegou a rodar (cota/rede). Fica fora do resumo:
+        # sem linha em `precos`, o recálculo mantém o preço da coleta anterior
+        # por carry-forward, em vez de registrar um zero que o admin lê como
+        # "não encontrado" e sai cotando na mão à toa.
+        if resultados is None:
+            falhas_busca.append(ing["nome"])
+            continue
         todos.extend(resultados)
 
         norm = [r["preco_normalizado"] for r in resultados if r["preco_normalizado"]]
@@ -451,13 +508,18 @@ def main():
     com_preco = sum(1 for r in resumo if r["mediana_exibicao"])
     print("=" * 60)
     print(f"  {com_preco}/{len(resumo)} ingredientes com preço")
+    if falhas_busca:
+        print(f"\n  ⚠️  {len(falhas_busca)} ingrediente(s) fora do snapshot por FALHA DE BUSCA "
+              f"(cota/rede), não por ausência no mercado:")
+        print(f"      {', '.join(falhas_busca)}")
 
     snapshot = {
-        "data":        datetime.now().strftime("%Y-%m-%d"),
-        "fonte":       "Google Shopping via SerpAPI",
-        "resumo":      resumo,
-        "resultados":  todos,
-        "descartados": descartados,
+        "data":          datetime.now().strftime("%Y-%m-%d"),
+        "fonte":         "Google Shopping via SerpAPI",
+        "resumo":        resumo,
+        "resultados":    todos,
+        "descartados":   descartados,
+        "falhas_busca":  falhas_busca,
     }
     with open(SNAPSHOT_FILE, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, ensure_ascii=False, indent=2)
