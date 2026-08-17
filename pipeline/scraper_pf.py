@@ -2,6 +2,7 @@ import requests
 import re
 import json
 import os
+import unicodedata
 from datetime import datetime, timedelta
 
 try:
@@ -32,6 +33,14 @@ SUPA_HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}
 # Palavras que indicam produto premium/atípico → descarta o resultado.
 PALAVRAS_NAO_GLOBAIS = ["gourmet", "premium", "luxo", "importado", "seleção especial",
                         "cesta", "kit presente", "trufado"]
+# Radicais que também descartam o resultado, casando qualquer flexão e ignorando
+# acento: "orgânico/Orgânica/orgânicos", "artesanal/artesanais". Palavra exata
+# não serve aqui — na coleta de 17/08 as 72 ofertas orgânicas/artesanais
+# apareciam em 6 grafias diferentes.
+RADICAIS_NAO_GLOBAIS = ["organic", "artesan"]
+# Fração descartada em cada ponta da distribuição de preço normalizado do
+# ingrediente (decil inferior e superior). n < 10 → não corta nada.
+FRACAO_DECIL = 0.10
 # Descarta preços muito fora da mediana do lote (pega erro de vírgula: 40 → 40000).
 LIMITE_RAZAO_MEDIANA = 4.0   # mantém só preços entre mediana/4 e mediana*4
 # Quantas ofertas da busca processar. O crédito da SerpAPI é cobrado por CHAMADA,
@@ -220,11 +229,27 @@ def _casa_palavra(termo, texto):
     return re.search(rf'(?<![0-9a-zà-ÿ]){re.escape(termo.lower())}(?![0-9a-zà-ÿ])', texto) is not None
 
 
+def _sem_acento(texto):
+    return "".join(c for c in unicodedata.normalize("NFD", texto)
+                   if unicodedata.category(c) != "Mn")
+
+
+def _casa_radical(radical, texto_sem_acento):
+    """Palavra que COMEÇA com o radical, em texto já sem acento. Só a lista
+    global usa isto — em palavras_nao por ingrediente o casamento por prefixo
+    traria de volta o bug do 'kit' × Kitano."""
+    return re.search(rf'(?<![0-9a-z]){radical}[a-z]*(?![0-9a-z])', texto_sem_acento) is not None
+
+
 def produto_valido(titulo, ingrediente):
     titulo_lower = titulo.lower()
     for palavra in PALAVRAS_NAO_GLOBAIS:
         if _casa_palavra(palavra, titulo_lower):
             return False, f"global '{palavra}'"
+    titulo_simples = _sem_acento(titulo_lower)
+    for radical in RADICAIS_NAO_GLOBAIS:
+        if _casa_radical(radical, titulo_simples):
+            return False, f"global '{radical}*'"
     if not any(p.lower() in titulo_lower for p in ingrediente["palavras_ok"]):
         return False, "produto fora do escopo"
     for palavra in ingrediente["palavras_nao"]:
@@ -272,6 +297,19 @@ def filtrar_outliers(precos):
     iqr = q3 - q1
     lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
     return [x for x in precos if lo <= x <= hi]
+
+# ─── Corte dos decis extremos ─────────────────────────────────────────────────
+def cortar_decis(resultados, fracao=FRACAO_DECIL):
+    """Descarta os `fracao` menores e os `fracao` maiores preços normalizados do
+    ingrediente. Trabalha sobre os REGISTROS (e não sobre a lista de preços)
+    porque duas ofertas de preço idêntico precisam ser cortadas uma a uma.
+    Retorna (mantidos, cortados); com n < 1/fracao o corte é 0 e nada sai."""
+    n = len(resultados)
+    k = int(n * fracao)
+    if k == 0:
+        return resultados, []
+    ordenados = sorted(resultados, key=lambda r: r["preco_normalizado"])
+    return ordenados[k:n - k], ordenados[:k] + ordenados[n - k:]
 
 # ─── Mediana ──────────────────────────────────────────────────────────────────
 def mediana(valores):
@@ -454,8 +492,16 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
             _registrar_descarte(descartados_out, ingrediente, r["titulo"], r["loja"], r["link"],
                                 r["preco_bruto"], r["preco_normalizado"], "sanidade_ou_outlier")
     resultados = [r for r in resultados if r["preco_normalizado"] in norm]
+
+    # decis extremos: tira os 10% mais baratos e os 10% mais caros do que sobrou
+    resultados, cortados = cortar_decis(resultados)
+    for r in cortados:
+        _registrar_descarte(descartados_out, ingrediente, r["titulo"], r["loja"], r["link"],
+                            r["preco_bruto"], r["preco_normalizado"], "decil_extremo")
+
     print(f"  ✅ {len(resultados)} válidos | {rejeitados} produto errado | "
-          f"{antes - len(resultados)} descartados (sanidade/outlier)")
+          f"{antes - len(resultados) - len(cortados)} descartados (sanidade/outlier) | "
+          f"{len(cortados)} nos decis extremos")
     # diagnóstico: se nada passou mas vieram produtos, mostra o que foi rejeitado e por quê
     if not resultados and motivos:
         print("  🔎 nenhum válido — títulos rejeitados:")

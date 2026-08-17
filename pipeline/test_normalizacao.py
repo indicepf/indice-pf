@@ -5,7 +5,8 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from scraper_pf import extrair_quantidade, extrair_contagem, produto_valido  # noqa: E402
+from scraper_pf import (extrair_quantidade, extrair_contagem, produto_valido,  # noqa: E402
+                        cortar_decis)
 
 CASOS_CONTAGEM = [
     ("1 dúzia", 12),
@@ -60,6 +61,25 @@ CASOS_PALAVRA = [
     ("Pimenta do Reino Smart com Moedor 50g", ["pimenta do reino"], ["moedor"], False),
     ("Óleo de Girassol Soya 900ml", ["óleo"], ["girassol"], False),
     ("Filé Mignon Gourmet", ["filé mignon"], [], False),   # palavra global
+    # radicais globais: qualquer flexão, com ou sem acento (títulos do snapshot 41)
+    ("LARANJA PERA ORGÂNICA - kg", ["laranja"], [], False),
+    ("ABÓBORA CABOTIA ORGÂNICO - kg", ["abóbora"], [], False),
+    ("Abóbora Cabotiá Orgânicos Do Sul 500g", ["abóbora"], [], False),
+    ("Açaí Organico 1kg", ["açaí"], [], False),
+    ("Bacon Artesanal Defumado E Temperado 1kg", ["bacon"], [], False),
+    ("Queijos artesanais 500g", ["queijo"], [], False),
+    ("Pimentão Verde Desidratado Em Flocos 500g", ["pimentão"], ["desidratado"], False),
+    # o radical casa por prefixo de palavra ("Orgânicos do Sul", "Organics"),
+    # mas não no meio dela
+    ("Açaí Bioorganico 1kg", ["açaí"], [], True),
+]
+
+# (preços, esperado_mantidos) — corte dos decis extremos
+CASOS_DECIL = [
+    ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [2, 3, 4, 5, 6, 7, 8, 9]),   # n=10 → 1 de cada ponta
+    ([1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8, 9]),    # n=9  → não corta
+    ([5, 5, 5, 5, 5, 5, 5, 5, 5, 99], [5] * 8),                    # empate cortado 1 a 1
+    ([], []),
 ]
 
 def main():
@@ -80,7 +100,13 @@ def main():
         ok = obtido == esperado
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} quantidade {titulo!r} -> {obtido} (esperado {esperado})")
-    total = len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA)
+    for precos, esperado in CASOS_DECIL:
+        mantidos, cortados = cortar_decis([{"preco_normalizado": p} for p in precos])
+        obtido = sorted(r["preco_normalizado"] for r in mantidos)
+        ok = obtido == esperado and len(mantidos) + len(cortados) == len(precos)
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} decil      {precos} -> {obtido} (esperado {esperado})")
+    total = len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA) + len(CASOS_DECIL)
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
