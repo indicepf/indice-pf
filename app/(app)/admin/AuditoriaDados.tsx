@@ -10,7 +10,7 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
   const [fortes, setFortes] = useState<VariacaoForte[]>([])
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<{ id: number; nome: string } | null>(null)
-  const [entradas, setEntradas] = useState<EntradaBruta[]>([])
+  const [entradas, setEntradas] = useState<EntradaBruta[] | null>(null)   // null = carregando
   const [snapId, setSnapId] = useState(0)
   const [busca, setBusca] = useState('')
   const [busy, setBusy] = useState(false)
@@ -19,7 +19,7 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
   useEffect(() => { getVariacoesFortes().then(v => { setFortes(v); setLoading(false) }) }, [])
 
   async function abrir(id: number, nome: string) {
-    setSel({ id, nome }); setEntradas([]); setMsg('')
+    setSel({ id, nome }); setEntradas(null); setMsg('')
     const { snapshotId, entradas } = await getEntradasIngrediente(id)
     setSnapId(snapshotId); setEntradas(entradas)
   }
@@ -30,7 +30,7 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
     const ctx = await capturarContexto()
     const { error } = await excluirEntradaERecalcular(e.id, snapId, sel.id, ctx)
     if (error) { setBusy(false); setMsg(`Erro ao excluir: ${error.message}`); return }
-    setEntradas(prev => prev.filter(x => x.id !== e.id))
+    setEntradas(prev => (prev || []).filter(x => x.id !== e.id))
     getVariacoesFortes().then(setFortes)
     setBusy(false); setMsg('Entrada excluída e índice recalculado.')
   }
@@ -96,27 +96,31 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
 
       {/* entradas do ingrediente selecionado */}
       {sel && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium">Entradas online de {sel.nome} (última coleta)</h3>
-            <button onClick={() => setSel(null)} className="text-xs text-dim hover:text-ink">fechar</button>
-          </div>
-          {msg && <p className="text-xs text-ok mb-2">{msg}</p>}
-          {!entradas.length ? <p className="text-sm text-dim">Sem entradas online nesta coleta.</p> : (
-            <div className="space-y-2">
-              {entradas.map(e => (
-                <div key={e.id} className="border border-border rounded-md bg-surface px-3 py-2.5 flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <a href={e.link || undefined} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-accent truncate block">{e.titulo}</a>
-                    <p className="text-xs text-dim">{e.loja} · {e.exibicao}</p>
-                  </div>
-                  <span className="text-sm tnum text-accent shrink-0">{e.preco_bruto != null ? brl(Number(e.preco_bruto)) : '—'}</span>
-                  <button disabled={busy} onClick={() => excluir(e)}
-                    className="text-xs border border-danger/30 text-danger px-2.5 py-1 rounded-md hover:bg-danger/5 transition disabled:opacity-60 shrink-0">excluir</button>
-                </div>
-              ))}
+        <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center px-4" onClick={() => setSel(null)}>
+          <div className="bg-surface-2 border border-border rounded-lg max-w-2xl w-full max-h-[85vh] overflow-auto p-6"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold tracking-tight text-lg">Entradas online de {sel.nome} (última coleta)</h3>
+              <button onClick={() => setSel(null)} className="text-sm text-dim hover:text-ink">fechar ✕</button>
             </div>
-          )}
+            {msg && <p className="text-xs text-ok mb-2">{msg}</p>}
+            {entradas === null ? <p className="text-sm text-dim">Carregando…</p>
+              : !entradas.length ? <p className="text-sm text-dim">Sem entradas online nesta coleta.</p> : (
+              <div className="space-y-2">
+                {entradas.map(e => (
+                  <div key={e.id} className="border border-border rounded-md bg-surface px-3 py-2.5 flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <a href={e.link || undefined} target="_blank" rel="noopener noreferrer" className="text-sm hover:text-accent truncate block">{e.titulo}</a>
+                      <p className="text-xs text-dim">{e.loja} · {e.exibicao}</p>
+                    </div>
+                    <span className="text-sm tnum text-accent shrink-0">{e.preco_bruto != null ? brl(Number(e.preco_bruto)) : '—'}</span>
+                    <button disabled={busy} onClick={() => excluir(e)}
+                      className="text-xs border border-danger/30 text-danger px-2.5 py-1 rounded-md hover:bg-danger/5 transition disabled:opacity-60 shrink-0">excluir</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
