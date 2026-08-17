@@ -39,6 +39,8 @@ LIMITE_RAZAO_MEDIANA = 4.0   # mantém só preços entre mediana/4 e mediana*4
 # paga. Com o corte antigo (15), 89 dos 123 ingredientes da coleta de 10/08
 # pararam exatamente em 15 ofertas, ou seja o limite era do código, não do Google.
 MAX_OFERTAS = int(os.getenv("MAX_OFERTAS", "60"))
+# Timeout de cada chamada à SerpAPI. 30s cortava respostas que chegariam.
+TIMEOUT_SERP = 60
 # Amostra mínima da coleta anterior para ela poder servir de teto no anti-alta.
 AMOSTRA_MIN_REF = 4
 
@@ -294,10 +296,18 @@ def _buscar_serp(query):
             "engine": "google_shopping", "q": query, "num": MAX_OFERTAS,
             "gl": "br", "hl": "pt", "location": "Brazil", "api_key": key,
         }
-        try:
-            resp = requests.get("https://serpapi.com/search", params=params, timeout=30)
-        except requests.RequestException as e:
-            print(f"  ❌ erro de rede: {e}")
+        # timeout de leitura da SerpAPI é intermitente e tirava o ingrediente do
+        # snapshot na primeira falha (3 itens em 17/08). 60s + 1 retentativa na
+        # MESMA conta: gasta no máximo 1 chamada extra por ingrediente afetado.
+        resp = None
+        for tentativa in (1, 2):
+            try:
+                resp = requests.get("https://serpapi.com/search", params=params, timeout=TIMEOUT_SERP)
+                break
+            except requests.RequestException as e:
+                print(f"  ⏳ erro de rede ({tentativa}/2): {e}")
+        if resp is None:
+            print("  ❌ rede fora depois de 2 tentativas")
             return None
         try:
             dados = resp.json()
