@@ -257,7 +257,12 @@ def _salvar_observacoes(snapshot_id, resultados, descartados):
     resultado aceito (status=included) e cada descarte com motivo
     (status=rejected) em price_observations. O dedup_hash é gerado no banco;
     replay da mesma oferta não duplica (ON CONFLICT DO NOTHING). Falha aqui
-    CONTA como falha do job — o fato bruto precisa ser preservado."""
+    CONTA como falha do job — o fato bruto precisa ser preservado.
+
+    Aceitos e descartes têm o MESMO conjunto de chaves de propósito: o PostgREST
+    rejeita um lote com objetos de chaves diferentes (PGRST102 "All object keys
+    must match"), e era isso que derrubava o lote que cruzava a fronteira entre
+    as duas listas (200 observações perdidas por coleta em 27/07–17/08)."""
     payload = [{
         "fonte":             "online_scrape",
         "snapshot_id":       snapshot_id,
@@ -269,6 +274,7 @@ def _salvar_observacoes(snapshot_id, resultados, descartados):
         "preco_normalizado": r["preco_normalizado"],
         "exibicao":          r["exibicao"],
         "status":            "included",
+        "motivo":            None,
         "run_id":            _RUN_ID,
     } for r in resultados] + [{
         "fonte":             "online_scrape",
@@ -279,6 +285,7 @@ def _salvar_observacoes(snapshot_id, resultados, descartados):
         "link":              d.get("link", ""),
         "preco_bruto":       d.get("preco_bruto"),
         "preco_normalizado": d.get("preco_normalizado"),
+        "exibicao":          None,
         "status":            "rejected",
         "motivo":            d.get("motivo"),
         "run_id":            _RUN_ID,
