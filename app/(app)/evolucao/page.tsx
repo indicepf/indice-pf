@@ -46,7 +46,7 @@ function EvolucaoInner() {
   const [calibBusca, setCalibBusca] = useState('')
   const [calibOnline, setCalibOnline] = useState<Record<number, Fonte[]>>({})
   const [calibAberto, setCalibAberto] = useState<string | null>(null)
-  const [fonte, setFonte] = useState<FonteKey>('blend')
+  const [fonte, setFonte] = useState<FonteKey>('oficial')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
   const [ini, setIni] = useState('')   // período: início (YYYY-MM-DD, '' = desde o começo)
   const [fim, setFim] = useState('')   // período: fim ('' = até a última coleta)
@@ -419,7 +419,7 @@ function EvolucaoInner() {
         </div>
         <div className="text-xs text-dim">Fonte do dado
           <div className="flex w-fit border border-border rounded-md overflow-hidden bg-surface text-sm mt-1">
-            {([['online', 'Online'], ['manual', 'Campo'], ['blend', 'Blend']] as [FonteKey, string][]).map(([k, label]) => (
+            {([['oficial', 'Publicado'], ['online', 'Online'], ['manual', 'Campo'], ['blend', 'Blend']] as [FonteKey, string][]).map(([k, label]) => (
               <button key={k} onClick={() => setFonte(k)} className={`px-3 py-1.5 transition-colors ${fonte === k ? 'bg-accent text-white' : 'text-dim hover:text-ink'}`}>{label}</button>
             ))}
           </div>
@@ -443,7 +443,7 @@ function EvolucaoInner() {
           <p className="text-sm font-medium">Variação % acumulada do custo
             <InfoTip w="w-72" texto="Quanto o custo mudou em relação à 1ª coleta do período (a base = 0%). Linha subindo = mais caro; descendo = mais barato. Escolha o prato (ou Todos), a fonte e — em Todos — quais linhas mostrar. Explicação completa abaixo do gráfico." /></p>
           <p className="text-xs text-dim">
-            {nacional ? 'Nacional e as regiões que você marcar.' : 'Só o prato selecionado.'} · Fonte: {fonte === 'online' ? 'online (raspado)' : fonte === 'manual' ? 'campo (leituras manuais)' : 'blend (média online × campo)'}
+            {nacional ? 'Nacional e as regiões que você marcar.' : 'Só o prato selecionado.'} · Fonte: {fonte === 'oficial' ? 'publicado (índice oficial)' : fonte === 'online' ? 'online (raspado) — simulação' : fonte === 'manual' ? 'campo (leituras manuais) — simulação' : 'blend (média online × campo) — simulação'}
             {variacao.base && ` · base: coleta de ${fmt(variacao.base)} (0%)`}.
           </p>
           </div>
@@ -477,7 +477,7 @@ function EvolucaoInner() {
           <p className="text-ink"><code>Δ% = (custo desta coleta − custo da 1ª coleta) ÷ custo da 1ª coleta × 100</code></p>
           <p><strong>Exemplo:</strong> se o Nacional foi R$ 11,63 na 1ª coleta (base = 0%) e R$ 11,93 depois, esse ponto é (11,93 − 11,63) ÷ 11,63 = <strong>+2,6%</strong> — 2,6% mais caro que no começo.</p>
           <p><strong>Linha subindo</strong> = ficando mais caro · <strong>descendo</strong> = mais barato · acima de 0% = mais caro que a base; abaixo = mais barato.</p>
-          <p>O <strong>custo</strong> de cada linha: <strong>Nacional</strong> = mediana dos 100 pratos; <strong>uma região</strong> = mediana dos pratos daquela região; <strong>um prato</strong> = o custo dele. A <strong>fonte</strong> define o preço de cada ingrediente: <strong>Online</strong> (raspado no varejo), <strong>Campo</strong> (leituras manuais/contribuições) ou <strong>Blend</strong> (média dos dois — o índice oficial).</p>
+          <p>O <strong>custo</strong> de cada linha: <strong>Nacional</strong> = mediana dos 100 pratos; <strong>uma região</strong> = mediana dos pratos daquela região; <strong>um prato</strong> = o custo dele. A <strong>fonte</strong> define de onde vem o custo: <strong>Publicado</strong> é o índice oficial da coleta, como foi gravado; <strong>Online</strong> (raspado no varejo), <strong>Campo</strong> (leituras manuais/contribuições) e <strong>Blend</strong> (média dos dois) recalculam o custo sob aquela premissa — são simulação, não o número publicado.</p>
         </div>
       </div>
       ) : (

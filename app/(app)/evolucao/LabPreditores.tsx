@@ -160,7 +160,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
   const medidoPorMes = useMemo(() => {
     const m = new Map<string, number[]>()
     for (const p of ev.serie) {
-      const v = p.blend?.mediana
+      const v = p.oficial?.mediana
       if (v != null && v > 0) { const a = m.get(ymDe(p.data)) ?? []; a.push(v); m.set(ymDe(p.data), a) }
     }
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b))

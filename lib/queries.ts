@@ -201,7 +201,9 @@ export async function getAllFontesManuais(snapData: string): Promise<Record<numb
 }
 
 // ---- Evolução temporal (aba /evolucao) ----
-export type FonteKey = 'blend' | 'online' | 'manual'
+// 'oficial' é o índice publicado (custos_pratos, gravado por integrar_snapshot);
+// as outras três são recálculo no cliente sob outra premissa de preço — simulação.
+export type FonteKey = 'oficial' | 'blend' | 'online' | 'manual'
 export type FonteSerie = { mediana: number; media: number; min: number; max: number }
 export type EvolucaoPonto = { data: string } & Record<FonteKey, FonteSerie>
 export type PratoSerie = { data: string } & Record<FonteKey, number>
@@ -242,17 +244,18 @@ export async function getFatoresRendimento(): Promise<Record<number, number>> {
   return out
 }
 
-// Série do índice ao longo das coletas, por fonte (blend / online / manual). Recalcula
-// o custo de cada prato em cada snapshot do modelo novo, sob cada premissa de fonte:
-//   blend  = média manual×online (o índice real);
+// Série do índice ao longo das coletas, por fonte. A fonte 'oficial' é o número
+// publicado — lê custos_pratos, não recalcula nada. As outras três recalculam o
+// custo de cada prato no cliente, sob outra premissa de preço (simulação):
+//   blend  = média manual×online;
 //   online = online preferido (cai p/ manual/fixo onde não há online);
 //   manual = manual (janela ±10d) preferido (cai p/ online/fixo onde não há manual).
 export async function getEvolucao(): Promise<Evolucao> {
   const [cp, snaps, receitas, ingRows, precosRows, manRows, pratosRows] = await Promise.all([
     // fetchAll: custos_pratos passa de 1000 linhas — sem paginação os snapshots
     // recentes somem e TODAS as abas do Histórico ficam em branco
-    fetchAll(() => supabase.from('custos_pratos').select('snapshot_id').order('id')),
-    supabase.from('snapshots').select('id,data').gte('data', CORTE_COLETA).order('data', { ascending: true }),
+    fetchAll(() => supabase.from('custos_pratos').select('snapshot_id,prato_id,custo_total').order('id')),
+    supabase.from('snapshots').select('id,data,custo_total_pf').gte('data', CORTE_COLETA).order('data', { ascending: true }),
     fetchAll(() => supabase.from('receitas').select('prato_id,ingrediente_id,qtd_g').order('id')),
     supabase.from('ingredientes').select('id,custo_fixo,preco_manual,categoria'),
     fetchAll(() => supabase.from('precos').select('snapshot_id,ingrediente_id,mediana_normalizada,media_exibicao,desvio_padrao').order('id')),
@@ -260,6 +263,10 @@ export async function getEvolucao(): Promise<Evolucao> {
     supabase.from('pratos').select('id,nome,regiao,ativo'),
   ])
   const novos = new Set((cp as any[]).map(r => r.snapshot_id))
+  // custo publicado de cada prato em cada coleta — é o que a fonte 'oficial' serve
+  const oficialPorSnap: Record<number, Record<number, number>> = {}
+  ;(cp as { snapshot_id: number; prato_id: number; custo_total: number }[])
+    .forEach(r => { (oficialPorSnap[r.snapshot_id] ||= {})[r.prato_id] = Number(r.custo_total) })
   const snapList = ((snaps.data || []) as any[]).filter(s => novos.has(s.id))   // só modelo novo, cronológico
   const ing = new Map<number, any>(); ((ingRows.data || []) as any[]).forEach(i => ing.set(i.id, i))
   // pratos inativos (substituídos) ficam fora do Histórico inteiro
@@ -276,20 +283,19 @@ export async function getEvolucao(): Promise<Evolucao> {
   const manPorIng: Record<number, { t: number; v: number }[]> = {}
   ;(manRows as any[]).forEach(m => { if (m.preco_manual != null) (manPorIng[m.ingrediente_id] ||= []).push({ t: new Date(m.criado_em).getTime(), v: Number(m.preco_manual) }) })
 
-  const lastOnline: Record<number, number> = {}
   const serie: EvolucaoPonto[] = []
   const porPrato: Record<number, PratoSerie[]> = {}
   const composicao: CompPonto[] = []
   const porPratoComp: Record<number, CompPonto[]> = {}
   const cvLojas: { data: string; cv: number }[] = []              // CV médio entre lojas (nacional) por coleta
   const porPratoCV: Record<number, { data: string; cv: number }[]> = {}   // CV entre lojas dos ingredientes de cada prato
-  const FONTES: FonteKey[] = ['blend', 'online', 'manual']
+  const FONTES: FonteKey[] = ['oficial', 'blend', 'online', 'manual']
   const nPratos = Object.keys(recPorPrato).length || 1
 
   for (const snap of snapList) {
     const online = precoPorSnap[snap.id] || {}
     const cvIngThis = cvIngPorSnap[snap.id] || {}
-    for (const k in online) lastOnline[+k] = online[+k]        // carry-forward do último online
+    const oficial = oficialPorSnap[snap.id] || {}
     const base = new Date(snap.data + 'T00:00:00Z').getTime()
     const ini = base - 10 * 86400000, fim = base + 11 * 86400000 - 1000
     const manG: Record<number, number> = {}
@@ -300,7 +306,7 @@ export async function getEvolucao(): Promise<Evolucao> {
     const precoIng = (iid: number, modo: FonteKey): { fixo?: number; g?: number } => {
       const fixo = ing.get(iid)?.custo_fixo
       if (fixo != null) return { fixo: Number(fixo) }
-      const O = online[iid] ?? lastOnline[iid] ?? null
+      const O = online[iid] ?? null       // sem carry-forward: oferta antiga não vira preço de hoje
       const M = manG[iid] ?? null
       const mLast = ing.get(iid)?.preco_manual != null ? Number(ing.get(iid).preco_manual) / 1000 : null
       let g: number | null
@@ -314,18 +320,24 @@ export async function getEvolucao(): Promise<Evolucao> {
       for (const it of itens) { const p = precoIng(it.ing, modo); if (p.fixo != null) c += p.fixo; else if (p.g != null) c += p.g * it.qtd }
       return c
     }
+    // 'oficial' não recalcula: lê o custo publicado do prato naquela coleta
+    const valorPrato = (pid: number, modo: FonteKey) =>
+      modo === 'oficial' ? (oficial[pid] ?? 0) : custoPrato(recPorPrato[pid], modo)
     const dist = (modo: FonteKey): FonteSerie => {
-      const vals = Object.values(recPorPrato).map(itens => custoPrato(itens, modo)).filter(v => v > 0)
+      const vals = Object.keys(recPorPrato).map(pid => valorPrato(+pid, modo)).filter(v => v > 0)
       if (!vals.length) return { mediana: 0, media: 0, min: 0, max: 0 }
       const s = [...vals].sort((a, b) => a - b)
-      return { mediana: mediana(vals), media: vals.reduce((a, b) => a + b, 0) / vals.length, min: s[0], max: s[s.length - 1] }
+      // no 'oficial' a mediana é o número publicado, não uma recontagem em JS:
+      // refazer a conta aqui devolvia 1 centavo a menos que a home por float
+      const med = modo === 'oficial' && snap.custo_total_pf != null ? Number(snap.custo_total_pf) : mediana(vals)
+      return { mediana: med, media: vals.reduce((a, b) => a + b, 0) / vals.length, min: s[0], max: s[s.length - 1] }
     }
-    serie.push({ data: snap.data, blend: dist('blend'), online: dist('online'), manual: dist('manual') })
+    serie.push({ data: snap.data, oficial: dist('oficial'), blend: dist('blend'), online: dist('online'), manual: dist('manual') })
     const gruposNac: Record<string, number> = {}
     for (const pidStr of Object.keys(recPorPrato)) {
       const pid = +pidStr
       const ponto: any = { data: snap.data }
-      for (const f of FONTES) ponto[f] = custoPrato(recPorPrato[pid], f)
+      for (const f of FONTES) ponto[f] = valorPrato(pid, f)
       ;(porPrato[pid] ||= []).push(ponto)
       // composição do prato por grupo (blend) → alimenta o total nacional e a série do prato
       const gp: Record<string, number> = {}
@@ -507,15 +519,16 @@ export async function getCalibracao(ini?: string, fim?: string): Promise<Calibra
 }
 
 // Snapshots do modelo novo (com custos_pratos), mais recente primeiro.
-export async function getSnapshotsNovos(): Promise<{ id: number; data: string }[]> {
+export async function getSnapshotsNovos(): Promise<{ id: number; data: string; custo_total_pf: number | null }[]> {
   const [cp, snaps] = await Promise.all([
     // fetchAll: custos_pratos passa de 1000 linhas (snapshots antigos incluídos);
     // sem paginação o PostgREST corta e coletas recentes somem da home
     fetchAll(() => supabase.from('custos_pratos').select('snapshot_id').order('id')),
-    supabase.from('snapshots').select('id,data').gte('data', CORTE_COLETA).order('data', { ascending: false }),
+    supabase.from('snapshots').select('id,data,custo_total_pf').gte('data', CORTE_COLETA).order('data', { ascending: false }),
   ])
   const novos = new Set((cp as any[]).map(r => r.snapshot_id))
-  return ((snaps.data || []) as any[]).filter(s => novos.has(s.id)).map(s => ({ id: s.id, data: s.data }))
+  return ((snaps.data || []) as any[]).filter(s => novos.has(s.id))
+    .map(s => ({ id: s.id, data: s.data, custo_total_pf: s.custo_total_pf != null ? Number(s.custo_total_pf) : null }))
 }
 
 export type LinhaIngrediente = {
@@ -1138,7 +1151,7 @@ export async function getStatsPublicas(): Promise<StatsPublicas> {
 // custo de cada prato em cada coleta do modelo novo — base do gráfico do
 // índice, dos movers e das sparklines da home (derivações no cliente)
 export type SeriePratos = {
-  snaps: { id: number; data: string }[]                  // ascendente
+  snaps: { id: number; data: string; custo_total_pf: number | null }[]   // ascendente
   pratos: { id: number; nome: string; regiao: string }[]
   custos: Record<number, (number | null)[]>              // pratoId → custo por coleta
 }

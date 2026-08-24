@@ -115,7 +115,7 @@ export default function PFComoMoeda({ ev }: { ev: Evolucao }) {
       const id = Number(recorte.slice(6))
       const prato = ev.pratos.find(p => p.id === id)
       return {
-        custoPF: ev.porPrato[id]?.[i]?.blend ?? null,
+        custoPF: ev.porPrato[id]?.[i]?.oficial ?? null,
         regiaoDoRecorte: prato?.regiao ?? null,
         rotuloRecorte: prato?.nome ?? 'Prato',
         dataColeta: data,
@@ -124,10 +124,10 @@ export default function PFComoMoeda({ ev }: { ev: Evolucao }) {
     if (recorte.startsWith('reg:')) {
       const reg = recorte.slice(4)
       const custos = ev.pratos.filter(p => p.regiao === reg)
-        .map(p => ev.porPrato[p.id]?.[i]?.blend).filter((v): v is number => v != null && v > 0)
+        .map(p => ev.porPrato[p.id]?.[i]?.oficial).filter((v): v is number => v != null && v > 0)
       return { custoPF: custos.length ? mediana(custos) : null, regiaoDoRecorte: reg, rotuloRecorte: reg, dataColeta: data }
     }
-    return { custoPF: ev.serie[i]?.blend.mediana ?? null, regiaoDoRecorte: null, rotuloRecorte: 'Nacional', dataColeta: data }
+    return { custoPF: ev.serie[i]?.oficial.mediana ?? null, regiaoDoRecorte: null, rotuloRecorte: 'Nacional', dataColeta: data }
   }, [ev, recorte])
 
   // PNAD do recorte: prato regional herda a renda da sua região; sem região
@@ -148,7 +148,7 @@ export default function PFComoMoeda({ ev }: { ev: Evolucao }) {
   const medidoPorMes = useMemo(() => {
     const por = new Map<string, number[]>()
     ev.serie.forEach(p => {
-      const v = p.blend.mediana
+      const v = p.oficial.mediana
       if (v != null && v > 0) { const a = por.get(p.data.slice(0, 7)) ?? []; a.push(v); por.set(p.data.slice(0, 7), a) }
     })
     return [...por.entries()].sort(([a], [b]) => a.localeCompare(b))
