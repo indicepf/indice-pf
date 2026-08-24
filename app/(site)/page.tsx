@@ -88,7 +88,7 @@ export default function Dashboard() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [custos, setCustos]     = useState<DishCost[]>([])
   const [loading, setLoading]   = useState(true)
-  const [snapsNovos, setSnapsNovos] = useState<{ id: number; data: string }[]>([])
+  const [snapsNovos, setSnapsNovos] = useState<{ id: number; data: string; custo_total_pf: number | null }[]>([])
   const [ini, setIni] = useState(''); const [fim, setFim] = useState('')   // período APLICADO (vazio = última coleta)
   const [pendIni, setPendIni] = useState(''); const [pendFim, setPendFim] = useState('')   // datas em edição (item 1: só valem no Aplicar)
   const [stats, setStats] = useState<StatsPublicas | null>(null)
@@ -149,7 +149,7 @@ export default function Dashboard() {
     ;(async () => {
       const range = snapsNovos.filter(s => (!ini || s.data >= ini) && (!fim || s.data <= fim))
       const ref = range[0] || snapsNovos[0]   // desc → coleta mais recente do intervalo
-      setSnapshot({ id: ref.id, data: ref.data, custo_total_pf: 0 } as Snapshot)
+      setSnapshot({ id: ref.id, data: ref.data, custo_total_pf: ref.custo_total_pf } as Snapshot)
       setCustos(await getDishCostsRange(ini, fim))
       setLoading(false)
       getAllDetalhes(ref.id, ref.data).then(setDetalhes)
@@ -181,7 +181,14 @@ export default function Dashboard() {
   }, [modo])
 
   const custosRegiao = useMemo(() => regioes.size ? custos.filter(c => regioes.has(c.pratos.regiao)) : custos, [custos, regioes])
-  const indice = useMemo(() => mediana(custosRegiao.map(c => c.custo_total)), [custosRegiao])
+  // sem recorte, o índice é o número PUBLICADO da coleta (snapshots.custo_total_pf);
+  // recalcular a mediana aqui só serve para o recorte (região ou período agregado),
+  // e é o que fazia a home divergir do valor gravado por arredondamento
+  const indice = useMemo(() => {
+    const publicado = snapshot?.custo_total_pf
+    if (!regioes.size && nColetasHome === 1 && publicado != null && publicado > 0) return publicado
+    return mediana(custosRegiao.map(c => c.custo_total))
+  }, [custosRegiao, regioes, nColetasHome, snapshot])
 
   // ── série (gráficos, Δ, movers, sparklines) ─────────────────────────────
   const idsRecorte = useMemo(() => {
@@ -198,7 +205,9 @@ export default function Dashboard() {
       .map(({ s, i }) => {
       const vals = serie.pratos.filter(p => idsRecorte.has(p.id))
         .map(p => serie.custos[p.id]?.[i]).filter((v): v is number => v != null && v > 0)
-      const med = mediana(vals)
+      // sem recorte de região a linha nacional é o índice publicado da coleta;
+      // com recorte, a mediana dos pratos daquela região
+      const med = (!regioes.size && s.custo_total_pf != null && s.custo_total_pf > 0) ? s.custo_total_pf : mediana(vals)
       const row: Record<string, number | string> = { data: fmtCurta(s.data), ts: tsDe(s.data), indice: +(med * fator).toFixed(2) }
       for (const n of MODOS) row[n.key] = +(med * (1 - n.desc)).toFixed(2)   // uma linha por nível (legenda clicável)
       for (const r of REGIOES) {
@@ -208,7 +217,7 @@ export default function Dashboard() {
       }
       return row
     })
-  }, [serie, idsRecorte, fator, ini, fim])
+  }, [serie, idsRecorte, fator, ini, fim, regioes])
 
   // Δ% do índice do recorte entre as duas últimas coletas (por nível o Δ é o mesmo)
   const deltaIndice = useMemo(() => {

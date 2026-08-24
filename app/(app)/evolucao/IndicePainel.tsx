@@ -20,7 +20,8 @@ import BotaoExportar from './BotaoExportar'
 import InfoTip from '../../InfoTip'
 
 const COR = { paprika: ACCENT, olive: BRAND.verde, ink: INK, muted: DIM, azul: BRAND.ciano }
-const FONTES: [FonteKey, string][] = [['blend', 'Blend'], ['online', 'Online'], ['manual', 'Manual']]
+// 'Publicado' é o índice gravado no banco; as outras três são simulação (recálculo)
+const FONTES: [FonteKey, string][] = [['oficial', 'Publicado'], ['blend', 'Blend'], ['online', 'Online'], ['manual', 'Manual']]
 const fmt = (d: string) => { const [, m, dia] = d.split('-'); return `${dia}/${m}` }
 const fmtDia = (d: string) => d.split('-').reverse().join('/')   // DD/MM/AAAA
 const ts = (d: string) => new Date(d + 'T00:00:00Z').getTime()
@@ -58,7 +59,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   snapsNovos: { id: number; data: string }[]
   admin?: boolean
 }) {
-  const [fonte, setFonte] = useState<FonteKey>('blend')
+  const [fonte, setFonte] = useState<FonteKey>('oficial')
   const [pratoId, setPratoId] = useState(0)          // 0 = índice nacional (todos os pratos)
   const [regiao, setRegiao] = useState('')           // '' = todas as regiões
   const [metricas, setMetricas] = useState({ mediana: true, media: false, min: false, max: false })
@@ -86,7 +87,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
   // dos preditores do IPCA) em vez do nível em R$
   const [mensalEmVariacao, setMensalEmVariacao] = useState(true)
   // com um prato selecionado, quais fontes mostrar (antes vinham as 3 sempre)
-  const [fontesPrato, setFontesPrato] = useState<Set<FonteKey>>(new Set<FonteKey>(['blend']))
+  const [fontesPrato, setFontesPrato] = useState<Set<FonteKey>>(new Set<FonteKey>(['oficial']))
   const [modelo, setModelo] = useState<ResultadoRegressao | { erro: string } | null>(null)
   const [avisoDescarte, setAvisoDescarte] = useState<string | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
@@ -128,7 +129,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
 
   const nacional = pratoId === 0
   const dados = useMemo(() => {
-    if (!nacional) return (ev.porPrato[pratoId] || []).map(p => ({ ts: ts(p.data), blend: r2(p.blend), online: r2(p.online), manual: r2(p.manual) }))
+    if (!nacional) return (ev.porPrato[pratoId] || []).map(p => ({ ts: ts(p.data), oficial: r2(p.oficial), blend: r2(p.blend), online: r2(p.online), manual: r2(p.manual) }))
     if (!regiao) return ev.serie.map(p => {
       const f = p[fonte]
       return { ts: ts(p.data), mediana: r2(f.mediana), media: r2(f.media), min: r2(f.min), max: r2(f.max), faixa: [r2(f.min), r2(f.max)] as [number, number] }
@@ -200,7 +201,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
 
   const dadosU = useMemo(() => {
     if (unidade === 'reais' || !uSel.series.length) return dadosP
-    const chaves = nacional ? ['mediana', 'media', 'min', 'max'] : ['blend', 'online', 'manual']
+    const chaves = nacional ? ['mediana', 'media', 'min', 'max'] : ['oficial', 'blend', 'online', 'manual']
     return dadosP.map((d: any, i) => {
       // conversor diário/mensal usa a última cotação anterior à coleta; a PNAD
       // é trimestral e segue a regra do trimestre vigente (lerNoMes)
@@ -249,7 +250,7 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
     const zDe: Record<string, (v: number | null) => number | null> = {}
     for (const k of overlayKeys) zDe[k] = z(brutos[k])
     // normalizadores das séries do índice, na mesma janela
-    const chaveIndice = nacional ? ['mediana', 'media', 'min', 'max'] : ['blend', 'online', 'manual']
+    const chaveIndice = nacional ? ['mediana', 'media', 'min', 'max'] : ['oficial', 'blend', 'online', 'manual']
     const zIndice: Record<string, (v: number | null) => number | null> = {}
     if (zAtivo) for (const c of chaveIndice) zIndice[c] = z(dadosU.map((d: any) => d[c] ?? null))
 
@@ -267,14 +268,14 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
       return row
     })
   }, [dadosU, datasColeta, overlaySeries, overlayKeys.join(','), zAtivo, nacional])
-  const pontosDiarios = dadosP.map((d: any, i) => ({ data: datasColeta[i], y: nacional ? d.mediana : d.blend }))
+  const pontosDiarios = dadosP.map((d: any, i) => ({ data: datasColeta[i], y: nacional ? d.mediana : d.oficial }))
 
   // índice agregado por mês (média da mediana/blend das coletas do mês)
   const pontosMensais = useMemo(() => {
     const byMes = new Map<string, number[]>()
     dadosP.forEach((d: any) => {
       const ym = new Date(d.ts).toISOString().slice(0, 7)
-      const y = nacional ? d.mediana : d.blend
+      const y = nacional ? d.mediana : d.oficial
       if (y != null) { const arr = byMes.get(ym) ?? []; arr.push(y); byMes.set(ym, arr) }
     })
     const níveis = [...byMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([ym, ys]) => ({
@@ -528,13 +529,13 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
           <p className="text-sm font-medium mb-1">
             {nacional ? 'Índice PF — custo do prato feito (R$), distribuição dos 100 pratos' : `${nomePrato} — custo (R$)`}
             <InfoTip texto={nacional
-              ? 'Cada coleta reúne o custo dos 100 pratos. A mediana é o índice nacional; a faixa mostra o prato mais barato e o mais caro. Escolha a fonte (blend/online/manual), a região e o período.'
-              : 'Custo deste prato ao longo do tempo, em cada fonte: blend (o índice real), online (só cotação online) e manual (só leituras manuais).'} />
+              ? 'Cada coleta reúne o custo dos 100 pratos. A mediana é o índice nacional; a faixa mostra o prato mais barato e o mais caro. Publicado é o número oficial da coleta; blend/online/manual são simulações que recalculam o custo sob outra premissa de preço.'
+              : 'Custo deste prato ao longo do tempo. Publicado é o custo oficial da coleta; blend (média online × campo), online (só cotação online) e manual (só leituras de campo) são simulações.'} />
           </p>
-          <BotaoExportar nome="indice-pf-serie" abas={() => [{ nome: 'Série', linhas: dadosP.map((d: any) => ({ Data: new Date(d.ts).toISOString().slice(0, 10), ...(nacional ? { Mediana: d.mediana, Média: d.media, Minimo: d.min, Maximo: d.max } : { Blend: d.blend, Online: d.online, Manual: d.manual }) })) }]} />
+          <BotaoExportar nome="indice-pf-serie" abas={() => [{ nome: 'Série', linhas: dadosP.map((d: any) => ({ Data: new Date(d.ts).toISOString().slice(0, 10), ...(nacional ? { Mediana: d.mediana, Média: d.media, Minimo: d.min, Maximo: d.max } : { Publicado: d.oficial, Blend: d.blend, Online: d.online, Manual: d.manual }) })) }]} />
           </div>
           <p className="text-xs text-dim mb-4">
-            {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}` : `${regiaoPrato ? regiaoPrato + ' · ' : ''}${[...fontesPrato].map(k => FONTES.find(f => f[0] === k)![1]).join(' × ') || 'nenhuma fonte marcada'}`}
+            {nacional ? `Fonte: ${FONTES.find(f => f[0] === fonte)![1]}${fonte === 'oficial' ? ' (índice publicado)' : ' (simulação)'}` : `${regiaoPrato ? regiaoPrato + ' · ' : ''}${[...fontesPrato].map(k => FONTES.find(f => f[0] === k)![1]).join(' × ') || 'nenhuma fonte marcada'}`}
             {unidade !== 'reais' && ` · em ${uSel.legenda.toLowerCase()}${uSel.inverte ? ' (sobe quando o PF fica mais barato)' : ''}`}
             {poucos && ' · série curta (poucas coletas) — cresce a cada coleta.'}
           </p>
@@ -588,7 +589,8 @@ export default function IndicePainel({ ev, snapsNovos, admin = false }: {
                   </>
                 ) : (
                   <>
-                    {fontesPrato.has('blend') && <Area yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_blend' : 'blend'} name="Blend" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivo ? 'none' : 'url(#grad-ind)'} />}
+                    {fontesPrato.has('oficial') && <Area yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_oficial' : 'oficial'} name="Publicado" stroke={COR.paprika} strokeWidth={2.5} dot={{ r: 3 }} fill={zAtivo ? 'none' : 'url(#grad-ind)'} />}
+                    {fontesPrato.has('blend') && <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_blend' : 'blend'} name="Blend" stroke={COR.ink} strokeWidth={2} dot={{ r: 3 }} />}
                     {fontesPrato.has('online') && <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_online' : 'online'} name="Online" stroke={COR.azul} strokeWidth={2} dot={{ r: 3 }} />}
                     {fontesPrato.has('manual') && <Line yAxisId="left" type="monotone" dataKey={zAtivo ? 'z_manual' : 'manual'} name="Manual" stroke={COR.olive} strokeWidth={2} dot={{ r: 3 }} />}
                   </>
