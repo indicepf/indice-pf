@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
-import { getEntradasIngrediente, excluirEntradaERecalcular, getIngredientes, type Evolucao, type EntradaBruta } from '@/lib/queries'
+import { getEntradasIngrediente, excluirEntradasERecalcular, getIngredientes, type Evolucao, type EntradaBruta } from '@/lib/queries'
 import type { Ing } from '@/lib/types'
 import { capturarContexto } from '@/lib/contexto'
 import { fetchAdmin } from '@/lib/fetch-admin'
@@ -96,7 +96,7 @@ export default function LabPreditores({ ev, souSuper = false }: { ev: Evolucao; 
     if (!confirm(`Excluir esta entrada de ${auditar.nome}? A mediana do ingrediente e o índice são recalculados. Fica registrado em "Ações do super".\n\n${e.titulo}\n${e.exibicao}`)) return
     setAuditBusy(true); setAuditMsg('')
     const ctx = await capturarContexto()
-    const { error } = await excluirEntradaERecalcular(e.id, snapAudit, auditar.id, ctx)
+    const { error } = await excluirEntradasERecalcular([e.id], snapAudit, auditar.id, ctx)
     if (error) { setAuditBusy(false); setAuditMsg(`Erro: ${error.message}`); return }
     setEntradas(prev => prev?.filter(x => x.id !== e.id) ?? null)
     setAuditBusy(false); setAuditMsg('Entrada excluída e índice recalculado.')

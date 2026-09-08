@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getVariacoesFortes, getEntradasIngrediente, excluirEntradaERecalcular, type VariacaoForte, type EntradaBruta } from '@/lib/queries'
+import { getVariacoesFortes, getEntradasIngrediente, excluirEntradasERecalcular, type VariacaoForte, type EntradaBruta } from '@/lib/queries'
 import { capturarContexto } from '@/lib/contexto'
 import { brl } from '@/lib/format'
 import type { Ing } from '@/lib/types'
@@ -28,7 +28,7 @@ export default function AuditoriaDados({ ings }: { ings: Ing[] }) {
     if (!confirm(`Excluir esta entrada de ${sel.nome}? A mediana do ingrediente e o índice serão recalculados. A ação fica registrada em "Ações do super".\n\n${e.titulo}\n${e.exibicao}`)) return
     setBusy(true); setMsg('')
     const ctx = await capturarContexto()
-    const { error } = await excluirEntradaERecalcular(e.id, snapId, sel.id, ctx)
+    const { error } = await excluirEntradasERecalcular([e.id], snapId, sel.id, ctx)
     if (error) { setBusy(false); setMsg(`Erro ao excluir: ${error.message}`); return }
     setEntradas(prev => (prev || []).filter(x => x.id !== e.id))
     getVariacoesFortes().then(setFortes)

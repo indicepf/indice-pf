@@ -1068,12 +1068,15 @@ export async function getEntradasIngrediente(ingredienteId: number, snapshotId?:
   return { snapshotId: snapId, entradas: (data || []) as EntradaBruta[] }
 }
 
-// Exclui uma entrada bruta e recomputa a estatística do ingrediente (precos) + o índice.
-export async function excluirEntradaERecalcular(id: number, snapshotId: number, ingredienteId: number, ctx?: Ctx) {
+// Exclui uma ou mais entradas brutas e recomputa a estatística do ingrediente
+// (precos) + o índice. Em lote a estatística e o índice são refeitos uma vez só.
+export async function excluirEntradasERecalcular(ids: number[], snapshotId: number, ingredienteId: number, ctx?: Ctx) {
   // exclui via RPC de super (whitelist inclui resultados_brutos na migração 25) →
   // a exclusão fica registrada em "Ações do super". Só então recalcula.
-  const { error } = await superExcluir('resultados_brutos', id, ctx)
-  if (error) return { error }
+  for (const id of ids) {
+    const { error } = await superExcluir('resultados_brutos', id, ctx)
+    if (error) return { error }
+  }
   const { data } = await supabase.from('resultados_brutos').select('preco_normalizado').eq('snapshot_id', snapshotId).eq('ingrediente_id', ingredienteId)
   const vals = ((data || []) as any[]).map(r => Number(r.preco_normalizado)).filter(v => !isNaN(v)).sort((a, b) => a - b)
   const r2 = (n: number) => Math.round(n * 100) / 100
