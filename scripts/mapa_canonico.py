@@ -78,6 +78,8 @@ BASE = {
     "Merluza (filé)":               "Proteína pescado",
     "Tambaqui (peixe)":             "Proteína pescado",
     "Pintado (peixe)":              "Proteína pescado",
+    "Filhote/Piraíba (peixe)":      "Proteína pescado",
+    "Lambari/Traíra (peixe)":       "Proteína pescado",
     "Pacu (peixe)":                 "Proteína pescado",
     "Pescada (peixe)":              "Proteína pescado",
     "Cavala (peixe)":               "Proteína pescado",
@@ -331,13 +333,13 @@ ATOMICO = {
     "Costela de Tambaqui": "Tambaqui (peixe)",
     "Peixe Dourada/Tambaqui": "Tambaqui (peixe)",
     "Peixe Pintado limpo (sem couro)": "Pintado (peixe)",
-    "Pescado Filhote em cubos": "Pintado (peixe)",
+    "Pescado Filhote em cubos": "Filhote/Piraíba (peixe)",
     "Pescado Pintado/Cachara em cubos": "Pintado (peixe)",
     "Costela/Posta de Pacu": "Pacu (peixe)",
     "Pescada branca em tiras": "Pescada (peixe)",
     "Posta de Cavala fresca": "Cavala (peixe)",
     "Tainha peixe do mar em postas firmes": "Tainha (peixe)",
-    "Peixe fluvial em pedaços": "Peixe de água doce (posta)",
+    "Peixe fluvial em pedaços": "Lambari/Traíra (peixe)",
     "Peixe regional desfiado": "Peixe de água doce (posta)",
     "Pescado Piranha em postas limpas": "Peixe de água doce (posta)",
     "Posta de Peixe (Cavala/Dourado)": "Peixe de mar (posta)",
@@ -655,7 +657,7 @@ REVISAR = {
     "Posta de Peixe (Cavala/Dourado)": "Genérico de mar; base 'peixe de mar (posta)'.",
     "Posta de peixe badejo/namorado/dourado": "Genérico de mar; base 'peixe de mar (posta)'.",
     "Peixe regional desfiado": "Espécie não especificada; base genérica água doce.",
-    "Pescado Filhote em cubos": "Filhote = pintado jovem; agrupei em pintado.",
+    "Pescado Filhote em cubos": "Filhote = piraíba jovem; base própria (des-consolidado do pintado em 08/09/2026).",
     "Pescado Piranha em postas limpas": "Piranha; base genérica água doce.",
     "Pão de alho bisnaga cremosa (forno)": "Tratado como produto pronto de varejo (bisnaga).",
     "Torresmo": "Tratado como produto pronto; pode ser feito de panceta.",
@@ -757,12 +759,11 @@ CONSOLIDA = {
     #     · "Pescada branca em tiras"                           → fica em Pescada
     "Peixe de mar (posta)":    "Pescada (peixe)",
     # — Peixe genérico de rio → Pintado (tambaqui/pacu des-consolidados).
-    #   RODADA 2:
-    #     · "Pescado Filhote em cubos" (Guisado N) → Filhote/Piraíba (termo novo,
-    #       busca "filé de piraíba filhote", nao: piramutaba/pirara/tilápia;
-    #       certamente coberto por preço manual — sem oferta online)
-    #     · "Pescado Piranha em postas" (Caldo CO) → Piranha (preço manual)
-    #     · "Peixe fluvial (Lambari/Traíra)"       → Lambari/Traíra (termo novo)
+    #   RODADA 2 (feita em 08/09/2026): "Pescado Filhote em cubos" (Guisado N)
+    #   saiu para Filhote/Piraíba e "Peixe fluvial em pedaços" (Peixe Frito CO)
+    #   saiu para Lambari/Traíra — o pintado inflava os dois pratos. Ambas as
+    #   bases têm oferta online escassa: podem depender de preço manual.
+    #     · "Pescado Piranha em postas" (Caldo CO) → Piranha (preço manual), pendente
     #     · "Peixe regional desfiado" (Mujica N) e Pintado/Cachara → ficam em Pintado
     "Peixe de água doce (posta)":"Pintado (peixe)",
     # — Regra: feijão fradinho = feijão de corda

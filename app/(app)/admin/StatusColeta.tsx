@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react'
 import { inputBase, ChevronVoltar } from '@/components/ui'
-import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, aprovarUltimaColeta, getHistoricoManual, editarLeituraManual, getLatestSnapshot, getSnapshotsNovos, getDetalheEncontrados, getEntradasIngrediente, excluirEntradaERecalcular, getColetas, type StatusColeta, type ItemColeta, type PrecoManualHist, type ItemEncontrado, type EntradaBruta, type ColetaResumo } from '@/lib/queries'
+import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, aprovarUltimaColeta, getHistoricoManual, editarLeituraManual, getLatestSnapshot, getSnapshotsNovos, getDetalheEncontrados, getEntradasIngrediente, excluirEntradasERecalcular, getColetas, type StatusColeta, type ItemColeta, type PrecoManualHist, type ItemEncontrado, type EntradaBruta, type ColetaResumo } from '@/lib/queries'
 import { capturarContexto } from '@/lib/contexto'
 import { brl } from '@/lib/format'
 
@@ -51,6 +51,8 @@ export default function StatusColeta() {
   const [encSort, setEncSort] = useState<{ col: ColEnc; dir: 1 | -1 }>({ col: 'score', dir: -1 })
   const [fontes, setFontes] = useState<Record<number, EntradaBruta[]>>({})        // fontes expandidas por ingrediente
   const [excluindo, setExcluindo] = useState<number | null>(null)
+  const [selecao, setSelecao] = useState<Set<number>>(new Set())                  // fontes marcadas p/ exclusão em lote
+  const [excluindoLote, setExcluindoLote] = useState(false)
   // histórico de coletas (cards recolhidos, filtro por data, paginação)
   const [coletas, setColetas] = useState<ColetaResumo[]>([])
   const [coletasTotal, setColetasTotal] = useState(0)
@@ -126,12 +128,16 @@ export default function StatusColeta() {
   async function abrirEncontrados(snap?: { id: number; data: string }) {
     const alvo = snap ?? (status ? { id: status.snapshotId, data: status.data } : null)
     if (!alvo) return
-    setEncSnapshot(alvo); setEncontrados([]); setFontes({}); setEncBusca(''); setEncSort({ col: 'score', dir: -1 })
+    setEncSnapshot(alvo); setEncontrados([]); setFontes({}); setEncBusca(''); setEncSort({ col: 'score', dir: -1 }); setSelecao(new Set())
     setEncontrados(await getDetalheEncontrados(alvo.id))
   }
 
   async function toggleFontes(ingId: number) {
-    if (ingId in fontes) { setFontes(f => { const c = { ...f }; delete c[ingId]; return c }); return }
+    if (ingId in fontes) {
+      const ids = new Set((fontes[ingId] || []).map(f => f.id))
+      setSelecao(sel => new Set([...sel].filter(id => !ids.has(id))))
+      setFontes(f => { const c = { ...f }; delete c[ingId]; return c }); return
+    }
     setFontes(f => ({ ...f, [ingId]: [] }))   // abre (carregando)
     const { entradas } = await getEntradasIngrediente(ingId, encSnapshot?.id ?? status?.snapshotId)
     setFontes(f => ({ ...f, [ingId]: entradas }))
@@ -143,11 +149,48 @@ export default function StatusColeta() {
     if (!confirm(`Excluir esta fonte? A mediana do ingrediente será recalculada.\n\n${e.titulo}\n${e.exibicao}`)) return
     setExcluindo(e.id); setMsg('')
     const ctx = await capturarContexto()
-    const { error } = await excluirEntradaERecalcular(e.id, snapId, ingId, ctx)
+    const { error } = await excluirEntradasERecalcular([e.id], snapId, ingId, ctx)
     setExcluindo(null)
     if (error) { setMsg(`Erro ao excluir: ${error.message}`); return }
     setFontes(f => ({ ...f, [ingId]: (f[ingId] || []).filter(x => x.id !== e.id) }))
     setEncontrados(await getDetalheEncontrados(snapId))   // mediana/Δ/amplitude mudaram
+    recarregar()
+  }
+
+  const toggleSel = (id: number) => setSelecao(prev => {
+    const nx = new Set(prev); if (nx.has(id)) nx.delete(id); else nx.add(id); return nx
+  })
+
+  // marca/desmarca todas as fontes abertas de um ingrediente de uma vez
+  function toggleSelIngrediente(ingId: number) {
+    const ids = (fontes[ingId] || []).map(f => f.id)
+    const todas = ids.length > 0 && ids.every(id => selecao.has(id))
+    setSelecao(prev => {
+      const nx = new Set(prev)
+      ids.forEach(id => todas ? nx.delete(id) : nx.add(id))
+      return nx
+    })
+  }
+
+  // exclui todas as marcadas: agrupa por ingrediente e recalcula uma vez por grupo
+  async function excluirSelecionadas() {
+    const snapId = encSnapshot?.id ?? status?.snapshotId
+    if (!snapId || !selecao.size) return
+    const porIng: Record<number, number[]> = {}
+    Object.entries(fontes).forEach(([ing, lista]) => {
+      const ids = lista.filter(f => selecao.has(f.id)).map(f => f.id)
+      if (ids.length) porIng[Number(ing)] = ids
+    })
+    if (!confirm(`Excluir ${selecao.size} fonte(s)? As medianas dos ingredientes serão recalculadas.`)) return
+    setExcluindoLote(true); setMsg('')
+    const ctx = await capturarContexto()
+    for (const [ing, ids] of Object.entries(porIng)) {
+      const { error } = await excluirEntradasERecalcular(ids, snapId, Number(ing), ctx)
+      if (error) { setExcluindoLote(false); setMsg(`Erro ao excluir: ${error.message}`); return }
+      setFontes(f => ({ ...f, [Number(ing)]: (f[Number(ing)] || []).filter(x => !ids.includes(x.id)) }))
+    }
+    setSelecao(new Set()); setExcluindoLote(false)
+    setEncontrados(await getDetalheEncontrados(snapId))
     recarregar()
   }
 
@@ -456,11 +499,23 @@ export default function StatusColeta() {
             <p className="text-xs text-dim mb-3 leading-relaxed">
               <strong>Δ anterior</strong> = variação da mediana vs a coleta anterior; <strong>amplitude</strong> = razão
               entre o resultado mais caro e o mais barato da busca — amplitude alta indica itens premium/gourmet/preparados
-              misturados. <strong>Clique no item</strong> para ver as fontes e excluir as erradas; clique nos títulos das
-              colunas para ordenar.
+              misturados. <strong>Clique no item</strong> para ver as fontes e excluir as erradas; marque a caixa de
+              várias fontes para excluir tudo de uma vez; clique nos títulos das colunas para ordenar.
             </p>
-            <input value={encBusca} onChange={e => setEncBusca(e.target.value)} placeholder="Buscar ingrediente…"
-              className={`${inputCls} mb-3 max-w-xs`} />
+            <div className="flex items-center gap-3 mb-3 flex-wrap sticky top-0 z-10 bg-surface-2 py-2">
+              <input value={encBusca} onChange={e => setEncBusca(e.target.value)} placeholder="Buscar ingrediente…"
+                className={`${inputCls} max-w-xs`} />
+              {selecao.size > 0 && (
+                <>
+                  <button onClick={excluirSelecionadas} disabled={excluindoLote}
+                    className="text-xs px-3 py-1.5 rounded bg-danger text-white disabled:opacity-50 cursor-pointer">
+                    {excluindoLote ? 'excluindo…' : `excluir ${selecao.size} selecionada(s)`}
+                  </button>
+                  <button onClick={() => setSelecao(new Set())} disabled={excluindoLote}
+                    className="text-xs text-dim hover:text-ink disabled:opacity-50 cursor-pointer">limpar seleção</button>
+                </>
+              )}
+            </div>
             {msg && <p className="text-xs text-danger mb-3">{msg}</p>}
             {!encontrados.length ? <p className="text-sm text-dim">Carregando…</p> : (
               <div className="overflow-x-auto">
@@ -514,9 +569,17 @@ export default function StatusColeta() {
                             <tr className="border-t border-border/40 bg-surface">
                               <td colSpan={6} className="py-2 pl-4">
                                 {!fontes[e.id].length ? <p className="text-dim py-1">Carregando fontes…</p> : (
+                                  <>
+                                  <button onClick={ev => { ev.stopPropagation(); toggleSelIngrediente(e.id) }}
+                                    className="text-dim hover:text-ink mb-1 cursor-pointer">
+                                    {fontes[e.id].every(f => selecao.has(f.id)) ? 'desmarcar todas' : 'marcar todas'}
+                                  </button>
                                   <ul className="space-y-1">
                                     {fontes[e.id].map(f => (
                                       <li key={f.id} className="flex items-center gap-2">
+                                        <input type="checkbox" checked={selecao.has(f.id)}
+                                          onChange={() => toggleSel(f.id)} onClick={ev => ev.stopPropagation()}
+                                          className="shrink-0 cursor-pointer" />
                                         <span className="tnum shrink-0 w-24 text-right">{f.exibicao}</span>
                                         <span className="truncate flex-1" title={f.titulo}>
                                           {f.link
@@ -532,6 +595,7 @@ export default function StatusColeta() {
                                       </li>
                                     ))}
                                   </ul>
+                                  </>
                                 )}
                               </td>
                             </tr>

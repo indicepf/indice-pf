@@ -31,8 +31,12 @@ SUPA_HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}
 
 # ─── Regras anti-inflação de preço ───────────────────────────────────────────
 # Palavras que indicam produto premium/atípico → descarta o resultado.
+# "ração/rações" é global: nenhum título de alimento humano usa a palavra, e ela
+# aparecia como ração de peixe carnívoro nos pescados (pirarucu, 3 de 4 ofertas
+# da coleta de 07/09) e como ração/núcleo suíno nos miúdos.
 PALAVRAS_NAO_GLOBAIS = ["gourmet", "premium", "luxo", "importado", "seleção especial",
-                        "cesta", "kit presente", "trufado"]
+                        "cesta", "kit presente", "trufado",
+                        "ração", "racao", "rações", "racoes"]
 # Radicais que também descartam o resultado, casando qualquer flexão e ignorando
 # acento: "orgânico/Orgânica/orgânicos", "artesanal/artesanais". Palavra exata
 # não serve aqui — na coleta de 17/08 as 72 ofertas orgânicas/artesanais

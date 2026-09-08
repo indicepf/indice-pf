@@ -51,7 +51,12 @@ TRIPE = {
     "Bucho/Dobradinha bovina": {
         "busca": "dobradinha bovina", "unidade": "g",
         "ok": ["dobradinha", "bucho", "mondongo"],
-        "nao": ["temperado", "caldo", "pronto"]},
+        # o casamento de palavras_nao é por palavra inteira: "pronto" não pegava
+        # "pronta". Prato pronto entrava caro (Dobradinha com feijão branco
+        # cozido a R$ 74,75/kg e Oderich em lata a R$ 57,67/kg, coleta de 07/09).
+        "nao": ["temperado", "temperada", "caldo", "pronto", "pronta",
+                "feijão branco", "feijao branco", "cozido", "cozida",
+                "conserva", "lata", "enlatada", "enlatado"]},
     "Carne de bode": {
         "busca": "carne de bode", "unidade": "g", "preco_manual": 40.0,
         "ok": ["bode", "caprino", "cabrito"],
@@ -105,7 +110,15 @@ TRIPE = {
     "Miúdos suínos": {
         "busca": "miúdos suínos kg", "unidade": "g",
         "ok": ["miúdos", "miudos", "suíno", "suino", "porco"],
-        "nao": ["frango", "bovino", "caldo"]},
+        # "suíno"/"porco" em palavras_ok é permissivo: puxava corte nobre
+        # ("Filé Mignon Suíno Swift", snap 37) e insumo de criação
+        # ("Núcleo Suínos", "Suplemento Nucleus", snaps 32/36/39/40).
+        "nao": ["frango", "bovino", "caldo",
+                "lombo", "lombinho", "mignon", "filé", "file", "pernil", "costela",
+                "bisteca", "panceta", "bacon", "linguiça", "linguica", "copa",
+                "carré", "carre", "picanha", "paleta", "presunto",
+                "núcleo", "nucleo", "nucleus", "suplemento", "premix",
+                "engorda", "leitão", "leitao", "crescimento", "lactação", "lactacao"]},
     "Presunto": {
         "busca": "presunto kg", "unidade": "g",
         "ok": ["presunto"],
@@ -154,6 +167,15 @@ TRIPE = {
         "busca": "pintado peixe posta kg", "unidade": "g",
         "ok": ["pintado", "cachara", "surubim"],
         "nao": ["empanado", "lata"]},
+    "Filhote/Piraíba (peixe)": {
+        "busca": "piraíba filhote peixe posta kg", "unidade": "g",
+        "ok": ["piraíba", "piraiba", "filhote"],
+        "nao": ["isca", "anzol", "piramutaba", "pirara", "tilápia", "tilapia"]},
+    "Lambari/Traíra (peixe)": {
+        "busca": "traíra peixe kg", "unidade": "g",
+        "ok": ["traíra", "traira", "lambari"],
+        "nao": ["isca", "artificial", "silicone", "anzol", "chumbada",
+                "conserva", "sardinha"]},
     "Tambaqui (peixe)": {
         "busca": "tambaqui posta kg", "unidade": "g",
         "ok": ["tambaqui"],
@@ -306,7 +328,9 @@ TRIPE = {
     "Pimentão": {
         "busca": "pimentão verde kg", "unidade": "g",
         "ok": ["pimentão", "pimentao"],
-        "nao": ["pimenta", "conserva", "seco", "pó"]},
+        # desidratado veio da migração 56 (aplicada direto no banco)
+        "nao": ["pimenta", "conserva", "seco", "pó",
+                "desidratado", "desidratada", "desidratados", "desidratadas"]},
     "Couve": {
         "busca": "couve manteiga maço", "unidade": "maco", "peso_ref_g": 250,
         "ok": ["couve"],
