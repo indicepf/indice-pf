@@ -24,8 +24,8 @@ jobs:
   scraper:
     runs-on: ubuntu-latest
     # 3 blocos de 40 min + folga. A coleta de 14/09 morreu no timeout de 30 min
-    # porque a SerpAPI passou de ~8s para ~30s por chamada (127 ingredientes =
-    # ~64 min). Quem corta a coleta agora é o DEADLINE_MIN de cada bloco, não o
+    # porque a SerpAPI passou de ~8s para ~30s por chamada (125 ingredientes =
+    # ~62 min). Quem corta a coleta agora é o DEADLINE_MIN de cada bloco, não o
     # runner: o timeout abaixo é só a rede de segurança.
     timeout-minutes: 150
 
@@ -58,7 +58,7 @@ jobs:
           # minutos disso (4 contas x 2 tentativas x 60s no pior caso).
           # 3 x (40 + estouro + gravação) cabe nos 150 min do job.
           DEADLINE_MIN: '40'
-          # modo 'completo' (cron ou dispatch default) = full run dos 127.
+          # modo 'completo' (cron ou dispatch default) = full run dos 125 (ativos e nao-fixos).
           # modo 'faltantes' (dispatch) = skip de 6 dias liga + merge no último snapshot,
           #   raspando só os que não vieram (manuais/não-encontrados).
           FORCE_RESCRAPE: ${{ (github.event_name == 'schedule' || github.event.inputs.modo == 'completo') && '1' || '' }}
