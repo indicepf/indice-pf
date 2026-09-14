@@ -2,6 +2,7 @@ import requests
 import re
 import json
 import os
+import sys
 import unicodedata
 from datetime import datetime, timedelta
 
@@ -56,6 +57,15 @@ MAX_OFERTAS = int(os.getenv("MAX_OFERTAS", "60"))
 TIMEOUT_SERP = 60
 # Amostra mínima da coleta anterior para ela poder servir de teto no anti-alta.
 AMOSTRA_MIN_REF = 4
+# Orçamento de tempo do bloco, em minutos (0 = sem limite, padrão local). Ao
+# estourar, o scraper para no ingrediente atual, grava o snapshot com o que já
+# coletou e sai com código 4 — o workflow salva no banco e abre outro bloco, que
+# pega só os pendentes. Sem isso a coleta de 14/09 foi morta pelo timeout do
+# runner aos 30 min e perdeu ~120 chamadas de SerpAPI já pagas.
+DEADLINE_MIN = float(os.getenv("DEADLINE_MIN", "0"))
+# Códigos de saída lidos pelo laço de blocos do workflow.
+SAI_NADA_PENDENTE = 3   # catálogo vazio: nada a coletar, nem snapshot escrito
+SAI_BLOCO_PARCIAL = 4   # parou no orçamento; snapshot escrito, ainda falta item
 
 # ─── Catálogo de ingredientes (vem da tabela 'ingredientes' do Supabase) ──────
 # Cada ingrediente tem: id, nome, busca, unidade, peso_ref_g, palavras_ok, palavras_nao.
@@ -89,7 +99,11 @@ def medianas_coleta_anterior():
     mais recente. Referência do filtro anti-alta. O qtd_resultados vem junto
     porque mediana apurada sobre 1–2 anúncios não é confiável o bastante para
     virar teto da coleta seguinte (ver AMOSTRA_MIN_REF)."""
-    r = requests.get(f"{SUPABASE_URL}/rest/v1/snapshots?select=id&order=data.desc&limit=1",
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    # data<hoje de propósito: em coleta por blocos o snapshot mais recente é o
+    # de hoje (gravado pelo bloco anterior), e ele não pode ser teto de si mesmo.
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/snapshots?select=id&data=lt.{hoje}"
+                     "&order=data.desc&limit=1",
                      headers=SUPA_HEADERS, timeout=30)
     r.raise_for_status()
     snaps = r.json()
@@ -517,6 +531,20 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
     return resultados
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
+def gravar_snapshot(resumo, todos, descartados, falhas_busca):
+    """Grava o snapshot no disco. Chamado a cada ingrediente (checkpoint): se o
+    processo morrer no meio, o que já foi coletado continua salvável."""
+    with open(SNAPSHOT_FILE, "w", encoding="utf-8") as f:
+        json.dump({
+            "data":          datetime.now().strftime("%Y-%m-%d"),
+            "fonte":         "Google Shopping via SerpAPI",
+            "resumo":        resumo,
+            "resultados":    todos,
+            "descartados":   descartados,
+            "falhas_busca":  falhas_busca,
+        }, f, ensure_ascii=False, indent=2)
+
+
 def main():
     print("🍽️  ÍNDICE PF — Scraper (catálogo dinâmico, modelo por prato)")
     print(f"📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}")
@@ -524,6 +552,9 @@ def main():
 
     catalogo = carregar_catalogo()
     print(f"📦 {len(catalogo)} ingredientes ativos no catálogo")
+    if not catalogo:
+        print("✅ Nada pendente para coletar.")
+        sys.exit(SAI_NADA_PENDENTE)
 
     # referência anti-alta: mediana de cada ingrediente na coleta anterior
     # (lida ANTES desta coleta gravar o snapshot novo)
@@ -535,7 +566,15 @@ def main():
         print(f"⚠️  Filtro anti-alta desativado (falha ao ler a coleta anterior: {e})")
 
     cache, todos, resumo, descartados, falhas_busca = carregar_cache(), [], [], [], []
-    for ing in catalogo:
+    inicio, pendentes = datetime.now(), []
+    if DEADLINE_MIN:
+        print(f"⏱️  Orçamento deste bloco: {DEADLINE_MIN:g} min")
+    for i, ing in enumerate(catalogo):
+        if DEADLINE_MIN and (datetime.now() - inicio).total_seconds() > DEADLINE_MIN * 60:
+            pendentes = [x["nome"] for x in catalogo[i:]]
+            print(f"\n⏳ Orçamento de {DEADLINE_MIN:g} min esgotado em {i}/{len(catalogo)}. "
+                  f"{len(pendentes)} ingrediente(s) ficam para o próximo bloco.")
+            break
         resultados = buscar_ingrediente(ing, cache, medianas_ant, descartados)
         # None = a busca não chegou a rodar (cota/rede). Fica fora do resumo:
         # sem linha em `precos`, o recálculo mantém o preço da coleta anterior
@@ -557,6 +596,7 @@ def main():
             "label":               label,
             "qtd_resultados":      len(resultados),
         })
+        gravar_snapshot(resumo, todos, descartados, falhas_busca)
 
     # ─── Tabela final ────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
@@ -573,17 +613,12 @@ def main():
               f"(cota/rede), não por ausência no mercado:")
         print(f"      {', '.join(falhas_busca)}")
 
-    snapshot = {
-        "data":          datetime.now().strftime("%Y-%m-%d"),
-        "fonte":         "Google Shopping via SerpAPI",
-        "resumo":        resumo,
-        "resultados":    todos,
-        "descartados":   descartados,
-        "falhas_busca":  falhas_busca,
-    }
-    with open(SNAPSHOT_FILE, "w", encoding="utf-8") as f:
-        json.dump(snapshot, f, ensure_ascii=False, indent=2)
+    gravar_snapshot(resumo, todos, descartados, falhas_busca)
     print(f"\n💾 Snapshot salvo em {SNAPSHOT_FILE}")
+    if pendentes:
+        print(f"⏸️  Bloco parcial: {len(pendentes)} pendente(s) para o próximo bloco "
+              f"({', '.join(pendentes[:8])}{'...' if len(pendentes) > 8 else ''})")
+        sys.exit(SAI_BLOCO_PARCIAL)
     print("✅ Concluído!")
 
 if __name__ == "__main__":

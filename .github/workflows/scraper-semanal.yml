@@ -23,7 +23,11 @@ concurrency:
 jobs:
   scraper:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 3 blocos de 40 min + folga. A coleta de 14/09 morreu no timeout de 30 min
+    # porque a SerpAPI passou de ~8s para ~30s por chamada (127 ingredientes =
+    # ~64 min). Quem corta a coleta agora é o DEADLINE_MIN de cada bloco, não o
+    # runner: o timeout abaixo é só a rede de segurança.
+    timeout-minutes: 150
 
     steps:
       - name: Checkout repositório
@@ -46,15 +50,47 @@ jobs:
           SERPAPI_KEY_2: ${{ secrets.SERPAPI_KEY_2 }}
           SERPAPI_KEY_3: ${{ secrets.SERPAPI_KEY_3 }}
           SERPAPI_KEY_4: ${{ secrets.SERPAPI_KEY_4 }}
-          # modo 'completo' (cron ou dispatch default) = full run dos 115.
+          # log do Python sem buffer: no cancelamento de 14/09 o step saiu VAZIO
+          # e não deu para ver onde a coleta estava.
+          PYTHONUNBUFFERED: '1'
+          # cada bloco coleta por no máximo 40 min e grava o que conseguiu. O corte é
+          # verificado ENTRE ingredientes, então um bloco pode passar alguns
+          # minutos disso (4 contas x 2 tentativas x 60s no pior caso).
+          # 3 x (40 + estouro + gravação) cabe nos 150 min do job.
+          DEADLINE_MIN: '40'
+          # modo 'completo' (cron ou dispatch default) = full run dos 127.
           # modo 'faltantes' (dispatch) = skip de 6 dias liga + merge no último snapshot,
           #   raspando só os que não vieram (manuais/não-encontrados).
           FORCE_RESCRAPE: ${{ (github.event_name == 'schedule' || github.event.inputs.modo == 'completo') && '1' || '' }}
           SCRAPE_MERGE:   ${{ github.event.inputs.modo == 'faltantes' && '1' || '' }}
         run: |
           echo "Modo: ${{ github.event.inputs.modo || 'completo (agendado)' }} | FORCE_RESCRAPE='${FORCE_RESCRAPE}' SCRAPE_MERGE='${SCRAPE_MERGE}'"
-          python pipeline/scraper_pf.py
-          python pipeline/salvar_supabase.py
+          # Coleta em blocos: cada bloco raspa dentro do seu orçamento de tempo e
+          # SALVA NO BANCO antes de o próximo começar. Do bloco 2 em diante entra
+          # o modo faltantes (pula o que já foi salvo nos últimos 6 dias) e o
+          # merge (grava no mesmo snapshot, sem apagar o que o bloco 1 trouxe).
+          # Saída do scraper: 0 = acabou o catálogo | 3 = nada pendente |
+          #                   4 = parou no orçamento, ainda falta.
+          for bloco in 1 2 3; do
+            echo "──────── BLOCO $bloco ────────"
+            if [ "$bloco" -gt 1 ]; then
+              export FORCE_RESCRAPE=''
+              export SCRAPE_MERGE='1'
+            fi
+            set +e
+            python pipeline/scraper_pf.py
+            rc=$?
+            set -e
+            if [ "$rc" -eq 3 ]; then echo "Nada pendente — fim."; break; fi
+            if [ "$rc" -ne 0 ] && [ "$rc" -ne 4 ]; then exit "$rc"; fi
+            python pipeline/salvar_supabase.py
+            if [ "$rc" -eq 0 ]; then echo "Catálogo coberto no bloco $bloco — fim."; break; fi
+          done
+          # 3 blocos e ainda sobrou: o que veio está salvo, mas a coleta não
+          # cobriu o catálogo. Avisa em vez de terminar verde em silêncio.
+          if [ "$rc" -eq 4 ]; then
+            echo "::warning::Coleta incompleta após 3 blocos — rode o workflow em modo 'faltantes' para completar."
+          fi
           # AUDITORIA ANTES DE INTEGRAR: calcular_custos_pratos NÃO roda mais aqui.
           # A coleta fica em precos/resultados_brutos, fora do índice, até o admin
           # revisar (Admin → Dados: variações fortes/entradas) e aprovar em
