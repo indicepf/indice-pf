@@ -118,6 +118,10 @@ def main():
     print(f"📅 Salvando snapshot de {data} no Supabase...")
     print(f"   {len(resumo)} ingredientes | {len(resultados)} resultados brutos")
 
+    if not resumo:
+        print("ℹ️  Nada a salvar: a coleta não trouxe ingrediente algum.")
+        return
+
     # guarda anti-sobrescrita: se a coleta veio TODA vazia (chave morta / sem rede),
     # aborta antes de apagar — não troca dados bons por nada.
     com_preco = sum(1 for r in resumo if r.get("mediana_normalizada") is not None)
