@@ -160,7 +160,7 @@ TRIPE = {
         "ok": ["merluza"],
         "nao": ["empanado", "temperado", "palito"]},
     "Pescada (peixe)": {
-        "busca": "pescada peixe posta kg", "unidade": "g",
+        "busca": "pescada peixe kg", "unidade": "g",
         "ok": ["pescada"],
         "nao": ["empanado", "lata", "patê"]},
     "Pintado (peixe)": {
@@ -357,7 +357,7 @@ TRIPE = {
         "ok": ["milho"],
         "nao": ["pipoca", "fubá", "farinha"]},
     "Palmito": {
-        "busca": "palmito pupunha conserva kg", "unidade": "g",
+        "busca": "palmito pupunha kg", "unidade": "g",
         "ok": ["palmito"],
         "nao": ["guariroba", "temperado"]},
     "Guariroba": {
