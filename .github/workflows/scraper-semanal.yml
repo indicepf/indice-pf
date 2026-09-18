@@ -91,6 +91,11 @@ jobs:
           if [ "$rc" -eq 4 ]; then
             echo "::warning::Coleta incompleta após 3 blocos — rode o workflow em modo 'faltantes' para completar."
           fi
+          # Fonte fixa: ingrediente que fechou a coleta sem NENHUMA oferta e tem
+          # loja cadastrada é relido direto da página e vira leitura manual
+          # (origem 'link'). Não escreve em precos/resultados_brutos e não
+          # derruba o job se a página estiver fora do ar.
+          python pipeline/fonte_fixa.py || echo "::warning::Fonte fixa falhou — itens sem oferta ficam para leitura manual no admin"
           # AUDITORIA ANTES DE INTEGRAR: calcular_custos_pratos NÃO roda mais aqui.
           # A coleta fica em precos/resultados_brutos, fora do índice, até o admin
           # revisar (Admin → Dados: variações fortes/entradas) e aprovar em

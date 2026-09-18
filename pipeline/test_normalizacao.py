@@ -42,6 +42,29 @@ CASOS_QUANTIDADE = [
     # o número continua tendo precedência sobre o quilo solto
     ("Frango congelado 2,5 kg", 2500.0),
     ("Arroz 5kg tipo 1 preço por kg", 5000.0),
+    # contagem do kit escrita LONGE da quantidade (coleta 45: 11 das 20 ofertas
+    # aceitas do Macarrão vinham divididas pelo peso de UMA unidade)
+    ("Kit 6 Macarrão Espaguete Urbano 500g Sem Glúten", 3000.0),
+    ("Kit C/ 06 Macarrão Espaguete Sem Glúten 500g Urbano", 3000.0),
+    ("KIT 3 unid Macarrão de Arroz Espaguete Sem Glúten 500g - Urbano", 1500.0),
+    ("Kit 4x Macarrão de Arroz Espaguete Sem Glúten Urbano 500g", 2000.0),
+    ("Guariroba Em Conserva Kit Com 2 Unidades Peso Líquido 580g", 1160.0),
+    ("Repolho Roxo Zilse Kit 3 Potes 540/400g", 1200.0),
+    ("Kit C/6 Caldo De Carne Maggi Tablete 114g", 684.0),
+    # contagem abrindo o título
+    ("10 Macarrão Espaguete Com Ovos Paulista Pacote 500g Cada", 5000.0),
+    ("2 Forma Queijo Muçarela Requeijão De Barra 2,5 Kg Injesul", 5000.0),
+    ("3 unidades Sal Refinado Cisne 1kg", 3000.0),
+    # o número que JÁ é a quantidade não vira contagem
+    ("8,5 Kg Carne Seca Salgada Curada - Coxão Mole", 8500.0),
+    ("2,5 kg Frango", 2500.0),
+    # número no meio do título sem marcador de kit continua sendo só nome
+    ("Macarrão Espaguete 8 com ovos 500g Camil", 500.0),
+    ("Cachaça 51 Tradicional 965 ml", 965.0),
+    # contagem DEPOIS da quantidade fica como está: em "Caixa 114g 12 Unidades"
+    # os 114 g já são o total da caixa
+    ("Caldo Tablete Carne Maggi Caixa 114g 12 Unidades", 114.0),
+    ("Caldo Maggi 114g C/12 Carne", 114.0),
     # sem unidade nenhuma segue sem quantidade
     ("Matambre - 1953 (374453)", None),
     ("Camarão Cinza Fresco", None),

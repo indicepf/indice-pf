@@ -937,6 +937,30 @@ export async function setPrecoManual(id: number, campos: {
   })
 }
 
+// Fonte fixa (migração 58): loja que o scraper relê sozinho quando a coleta da
+// semana não acha o ingrediente. Vira leitura manual (origem 'link'), nunca
+// oferta online. URL vazia desliga a releitura.
+export type FonteFixa = { url: string | null; qtd_g: number | null }
+
+// Consulta separada de propósito: enquanto a migração 58 não rodar no SQL
+// Editor, a coluna não existe e o PostgREST devolve 400. Junto do select de
+// getStatusUltimaColeta isso derrubaria a aba Coleta inteira; sozinha, só faz o
+// campo aparecer vazio.
+export async function getFontesFixas(): Promise<Record<number, FonteFixa>> {
+  const { data, error } = await supabase.from('ingredientes').select('id,fonte_fixa_url,fonte_fixa_qtd_g')
+  if (error || !data) return {}
+  const out: Record<number, FonteFixa> = {}
+  ;(data as { id: number; fonte_fixa_url: string | null; fonte_fixa_qtd_g: number | null }[])
+    .forEach(r => { out[r.id] = { url: r.fonte_fixa_url ?? null, qtd_g: r.fonte_fixa_qtd_g ?? null } })
+  return out
+}
+
+export async function setFonteFixa(id: number, url: string, qtdG: number | null) {
+  return supabase.from('ingredientes')
+    .update({ fonte_fixa_url: url.trim() || null, fonte_fixa_qtd_g: qtdG && qtdG > 0 ? qtdG : 1000 })
+    .eq('id', id)
+}
+
 export async function limparPrecoManual(id: number) {
   return supabase.from('ingredientes')
     .update({ preco_manual: null, custo_fixo: null, preco_manual_loja: null, preco_manual_link: null }).eq('id', id)
