@@ -38,7 +38,10 @@ DRY = os.getenv("FONTE_FIXA_DRY") == "1"
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
       "Accept-Language": "pt-BR,pt;q=0.9"}
-TIMEOUT = 25
+# Loja de nicho é lenta e irregular: a fonte da Carne de bode respondeu em 1s,
+# 19s e 27s em três tentativas seguidas. 45s + 1 retentativa, pelo mesmo motivo
+# que a busca da SerpAPI tem: página fora do ar por um momento não é preço novo.
+TIMEOUT = 45
 # Guarda contra gravar lixo: o preço lido só vale se ficar entre 1/3 e 3x o
 # preço manual que já está no cadastro. Fonte fixa é loja que o responsável já
 # conhece — se o número saiu dessa faixa, ou a página mudou de produto ou o
@@ -212,11 +215,16 @@ def main():
             pulados += 1
             continue
         loja = urlparse(ing["fonte_fixa_url"]).netloc
-        try:
-            resp = requests.get(ing["fonte_fixa_url"], headers=UA, timeout=TIMEOUT, allow_redirects=True)
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            print(f"  FALHA  {ing['nome']:<26} página fora do ar: {str(e)[:70]}")
+        resp = erro_rede = None
+        for tentativa in (1, 2):
+            try:
+                resp = requests.get(ing["fonte_fixa_url"], headers=UA, timeout=TIMEOUT, allow_redirects=True)
+                resp.raise_for_status()
+                break
+            except requests.RequestException as e:
+                resp, erro_rede = None, e
+        if resp is None:
+            print(f"  FALHA  {ing['nome']:<26} página fora do ar (2 tentativas): {str(erro_rede)[:60]}")
             falhas += 1
             continue
 
