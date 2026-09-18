@@ -57,6 +57,14 @@ MAX_OFERTAS = int(os.getenv("MAX_OFERTAS", "60"))
 TIMEOUT_SERP = 60
 # Amostra mínima da coleta anterior para ela poder servir de teto no anti-alta.
 AMOSTRA_MIN_REF = 4
+# Quanto acima da mediana da coleta anterior a oferta ainda é aceita. Era 1.5 e
+# travava o índice: no backtest das coletas 41–45 (com o multipack já corrigido)
+# a mediana do catálogo não saía de R$ 29,90 em cinco semanas, porque o teto da
+# semana anterior virava o teto da seguinte. Com 2.0 o ruído fica praticamente
+# igual (ofertas com variação >20%: 14,7% contra 13,7%; reversões 6,1% contra
+# 5,6%), corta 42% menos oferta (2.251 contra 3.892) e o nível volta a se mover.
+# Desligar de vez não serve: sem teto nenhum o ruído dobra (23,2% e 10,6%).
+TETO_ANTI_ALTA = 2.0
 # Orçamento de tempo do bloco, em minutos (0 = sem limite, padrão local). Ao
 # estourar, o scraper para no ingrediente atual, grava o snapshot com o que já
 # coletou e sai com código 4 — o workflow salva no banco e abre outro bloco, que
@@ -183,6 +191,29 @@ _MULTIPACK = r'(\d+)\s*(?:[x×]|(?:pacotes?|garrafas?|latas?|caixas?|potes?|unid
 # "sem_quantidade_no_titulo" da coleta de 10/08 eram deste formato, e é o que
 # zerava o Matambre bovino em todas as coletas desde que ele entrou no catálogo.
 _UNIDADE_SOZINHA = re.compile(r'\b(?:kg|quilos?|kilos?|litros?)\b')
+# Contagem do kit escrita LONGE da quantidade, que o _MULTIPACK não alcança:
+# "Kit 6 Macarrão Espaguete Urbano 500g", "KIT 3 unid ... 500g", "Kit C/ 06 ...
+# 500g", "Guariroba Em Conserva Kit Com 2 Unidades Peso Líquido 580g". Sem isto
+# o preço do kit inteiro era dividido pelo peso de UMA unidade: 11 das 20
+# ofertas aceitas do Macarrão na coleta 45 vieram de 2x a 6x infladas
+# (R$ 99,80/kg num espaguete de R$ 16,63/kg) e foram excluídas na mão.
+# O (?!\d) no lugar de \b é o que deixa "Kit 4x Macarrão ... 500g" ser lido: ali
+# o dígito é colado no 'x' e a fronteira de palavra não fecha.
+_KIT_ANTES = re.compile(r'\b(?:kit|leve|combo|pack)\s*(?:c/|com|de)?\s*(\d{1,2})(?![\d.,])')
+# Número solto abrindo o título: "10 Macarrão ... Pacote 500g Cada",
+# "2 Forma Queijo Muçarela ... 2,5 Kg". Não vale quando esse número JÁ é a
+# quantidade ("8,5 Kg Carne Seca Salgada"), daí o lookahead de unidade.
+_CONTAGEM_INICIO = re.compile(r'^\s*(\d{1,2})\s*x?\s+(?!kg|g\b|ml|l\b|kilos?|quilos?|litros?)[a-zà-ÿ]')
+
+def _contagem_kit(prefixo):
+    """Quantas unidades o título anuncia ANTES de dizer a quantidade. Só o
+    prefixo é lido de propósito: em "Caldo Tablete Carne Maggi Caixa 114g 12
+    Unidades" os 114 g já são o total da caixa, e multiplicar por 12 quebraria
+    as 6 ofertas de caldo da coleta 45. Contagem escrita depois da quantidade
+    fica como está."""
+    m = _KIT_ANTES.search(prefixo) or _CONTAGEM_INICIO.search(prefixo)
+    n = int(m.group(1)) if m else 1
+    return n if n > 1 else 1
 
 def extrair_quantidade(titulo):
     titulo_lower = titulo.lower()
@@ -196,7 +227,7 @@ def extrair_quantidade(titulo):
         m = re.search(r'(\d+[\.,]?\d*)\s*' + unidade, titulo_lower)
         if m:
             valor = float(m.group(1).replace(',', '.'))
-            return valor * multiplicador
+            return valor * multiplicador * _contagem_kit(titulo_lower[:m.start()])
     # último recurso, só depois de falharem todos os padrões COM número
     if _UNIDADE_SOZINHA.search(titulo_lower):
         return 1000.0
@@ -345,7 +376,7 @@ def _buscar_serp(query):
     if not SERP_API_KEYS:
         print("  ❌ Nenhuma SERPAPI_KEY configurada")
         return None
-    vazio = None
+    vazio, indisponiveis = None, 0
     for _ in range(len(SERP_API_KEYS)):
         key = SERP_API_KEYS[_serp_idx]
         params = {
@@ -363,8 +394,13 @@ def _buscar_serp(query):
             except requests.RequestException as e:
                 print(f"  ⏳ erro de rede ({tentativa}/2): {e}")
         if resp is None:
-            print("  ❌ rede fora depois de 2 tentativas")
-            return None
+            # antes isto abortava a busca inteira na primeira conta com rede ruim.
+            # Uma conta fora do ar não é resposta do Google: conta como
+            # indisponível e a próxima ainda é tentada.
+            print("  ❌ rede fora depois de 2 tentativas nesta conta")
+            indisponiveis += 1
+            _serp_idx = (_serp_idx + 1) % len(SERP_API_KEYS)
+            continue
         try:
             dados = resp.json()
         except ValueError:
@@ -382,9 +418,22 @@ def _buscar_serp(query):
             continue
         # 401/429 ou erro de cota → tenta a próxima conta
         print(f"  ⚠️  chave #{_serp_idx + 1} falhou ({resp.status_code} {erro}); tentando próxima")
+        indisponiveis += 1
         _serp_idx = (_serp_idx + 1) % len(SERP_API_KEYS)
+    # "sem resultados" só vale como fato de mercado se TODAS as contas chegaram a
+    # responder. Em 14/09 a conta #1 estava esgotada (429) o run inteiro e o
+    # vazio das outras três virou qtd_resultados=0 em 6 ingredientes que na
+    # semana anterior tinham trazido de 27 a 40 ofertas — Carne ovina, Feijão de
+    # corda, Goma de tapioca, Palmito, Pescada e Traíra saíram do índice como se
+    # tivessem sumido do mercado. Com chave esgotada ou rede fora no meio, isto
+    # é falha de busca: o ingrediente fica fora do snapshot e o recálculo mantém
+    # o preço anterior por carry-forward.
+    if vazio is not None and indisponiveis == 0:
+        return vazio   # todas as contas responderam e todas vieram vazias
     if vazio is not None:
-        return vazio   # todas as contas devolveram vazio: sem resultados mesmo
+        print(f"  ❌ vazio em {len(SERP_API_KEYS) - indisponiveis} conta(s), mas "
+              f"{indisponiveis} indisponível(is) — falha de busca, não 'não encontrado'")
+        return None
     print("  ❌ Todas as chaves SerpAPI falharam/esgotaram")
     return None
 
@@ -424,7 +473,12 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
         return None
     itens = dados.get("shopping_results", [])
     if not itens:
+        # grava o vazio no cache do dia: a SerpAPI guarda a própria busca por ~1h
+        # e devolve o mesmo vazio instantaneamente, então re-perguntar nos blocos
+        # 2 e 3 só queima chave. Em 14/09 foram 8 repetições x 4 contas.
         print("  ⚠️  Sem resultados")
+        cache[chave] = []
+        salvar_cache(cache)
         return []
     print(f"  📥 {len(itens)} ofertas devolvidas pela busca (processando até {MAX_OFERTAS})")
 
@@ -467,7 +521,7 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
             "link":              link,
         })
 
-    # anti-alta: descarta preço >50% acima da mediana do ingrediente na coleta
+    # anti-alta: descarta preço acima de TETO_ANTI_ALTA x a mediana do ingrediente na coleta
     # anterior (provável produto errado/embalagem menor inflando o preço).
     # Duas travas contra o laço de realimentação que matou a Pimenta do reino:
     # em 13/07 sobrou 1 anúncio a R$37,98/kg (o preço real é ~R$200/kg), esse
@@ -480,7 +534,7 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
     med_ant, n_ant = ref if ref else (None, 0)
     inflados = 0
     if med_ant and n_ant >= AMOSTRA_MIN_REF:
-        teto = med_ant * 1.5
+        teto = med_ant * TETO_ANTI_ALTA
         sobreviventes = [r for r in resultados if r["preco_normalizado"] <= teto]
         if resultados and not sobreviventes:
             print(f"  ⚠️  anti-alta cortaria TODAS as {len(resultados)} ofertas "
@@ -494,7 +548,7 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
             inflados = len(resultados) - len(sobreviventes)
             resultados = sobreviventes
             if inflados:
-                print(f"  🚫 {inflados} descartado(s) por preço >50% acima da coleta anterior "
+                print(f"  🚫 {inflados} descartado(s) por preço acima do teto da coleta anterior "
                       f"(teto R${teto * 1000:.2f}/kg)")
     elif med_ant:
         print(f"  ℹ️  anti-alta desligado: coleta anterior teve só {n_ant} resultado(s) "
@@ -560,7 +614,8 @@ def main():
     # (lida ANTES desta coleta gravar o snapshot novo)
     try:
         medianas_ant = medianas_coleta_anterior()
-        print(f"🛡️  Filtro anti-alta ativo: referência de {len(medianas_ant)} ingredientes da coleta anterior (+50% = descarte)")
+        print(f"🛡️  Filtro anti-alta ativo: referência de {len(medianas_ant)} ingredientes "
+              f"da coleta anterior (acima de {TETO_ANTI_ALTA:g}x a mediana = descarte)")
     except Exception as e:
         medianas_ant = {}
         print(f"⚠️  Filtro anti-alta desativado (falha ao ler a coleta anterior: {e})")

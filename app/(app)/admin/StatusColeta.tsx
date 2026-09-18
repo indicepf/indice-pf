@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react'
 import { inputBase, ChevronVoltar } from '@/components/ui'
-import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, aprovarUltimaColeta, getHistoricoManual, editarLeituraManual, getLatestSnapshot, getSnapshotsNovos, getDetalheEncontrados, getEntradasIngrediente, excluirEntradasERecalcular, getColetas, type StatusColeta, type ItemColeta, type PrecoManualHist, type ItemEncontrado, type EntradaBruta, type ColetaResumo } from '@/lib/queries'
+import { getStatusUltimaColeta, setPrecoManual, recalcularCustos, aprovarUltimaColeta, getHistoricoManual, editarLeituraManual, getLatestSnapshot, getSnapshotsNovos, getDetalheEncontrados, getEntradasIngrediente, excluirEntradasERecalcular, getColetas, setFonteFixa, getFontesFixas, type StatusColeta, type ItemColeta, type PrecoManualHist, type ItemEncontrado, type EntradaBruta, type ColetaResumo } from '@/lib/queries'
 import { capturarContexto } from '@/lib/contexto'
 import { brl } from '@/lib/format'
 
@@ -52,6 +52,9 @@ export default function StatusColeta() {
   const [fontes, setFontes] = useState<Record<number, EntradaBruta[]>>({})        // fontes expandidas por ingrediente
   const [excluindo, setExcluindo] = useState<number | null>(null)
   const [selecao, setSelecao] = useState<Set<number>>(new Set())                  // fontes marcadas p/ exclusão em lote
+  const [fixas, setFixas] = useState<Record<number, { url: string; qtd: string }>>({})   // edição da fonte fixa
+  const [fixasSalvas, setFixasSalvas] = useState<Record<number, { url: string | null; qtd_g: number | null }>>({})
+  const [salvandoFixa, setSalvandoFixa] = useState<number | null>(null)
   const [excluindoLote, setExcluindoLote] = useState(false)
   // histórico de coletas (cards recolhidos, filtro por data, paginação)
   const [coletas, setColetas] = useState<ColetaResumo[]>([])
@@ -82,6 +85,7 @@ export default function StatusColeta() {
 
   async function recarregar() {
     setStatus(await getStatusUltimaColeta())
+    setFixasSalvas(await getFontesFixas())
     // staging (auditoria antes de integrar): a última coleta ainda não tem
     // custos_pratos → não entra no índice até ser aprovada aqui
     const [ultimo, novos] = await Promise.all([getLatestSnapshot(), getSnapshotsNovos()])
@@ -102,6 +106,21 @@ export default function StatusColeta() {
     if (error) { setMsg(`Erro ao integrar a coleta: ${error.message}`); return }
     setMsg('Coleta aprovada e integrada ao índice.')
     recarregar()
+  }
+
+  // fonte fixa: loja que o scraper relê sozinho na semana em que não achar o item
+  async function salvarFonteFixa(item: ItemColeta) {
+    const salva = fixasSalvas[item.id]
+    const f = fixas[item.id] ?? { url: salva?.url ?? '', qtd: String(salva?.qtd_g ?? 1000) }
+    const qtd = Number(f.qtd.replace(',', '.'))
+    if (f.url.trim() && !(qtd > 0)) { setMsg(`${item.nome}: informe a quantidade da embalagem anunciada na página (em g/ml).`); return }
+    setSalvandoFixa(item.id); setMsg('')
+    const { error } = await setFonteFixa(item.id, f.url, qtd)
+    setSalvandoFixa(null)
+    if (error) { setMsg(`Erro ao salvar a fonte fixa de ${item.nome}: ${error.message}`); return }
+    setMsg(f.url.trim() ? `Fonte fixa de ${item.nome} salva — será relida na próxima coleta que não achá-lo.`
+                        : `Fonte fixa de ${item.nome} removida.`)
+    await recarregar()
   }
 
   async function salvarManual(item: ItemColeta) {
@@ -344,6 +363,32 @@ export default function StatusColeta() {
                   </button>
                   <button onClick={() => verHistorico(item.id)}
                     className="text-xs text-accent hover:underline">{item.id in hist ? 'ocultar histórico' : 'histórico'}</button>
+                </div>
+                {/* fonte fixa: item de nicho que a busca nunca acha (carne de bode,
+                    jambu) passa a ser relido automaticamente da loja de sempre */}
+                <div className="mt-3 border-t border-border pt-3">
+                  <p className="text-xs text-dim mb-2">
+                    <strong className="text-ink">Fonte fixa</strong> — loja que o scraper relê sozinho na semana em que
+                    não achar este item. O preço lido entra como leitura manual (não como oferta de mercado).
+                    {fixasSalvas[item.id]?.url ? ' Ativa.' : ' Não cadastrada.'}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <label className="sm:col-span-2">Link da loja
+                      <input value={fixas[item.id]?.url ?? fixasSalvas[item.id]?.url ?? ''} placeholder="https://… (vazio desliga)"
+                        onChange={e => setFixas(f => ({ ...f, [item.id]: { url: e.target.value, qtd: f[item.id]?.qtd ?? String(fixasSalvas[item.id]?.qtd_g ?? 1000) } }))}
+                        className={inputCls} />
+                    </label>
+                    <label>Quantidade na página ({ehVolume(item) ? 'ml' : 'g'})
+                      <input value={fixas[item.id]?.qtd ?? String(fixasSalvas[item.id]?.qtd_g ?? 1000)} inputMode="decimal"
+                        placeholder="1000 = cota o quilo"
+                        onChange={e => setFixas(f => ({ ...f, [item.id]: { url: f[item.id]?.url ?? fixasSalvas[item.id]?.url ?? '', qtd: e.target.value } }))}
+                        className={inputCls} />
+                    </label>
+                  </div>
+                  <button onClick={() => salvarFonteFixa(item)} disabled={salvandoFixa === item.id}
+                    className="btn-mk sm mt-3 disabled:opacity-60">
+                    {salvandoFixa === item.id ? 'Salvando…' : 'Salvar fonte fixa'}
+                  </button>
                 </div>
                 </>
                 )}
