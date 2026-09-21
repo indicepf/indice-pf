@@ -339,6 +339,26 @@ def limpar_preco(preco_txt):
     except ValueError:
         return None
 
+# ─── Origem da oferta ────────────────────────────────────────────────────────
+# Anúncio de marketplace é de terceiro, e foi ele que inflou a coleta 46 com kit,
+# embalagem pequena e importado: a participação de marketplace nas observações
+# subiu de 17% (31/08) para 31% (21/09) quando o location quebrou. Nos queijos,
+# onde a diferença entre peça de supermercado e anúncio avulso é grande, a
+# decisão do responsável em 21/09 foi só supermercado — "é melhor e mais
+# confiável". Vale só para os itens listados; no resto o marketplace continua
+# valendo, porque em vários ingredientes ele é a única oferta que existe.
+LOJAS_MARKETPLACE = ("mercado livre", "mercadolivre", "shopee", "magalu",
+                     "ebay", "aliexpress", "amazon")
+SO_SUPERMERCADO = {"Queijo prato", "Queijo mussarela"}
+
+
+def loja_aceita(ingrediente, loja):
+    if ingrediente["nome"] not in SO_SUPERMERCADO:
+        return True
+    l = (loja or "").lower()
+    return not any(m in l for m in LOJAS_MARKETPLACE)
+
+
 # ─── Validação de produto ─────────────────────────────────────────────────────
 def _casa_palavra(termo, texto):
     """Casamento por palavra inteira. Com substring pura, palavra_nao curta
@@ -549,6 +569,12 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
             qs = urllib.parse.urlencode({"q": ingrediente["busca"], "tbm": "shop"})
             link = f"https://www.google.com/search?{qs}"
 
+        if not loja_aceita(ingrediente, loja):
+            rejeitados += 1
+            motivos.append((titulo, f"loja de marketplace ({loja})"))
+            _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
+                                limpar_preco(preco_txt), None, "loja_marketplace")
+            continue
         valido, motivo = produto_valido(titulo, ingrediente)
         if not valido:
             rejeitados += 1
