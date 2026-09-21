@@ -496,7 +496,7 @@ TRIPE = {
         "ok": ["ketchup", "catchup"],
         "nao": ["mostarda", "maionese"]},
     "Mostarda": {
-        "busca": "mostarda 200g", "unidade": "g",
+        "busca": "mostarda amarela tradicional", "unidade": "g",
         "ok": ["mostarda"],
         "nao": ["ketchup", "maionese", "milho", "bisnaga", "chucrute", "crispy"]},
     "Maionese": {

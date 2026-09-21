@@ -53,6 +53,24 @@ LIMITE_RAZAO_MEDIANA = 4.0   # mantém só preços entre mediana/4 e mediana*4
 # paga. Com o corte antigo (15), 89 dos 123 ingredientes da coleta de 10/08
 # pararam exatamente em 15 ofertas, ou seja o limite era do código, não do Google.
 MAX_OFERTAS = int(os.getenv("MAX_OFERTAS", "60"))
+# Localidade da busca. Com location="Brazil" o Google Shopping deixou de
+# devolver as listagens de supermercado em algum ponto entre 14 e 21/09/2026: a
+# participação de marketplace nas observações subiu de 17% (31/08) para 31%
+# (21/09) e o arroz saiu de R$ 4,29/kg para R$ 13,85 sem o mercado ter mudado.
+# Medido em 21/09 com a MESMA query ("arroz branco tipo 1"), 1 crédito por teste:
+#   location="Brazil"           → 50% marketplace, n=13, R$ 19,90/kg
+#   + google_domain só          → 50% marketplace, n=13, R$ 19,90/kg (não resolve)
+#   location="Sao Paulo,..."    →  8% marketplace, n=26, R$  4,84/kg
+#   location="Rio de Janeiro..."→  2% marketplace, n=25, R$  4,80/kg
+#   location="Recife,..."       → 42% marketplace, n=12, R$ 26,32/kg (não resolve)
+# As cinco coletas anteriores tinham o arroz entre R$ 4,20 e R$ 4,59, então a
+# metrópole é que devolve o dado certo. Não é viés local: as lojas que voltam são
+# Angeloni (SC), Zaffari (RS), GBarbosa (NE), Nordestão (RN), Koch (SC) e
+# Zona Sul (RJ) — o parâmetro destrava a vertical de supermercado, não a cidade.
+# SP e Rio dão a mesma lista e diferem 0,8%; Recife não tem essa cobertura.
+# google_domain acompanha porque foi assim que o teste passou: location sozinho
+# não chegou a ser medido, e trocar por não-testado não vale o crédito.
+LOCATION = "Sao Paulo,State of Sao Paulo,Brazil"
 # Timeout de cada chamada à SerpAPI. 30s cortava respostas que chegariam.
 TIMEOUT_SERP = 60
 # Amostra mínima da coleta anterior para ela poder servir de teto no anti-alta.
@@ -412,7 +430,8 @@ def _buscar_serp(query):
         key = SERP_API_KEYS[_serp_idx]
         params = {
             "engine": "google_shopping", "q": query, "num": MAX_OFERTAS,
-            "gl": "br", "hl": "pt", "location": "Brazil", "api_key": key,
+            "gl": "br", "hl": "pt", "location": LOCATION, "api_key": key,
+            "google_domain": "google.com.br",
         }
         # timeout de leitura da SerpAPI é intermitente e tirava o ingrediente do
         # snapshot na primeira falha (3 itens em 17/08). 60s + 1 retentativa na
