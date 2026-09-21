@@ -191,7 +191,7 @@ TRIPE = {
     "Cavala (peixe)": {
         "busca": "cavala peixe kg", "unidade": "g",
         "ok": ["cavala"],
-        "nao": ["lata", "conserva", "ração", "racao", "isca"]},
+        "nao": ["lata", "conserva", "ração", "racao", "isca", "azeite", "óleo", "oleo", "naval", "patê", "pate"]},
     "Pirarucu seco": {
         "busca": "pirarucu seco salgado kg", "unidade": "g",
         "ok": ["pirarucu"],
@@ -199,14 +199,13 @@ TRIPE = {
     "Sururu": {
         "busca": "sururu", "unidade": "g",
         "ok": ["sururu", "mexilhão", "mexilhao", "marisco"],
-        "nao": ["temperado", "lata pronta"]},
+        "nao": ["temperado", "lata pronta", "shochu", "saquê", "sake", "bebida", "destilado"]},
 
     # ── Ovos ─────────────────────────────────────────────────────────────────
     "Ovo": {
         "busca": "ovos bandeja 30 unidades", "unidade": "unidade", "peso_ref_g": 55,
         "ok": ["ovo", "ovos"],
-        "nao": ["codorna", "chocolate", "páscoa", "desidratado", "porta",
-                "organizador", "kit", "cartela plástica", "suporte"]},
+        "nao": ["codorna", "chocolate", "páscoa", "desidratado", "porta", "organizador", "kit", "cartela plástica", "suporte", "cartela", "papelão", "papelao", "tampa", "cavidades", "plástico", "plastico", "dispensador", "camadas", "bandejas"]},
 
     # ── Gordura/Óleo ─────────────────────────────────────────────────────────
     "Óleo de soja": {
@@ -230,7 +229,7 @@ TRIPE = {
     "Arroz branco": {
         "busca": "arroz branco tipo 1", "unidade": "g",
         "ok": ["arroz"],
-        "nao": ["integral", "parboilizado", "temperado", "japonês", "arbóreo"]},
+        "nao": ["integral", "parboilizado", "temperado", "japonês", "arbóreo", "oriental", "sushi", "paella", "cateto", "blanco"]},
     "Macarrão": {
         "busca": "macarrão espaguete 500g", "unidade": "g",
         "ok": ["macarrão", "espaguete", "spaghetti", "penne", "massa"],
@@ -250,11 +249,11 @@ TRIPE = {
     "Farinha de mandioca": {
         "busca": "farinha de mandioca torrada kg", "unidade": "g",
         "ok": ["farinha", "mandioca"],
-        "nao": ["trigo", "milho", "tapioca", "polvilho", "rosca"]},
+        "nao": ["trigo", "milho", "tapioca", "polvilho", "rosca", "fécula", "fecula"]},
     "Goma de tapioca": {
         "busca": "goma de tapioca hidratada kg", "unidade": "g",
         "ok": ["goma", "tapioca", "polvilho"],
-        "nao": ["farinha de trigo", "rosca"]},
+        "nao": ["farinha de trigo", "rosca", "granulada", "granulado", "cremosa", "garlic", "wrap", "pouch", "fit"]},
     "Pão francês": {
         "busca": "pão francês kg", "unidade": "g",
         "ok": ["pão", "pao"],
@@ -272,7 +271,7 @@ TRIPE = {
     "Leite": {
         "busca": "leite integral 1 litro", "unidade": "ml",
         "ok": ["leite"],
-        "nao": ["condensado", "em pó", "coco", "creme"]},
+        "nao": ["condensado", "em pó", "coco", "creme", "desnatado", "semidesnatado", "zero lactose"]},
     "Leite de coco": {
         "busca": "leite de coco 200ml", "unidade": "ml",
         "ok": ["coco"],
@@ -338,7 +337,7 @@ TRIPE = {
     "Repolho": {
         "busca": "repolho verde kg", "unidade": "g",
         "ok": ["repolho"],
-        "nao": ["chucrute", "conserva"]},
+        "nao": ["chucrute", "conserva", "roxo"]},
     "Alface": {
         # rúcula/escarola saíram daqui na explosão de 12/07/2026 (bases próprias)
         "busca": "alface crespa unidade", "unidade": "maco", "peso_ref_g": 300,
@@ -355,7 +354,7 @@ TRIPE = {
     "Milho verde": {
         "busca": "milho verde espiga kg", "unidade": "g",
         "ok": ["milho"],
-        "nao": ["pipoca", "fubá", "farinha"]},
+        "nao": ["pipoca", "fubá", "farinha", "semente", "sementes", "híbrido", "hibrido"]},
     "Palmito": {
         "busca": "palmito pupunha kg", "unidade": "g",
         "ok": ["palmito"],
@@ -371,8 +370,7 @@ TRIPE = {
     "Jambu": {
         "busca": "jambu congelado", "unidade": "g", "preco_manual": 60.0,
         "ok": ["jambu"],
-        "nao": ["desidrat", "extrato", "pomada", "creme", "flor", "semente",
-                "cumaru", "cápsula", "capsula", "óleo", "oleo"]},
+        "nao": ["desidrat", "extrato", "pomada", "creme", "flor", "semente", "cumaru", "cápsula", "capsula", "óleo", "oleo", "tucupi"]},
     "Maniva (folha de mandioca)": {
         "busca": "maniva maniçoba kg", "unidade": "g",
         "ok": ["maniva", "maniçoba", "manicoba"],
@@ -386,7 +384,7 @@ TRIPE = {
     "Feijão preto": {
         "busca": "feijão preto kg", "unidade": "g",
         "ok": ["preto"],
-        "nao": ["carioca", "fradinho", "lata", "temperado"]},
+        "nao": ["carioca", "fradinho", "lata", "temperado", "saco", "lixo"]},
     "Feijão de corda": {
         "busca": "feijão de corda fradinho kg", "unidade": "g",
         "ok": ["corda", "fradinho", "caupi", "macassar", "verde"],
@@ -400,7 +398,7 @@ TRIPE = {
     "Banana da terra": {
         "busca": "banana da terra kg", "unidade": "g",
         "ok": ["banana"],
-        "nao": ["passa", "chips", "doce"]},
+        "nao": ["passa", "chips", "doce", "prata", "biomassa", "caturra", "bananada"]},
     "Limão": {
         "busca": "limão tahiti kg", "unidade": "g",
         "ok": ["limão", "limao"],
@@ -428,7 +426,7 @@ TRIPE = {
     "Tucupi": {
         "busca": "tucupi 500ml", "unidade": "ml",
         "ok": ["tucupi"],
-        "nao": ["goma", "farinha"]},
+        "nao": ["goma", "farinha", "molho de pimenta", "murupi"]},
     "Açaí (polpa)": {
         "busca": "polpa de açaí 1kg", "unidade": "g",
         "ok": ["açaí", "acai"],
@@ -442,7 +440,7 @@ TRIPE = {
     "Alho": {
         "busca": "alho descascado", "unidade": "g",
         "ok": ["alho"],
-        "nao": ["granulado", "desidratado", "em pó", "temperado", "aperitivo", "espanhol", "pasta"]},
+        "nao": ["granulado", "desidratado", "em pó", "temperado", "aperitivo", "espanhol", "pasta", "triturado"]},
     "Cheiro-verde": {
         "busca": "cheiro verde maço", "unidade": "maco", "peso_ref_g": 150,
         "ok": ["salsinha", "cebolinha", "cheiro", "tempero verde"],
@@ -450,7 +448,7 @@ TRIPE = {
     "Coentro": {
         "busca": "coentro maço", "unidade": "maco", "peso_ref_g": 100,
         "ok": ["coentro"],
-        "nao": ["em pó", "semente", "desidratado", "grão"]},
+        "nao": ["em pó", "semente", "desidratado", "grão", "em po", "moído", "moido"]},
     "Pimenta": {
         "busca": "pimenta do reino 100g", "unidade": "g",
         "ok": ["pimenta"],
@@ -500,7 +498,7 @@ TRIPE = {
     "Mostarda": {
         "busca": "mostarda 200g", "unidade": "g",
         "ok": ["mostarda"],
-        "nao": ["ketchup", "maionese"]},
+        "nao": ["ketchup", "maionese", "milho", "bisnaga", "chucrute", "crispy"]},
     "Maionese": {
         "busca": "maionese 500g", "unidade": "g",
         "ok": ["maionese"],
@@ -566,11 +564,11 @@ TRIPE = {
     "Queijo prato": {
         "busca": "queijo prato kg", "unidade": "g",
         "ok": ["queijo prato"],
-        "nao": ["mussarela", "muçarela", "ralado", "sabor"]},
+        "nao": ["mussarela", "muçarela", "ralado", "sabor", "fatiado", "fatias", "fatia"]},
     "Queijo mussarela": {
         "busca": "queijo mussarela kg", "unidade": "g",
         "ok": ["mussarela", "muçarela", "mozarela"],
-        "nao": ["búfala", "bufala", "ralado", "queijo prato", "sabor"]},
+        "nao": ["búfala", "bufala", "ralado", "queijo prato", "sabor", "fatiado", "fatias", "fatia"]},
     "Fubá de milho": {
         "busca": "fubá mimoso kg", "unidade": "g",
         "ok": ["fubá", "fuba"],
@@ -582,7 +580,7 @@ TRIPE = {
     "Extrato de tomate": {
         "busca": "extrato de tomate", "unidade": "g",
         "ok": ["extrato"],
-        "nao": ["molho", "ketchup", "polpa"]},
+        "nao": ["molho", "ketchup", "polpa", "temperado"]},
     "Molho de tomate (sachê)": {
         "busca": "molho de tomate sachê", "unidade": "g",
         "ok": ["molho de tomate"],
@@ -602,7 +600,7 @@ TRIPE = {
     "Pimenta (fresca)": {
         "busca": "pimenta dedo de moça kg", "unidade": "g",
         "ok": ["pimenta"],
-        "nao": ["reino", "moedor", "molho", "kit", "semente", "calabresa seca", "biquinho em conserva"]},
+        "nao": ["reino", "moedor", "molho", "kit", "semente", "calabresa seca", "biquinho em conserva", "em pó", "em po", "moída", "moida", "flocos", "calabresa"]},
 
     # ── Novo ingrediente (Dobradinha à Paulista, 12/07/2026) ─────────────────
     "Feijão branco": {

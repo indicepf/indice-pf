@@ -173,13 +173,25 @@ def chave_cache(ingrediente):
 
 # ─── Extrator de peso/volume (R$/g e R$/ml) ──────────────────────────────────
 # Unidades reconhecidas e seus fatores para g/ml (ordem importa: kg antes de g).
+# 'gr', 'grs', 'gramas', 'kilo' e 'quilo' faltavam: "500GR" não casa com g\b
+# porque o 'r' fecha a fronteira de palavra. Eram 33 descartes por
+# "sem_quantidade_no_titulo" na coleta 46 — e justamente as ofertas certas da
+# Goma de tapioca, do Camarão seco e do Colorau. Ordem importa: kg antes de g,
+# 'gramas' antes de 'grs' antes de 'g'.
 _UNIDADES_QTD = [
     (r'kg',      1000),
+    (r'kilos?',  1000),
+    (r'quilos?', 1000),
     (r'litros?', 1000),
     (r'l\b',     1000),
     (r'ml\b',    1),
+    (r'gramas?', 1),
+    (r'grs?\b',  1),
     (r'g\b',     1),
 ]
+# Título que anuncia o preço do quilo mesmo tendo outros pesos escritos:
+# "Frango Inteiro Peso entre 1,5KG a 2,5KG Preço do kg".
+_PRECO_POR_QUILO = re.compile(r'(?:pre[çc]o|valor)\s*(?:do|por|p/)\s*(?:kg|quilo)|r\$\s*/\s*kg')
 # Conector de multipack: "2x500g", "2 × 500 ml", "kit 3 pacotes de 500 g",
 # "6 garrafas de 900 ml". O total é n × quantidade — usar só a quantidade da
 # embalagem subcontava o anúncio e inflava o preço normalizado (COL-002).
@@ -215,14 +227,33 @@ def _contagem_kit(prefixo):
     n = int(m.group(1)) if m else 1
     return n if n > 1 else 1
 
+def _quantidades_distintas(titulo_lower):
+    """Todas as quantidades escritas no título, em gramas/ml. Mais de uma = o
+    título não diz qual é a da embalagem."""
+    vals = set()
+    for unidade, multiplicador in _UNIDADES_QTD:
+        for m in re.finditer(r'(\d+[\.,]?\d*)\s*' + unidade, titulo_lower):
+            vals.add(round(float(m.group(1).replace(',', '.')) * multiplicador, 2))
+    return vals
+
+
 def extrair_quantidade(titulo):
     titulo_lower = titulo.lower()
     for unidade, multiplicador in _UNIDADES_QTD:
         m = re.search(_MULTIPACK + r'(\d+[\.,]?\d*)\s*' + unidade, titulo_lower)
         if m:
+            # "N x Q" é estrutura explícita: o total é N*Q e não há ambiguidade,
+            # mesmo que o título repita o total ("1Kg - 10 pacotes de 100g").
             n = int(m.group(1))
             valor = float(m.group(2).replace(',', '.'))
             return n * valor * multiplicador
+    # Sem multipack, duas quantidades diferentes no título tornam a embalagem
+    # indecidível: lista de tamanhos ("2 kg 1kg 500g 300g" no Colorau, que virou
+    # R$ 7,25/kg por ler o primeiro) ou faixa de peso ("540g a 1,020Kg"). O
+    # parser escolhia a primeira que casasse. Agora a oferta sai, salvo quando o
+    # título diz que o preço é o do quilo.
+    if len(_quantidades_distintas(titulo_lower)) > 1:
+        return 1000.0 if _PRECO_POR_QUILO.search(titulo_lower) else None
     for unidade, multiplicador in _UNIDADES_QTD:
         m = re.search(r'(\d+[\.,]?\d*)\s*' + unidade, titulo_lower)
         if m:
@@ -455,33 +486,16 @@ def _registrar_descarte(saida, ingrediente, titulo, loja, link, preco_bruto, pre
     })
 
 
-def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=None):
-    chave = chave_cache(ingrediente)
-    if chave in cache:
-        # cache guarda só os aceitos; num rerun do mesmo dia os descartes não
-        # são reavaliados (a coleta original já os registrou)
-        print(f"\n💾 {ingrediente['nome']} → cache de hoje")
-        return cache[chave]
+def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None):
+    """Aplica TODOS os filtros a uma lista de ofertas cruas e devolve as aceitas.
 
-    print(f"\n🔍 {ingrediente['nome']} → '{ingrediente['busca']}'")
-    dados = _buscar_serp(ingrediente["busca"])
-    if dados is None:
-        # falha de infraestrutura (cota esgotada/rede), não fato de mercado:
-        # None faz o main() deixar o ingrediente FORA do snapshot, em vez de
-        # gravar qtd_resultados=0 e mandá-lo para a fila de leitura manual
-        print("  ❌ busca falhou (cota/rede) — ingrediente fica FORA deste snapshot")
-        return None
-    itens = dados.get("shopping_results", [])
-    if not itens:
-        # grava o vazio no cache do dia: a SerpAPI guarda a própria busca por ~1h
-        # e devolve o mesmo vazio instantaneamente, então re-perguntar nos blocos
-        # 2 e 3 só queima chave. Em 14/09 foram 8 repetições x 4 contas.
-        print("  ⚠️  Sem resultados")
-        cache[chave] = []
-        salvar_cache(cache)
-        return []
-    print(f"  📥 {len(itens)} ofertas devolvidas pela busca (processando até {MAX_OFERTAS})")
+    Pura de propósito: não faz rede nem lê cache. A coleta chama com o que a
+    SerpAPI devolveu; o replay (scripts/replay_coleta.py) chama com as ofertas
+    já gravadas em price_observations. Se o filtro morasse dentro da busca, o
+    replay estaria testando um código diferente do que roda na produção.
 
+    Cada item é um dict no formato da SerpAPI: title, price, source, link.
+    """
     resultados, rejeitados, motivos = [], 0, []
     for item in itens[:MAX_OFERTAS]:
         titulo    = item.get("title", "")
@@ -580,6 +594,37 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
         for t, m in motivos[:8]:
             print(f"       - [{m}] {t}")
 
+    return resultados
+
+
+def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=None):
+    chave = chave_cache(ingrediente)
+    if chave in cache:
+        # cache guarda só os aceitos; num rerun do mesmo dia os descartes não
+        # são reavaliados (a coleta original já os registrou)
+        print(f"\n💾 {ingrediente['nome']} → cache de hoje")
+        return cache[chave]
+
+    print(f"\n🔍 {ingrediente['nome']} → '{ingrediente['busca']}'")
+    dados = _buscar_serp(ingrediente["busca"])
+    if dados is None:
+        # falha de infraestrutura (cota esgotada/rede), não fato de mercado:
+        # None faz o main() deixar o ingrediente FORA do snapshot, em vez de
+        # gravar qtd_resultados=0 e mandá-lo para a fila de leitura manual
+        print("  ❌ busca falhou (cota/rede) — ingrediente fica FORA deste snapshot")
+        return None
+    itens = dados.get("shopping_results", [])
+    if not itens:
+        # grava o vazio no cache do dia: a SerpAPI guarda a própria busca por ~1h
+        # e devolve o mesmo vazio instantaneamente, então re-perguntar nos blocos
+        # 2 e 3 só queima chave. Em 14/09 foram 8 repetições x 4 contas.
+        print("  ⚠️  Sem resultados")
+        cache[chave] = []
+        salvar_cache(cache)
+        return []
+    print(f"  📥 {len(itens)} ofertas devolvidas pela busca (processando até {MAX_OFERTAS})")
+
+    resultados = filtrar_ofertas(ingrediente, itens, medianas_ant, descartados_out)
     cache[chave] = resultados
     salvar_cache(cache)
     return resultados
