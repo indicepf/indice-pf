@@ -120,28 +120,51 @@ def _ids_coletados_recentes(dias=6):
     return {p["ingrediente_id"] for p in r.json() if p["ingrediente_id"] is not None}
 
 
-def medianas_coleta_anterior():
-    """(mediana normalizada em R$/g, qtd_resultados) por ingrediente na coleta
-    mais recente. Referência do filtro anti-alta. O qtd_resultados vem junto
-    porque mediana apurada sobre 1–2 anúncios não é confiável o bastante para
-    virar teto da coleta seguinte (ver AMOSTRA_MIN_REF)."""
+def medianas_coleta_anterior(janela=5):
+    """Referência do filtro anti-alta: para cada ingrediente, a MAIOR mediana
+    entre as últimas `janela` coletas que tiveram amostra suficiente.
+
+    Era só a coleta imediatamente anterior, e isso fazia um defeito de uma semana
+    virar teto da seguinte. Em 14/09 o Queijo prato saiu a R$ 10,79 num item cujas
+    quatro coletas anteriores ficaram entre R$ 59,30 e R$ 62,96; esse 10,79 imporia
+    teto de R$ 21,58 e cortaria todas as ofertas reais de queijo. Treze ingredientes
+    estavam nessa situação em 21/09.
+
+    O máximo, e não a mediana das medianas, porque o teto só corta POR CIMA: usar o
+    maior valor recente erra para o lado de deixar passar, e quem barra produto
+    errado é o filtro de produto. A mediana das medianas consertaria o Queijo prato
+    e quebraria a Pimenta do reino, cujo valor certo (R$ 299) é justamente o mais
+    recente, contra R$ 59,98 de mediana das quatro anteriores.
+
+    Devolve (mediana em R$/g, qtd_resultados da coleta que deu o máximo) — a qtd
+    vai junto porque o chamador ainda exige AMOSTRA_MIN_REF para usar o teto.
+    """
     hoje = datetime.now().strftime("%Y-%m-%d")
     # data<hoje de propósito: em coleta por blocos o snapshot mais recente é o
     # de hoje (gravado pelo bloco anterior), e ele não pode ser teto de si mesmo.
     r = requests.get(f"{SUPABASE_URL}/rest/v1/snapshots?select=id&data=lt.{hoje}"
-                     "&order=data.desc&limit=1",
+                     f"&order=data.desc&limit={janela}",
                      headers=SUPA_HEADERS, timeout=30)
     r.raise_for_status()
     snaps = r.json()
     if not snaps:
         return {}
+    ids = ",".join(str(s["id"]) for s in snaps)
     r = requests.get(f"{SUPABASE_URL}/rest/v1/precos"
-                     f"?select=ingrediente_id,mediana_normalizada,qtd_resultados&snapshot_id=eq.{snaps[0]['id']}",
+                     f"?select=ingrediente_id,mediana_normalizada,qtd_resultados"
+                     f"&snapshot_id=in.({ids})",
                      headers=SUPA_HEADERS, timeout=30)
     r.raise_for_status()
-    return {p["ingrediente_id"]: (float(p["mediana_normalizada"]), p.get("qtd_resultados") or 0)
-            for p in r.json()
-            if p["ingrediente_id"] is not None and p["mediana_normalizada"] not in (None, 0)}
+    melhor = {}
+    for p in r.json():
+        iid, med = p["ingrediente_id"], p["mediana_normalizada"]
+        qtd = p.get("qtd_resultados") or 0
+        if iid is None or med in (None, 0) or qtd < AMOSTRA_MIN_REF:
+            continue
+        med = float(med)
+        if iid not in melhor or med > melhor[iid][0]:
+            melhor[iid] = (med, qtd)
+    return melhor
 
 
 def carregar_catalogo():
