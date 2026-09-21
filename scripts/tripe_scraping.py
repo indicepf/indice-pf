@@ -244,8 +244,8 @@ TRIPE = {
         "nao": ["mandioca", "rosca", "milho"]},
     "Farinha de rosca": {
         "busca": "farinha de rosca 500g", "unidade": "g",
-        "ok": ["rosca", "panko"],
-        "nao": ["mandioca", "trigo integral"]},
+        "ok": ["rosca"],
+        "nao": ["mandioca", "trigo integral", "panko"]},
     "Farinha de mandioca": {
         "busca": "farinha de mandioca torrada kg", "unidade": "g",
         "ok": ["farinha", "mandioca"],
@@ -564,11 +564,11 @@ TRIPE = {
     "Queijo prato": {
         "busca": "queijo prato kg", "unidade": "g",
         "ok": ["queijo prato"],
-        "nao": ["mussarela", "muçarela", "ralado", "sabor", "fatiado", "fatias", "fatia"]},
+        "nao": ["mussarela", "muçarela", "ralado", "sabor", "fatiado", "fatias", "fatia", "gran reserva", "zero lactose", "lacfree"]},
     "Queijo mussarela": {
         "busca": "queijo mussarela kg", "unidade": "g",
         "ok": ["mussarela", "muçarela", "mozarela"],
-        "nao": ["búfala", "bufala", "ralado", "queijo prato", "sabor", "fatiado", "fatias", "fatia"]},
+        "nao": ["búfala", "bufala", "ralado", "queijo prato", "sabor", "fatiado", "fatias", "fatia", "gran reserva", "zero lactose", "lacfree", "palito", "nozinho", "recheado"]},
     "Fubá de milho": {
         "busca": "fubá mimoso kg", "unidade": "g",
         "ok": ["fubá", "fuba"],
