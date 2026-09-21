@@ -65,6 +65,29 @@ CASOS_QUANTIDADE = [
     # os 114 g já são o total da caixa
     ("Caldo Tablete Carne Maggi Caixa 114g 12 Unidades", 114.0),
     ("Caldo Maggi 114g C/12 Carne", 114.0),
+    # 'gr', 'grs', 'gramas', 'kilo': títulos reais que a coleta 46 descartou como
+    # "sem quantidade no título" só porque o g\b não fecha depois do 'r'
+    ("Camarão Seco Inteiro 500gr Salgado Vatapá", 500.0),
+    ("FARINHA PANKO - NEUTRO - 500GR", 500.0),
+    ("Cominho Em Pó (50 gramas)", 50.0),
+    ("Tapioca Tradicional Du Jeca Pacote 500 Gramas", 500.0),
+    ("Colorifico 200gr (colorau) -", 200.0),
+    ("Feijão de Fava Rajado Preto 1kilo Sofia Magia", 1000.0),
+    ("CALDO DE CARNE CART 10X57GR KNORR", 570.0),
+    # duas quantidades diferentes sem multipack: embalagem indecidível, sai
+    ("COLORAU EXTRA FORTE COLORIFICO 100% 2 kg 1kg 500g 300g COM LAUDO", None),
+    ("Bisteca Suína Sadia 540g a 1,020Kg", None),
+    ("Milho Espanhol Mostarda e Mel Granel-200g-500g", None),
+    # ...salvo quando o próprio título diz que o preço é o do quilo
+    ("Frango Inteiro Peso entre 1,5KG a 2,5KG Preço do kg", 1000.0),
+    # multipack explícito decide mesmo com o total repetido no título
+    ("Polpa de Açaí 1Kg - 10 pacotes de 100g", 1000.0),
+    ("Açaí Médio 11% Polpa 1 Kg (10x100g)", 1000.0),
+    # LIMITE CONHECIDO: contagem escrita DEPOIS da quantidade continua ignorada.
+    # Aqui subconta (são 2 pacotes de 500 g), mas a regra oposta quebraria o
+    # caldo Maggi logo acima, onde os 114 g já são o total da caixa. O título
+    # não distingue os dois casos.
+    ("FECULA DE MANDIOCA GOMA AMAFIL 500GR - 2 UNIDADES", 500.0),
     # sem unidade nenhuma segue sem quantidade
     ("Matambre - 1953 (374453)", None),
     ("Camarão Cinza Fresco", None),
