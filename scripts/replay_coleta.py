@@ -63,19 +63,25 @@ def carregar_catalogo():
     return cat
 
 
-def ofertas_do_snapshot(snap_id):
+def ofertas_do_snapshot(snap_id, runs=None):
     """Reconstrói a lista que a SerpAPI devolveu, no formato que o filtro espera.
 
     As aceitas vêm de `resultados_brutos` porque ele preserva ofertas repetidas;
     `price_observations` colapsa duplicata exata pelo dedup_hash (7 de 1.489 na
     coleta 46). As rejeitadas só existem em price_observations.
+
+    `runs` limita as rejeitadas a certos run_id. Recoleta do mesmo dia reescreve
+    `resultados_brutos` mas só ACRESCENTA em price_observations (append-only), e
+    sem o filtro o replay misturaria as ofertas das duas execuções.
     """
+    filtro_run = f"&run_id=in.({','.join(str(r) for r in runs)})" if runs else ""
     por_ing = collections.defaultdict(list)
     for r in get_all("resultados_brutos", "ingrediente_id,titulo,preco_bruto,loja,link",
                      f"&snapshot_id=eq.{snap_id}&ingrediente_id=not.is.null"):
         por_ing[r["ingrediente_id"]].append(r)
     for o in get_all("price_observations", "ingrediente_id,titulo,preco_bruto,loja,link",
-                     f"&snapshot_id=eq.{snap_id}&status=eq.rejected&ingrediente_id=not.is.null"):
+                     f"&snapshot_id=eq.{snap_id}&status=eq.rejected"
+                     f"&ingrediente_id=not.is.null{filtro_run}"):
         por_ing[o["ingrediente_id"]].append(o)
     return {iid: [{"title": r["titulo"] or "",
                    "price": "" if r["preco_bruto"] is None else str(r["preco_bruto"]),
@@ -98,8 +104,8 @@ def publicado(snap_id):
                              f"&snapshot_id=eq.{snap_id}&ingrediente_id=not.is.null")}
 
 
-def replay(snap_id, snap_anterior, catalogo, apenas=None):
-    ofertas = ofertas_do_snapshot(snap_id)
+def replay(snap_id, snap_anterior, catalogo, apenas=None, runs=None):
+    ofertas = ofertas_do_snapshot(snap_id, runs)
     med_ant = medianas_de(snap_anterior) if snap_anterior else {}
     antes = publicado(snap_id)
     linhas = []
@@ -150,6 +156,7 @@ def main():
     ap.add_argument("snapshots", help="id, lista (38,42) ou faixa (38-46)")
     ap.add_argument("--so", default="", help="só estes ingredientes, separados por vírgula")
     ap.add_argument("--resumo", action="store_true", help="só a contagem de divergências")
+    ap.add_argument("--runs", default="", help="limita as rejeitadas a estes run_id (ex: 437,438,439)")
     args = ap.parse_args()
 
     if "-" in args.snapshots:
@@ -158,6 +165,7 @@ def main():
     else:
         ids = [int(x) for x in args.snapshots.split(",")]
     apenas = {n.strip() for n in args.so.split(",") if n.strip()} or None
+    runs = [int(r) for r in args.runs.split(",") if r.strip()] or None
 
     snaps = {s["id"]: s["data"] for s in get_all("snapshots", "id,data", "&order=id")}
     ordenados = sorted(snaps)
@@ -169,7 +177,7 @@ def main():
             print(f"snapshot {sid} não existe"); continue
         i = ordenados.index(sid)
         anterior = ordenados[i - 1] if i > 0 else None
-        linhas = replay(sid, anterior, catalogo, apenas)
+        linhas = replay(sid, anterior, catalogo, apenas, runs)
         total_div += len(imprimir(sid, snaps[sid], linhas, args.resumo))
     print(f"\ntotal de divergências: {total_div}")
 
