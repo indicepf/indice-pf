@@ -296,6 +296,30 @@ _KIT_ANTES = re.compile(r'\b(?:kit|leve|combo|pack)\s*(?:c/|com|de)?\s*(\d{1,2})
 # quantidade ("8,5 Kg Carne Seca Salgada"), daí o lookahead de unidade.
 _CONTAGEM_INICIO = re.compile(r'^\s*(\d{1,2})\s*x?\s+(?!kg|g\b|ml|l\b|kilos?|quilos?|litros?)[a-zà-ÿ]')
 
+# Peso "aproximado" no título: o número é o peso do ITEM, não o da embalagem, e
+# o preço anunciado costuma ser o do quilo. O mesmo texto significa o contrário
+# conforme o produto, e o título não distingue:
+#   "Frango Inteiro Resfriado 3kg (Peso Aproximado)"  R$ 11,99 -> lido 4,00/kg   (errado, é 11,99/kg)
+#   "Beterraba Kg - Peso Aprox. Un 0,300 kg"          R$  6,29 -> lido 20,97/kg  (errado, é 6,29/kg)
+#   "Abóbora Cabotian (Aprox. 2,5 Kg)"                R$ 11,59 -> lido 4,64/kg   (CERTO, é a abóbora inteira)
+# Com duas leituras possíveis e nada no texto decidindo, a oferta sai — mesma
+# regra do título com duas quantidades. São 304 ofertas em 19.325 (1,6%).
+_PESO_APROXIMADO = re.compile(r'(?:aprox\.?|aproximad[oa]s?|~)', re.I)
+
+
+def quantidade_ambigua(titulo):
+    """True quando o peso do título está marcado como aproximado e as duas
+    leituras (preço do item x preço do quilo) dariam resultados diferentes.
+
+    Perto de 1 kg as duas coincidem, então ali não há ambiguidade e a oferta
+    fica: "Tomate Saladete (aprox 1kg)" dá R$/kg igual nos dois sentidos.
+    """
+    if not _PESO_APROXIMADO.search(titulo):
+        return False
+    qtd = extrair_quantidade(titulo)
+    return bool(qtd) and not (900 <= qtd <= 1100)
+
+
 def _contagem_kit(prefixo):
     """Quantas unidades o título anuncia ANTES de dizer a quantidade. Só o
     prefixo é lido de propósito: em "Caldo Tablete Carne Maggi Caixa 114g 12
@@ -631,6 +655,12 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
             motivos.append((titulo, motivo))
             _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
                                 limpar_preco(preco_txt), None, f"produto_invalido: {motivo}")
+            continue
+        if ingrediente["unidade"] in ("g", "ml") and quantidade_ambigua(titulo):
+            rejeitados += 1
+            motivos.append((titulo, "peso aproximado: item ou quilo, o título não diz"))
+            _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
+                                limpar_preco(preco_txt), None, "peso_aproximado_ambiguo")
             continue
         faixa = FAIXA_EMBALAGEM.get(ingrediente["nome"])
         if faixa and ingrediente["unidade"] in ("g", "ml"):
