@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scraper_pf import (extrair_quantidade, extrair_contagem, produto_valido,  # noqa: E402
-                        cortar_decis)
+                        cortar_decis, quantidade_ambigua)
 
 CASOS_CONTAGEM = [
     ("1 dúzia", 12),
@@ -132,8 +132,28 @@ CASOS_DECIL = [
     ([], []),
 ]
 
+# (título, esperado) — peso marcado como aproximado: o número é o peso do ITEM,
+# e o preço costuma ser o do quilo. O mesmo texto significa o contrário conforme
+# o produto (frango x abóbora), então a oferta sai por ambiguidade.
+CASOS_AMBIGUO = [
+    ("Frango Inteiro Resfriado 3kg ( Peso Aproximado)", True),
+    ("Frango Inteiro Congelado Carrefour Classic Aprox. 2,8kg", True),
+    ("Beterraba Kg - Peso Aprox. Un 0,300 kg", True),
+    ("Abóbora Cabotian (Aprox. 2,5 Kg)", True),      # perde uma oferta certa, e tudo bem
+    ("Tomate Saladete (aprox 1kg)", False),          # perto de 1 kg as duas leituras coincidem
+    ("Frango Inteiro Seara 2,5kg", False),           # sem 'aprox', o peso é da embalagem
+    ("Arroz Branco Tipo 1 5kg", False),
+    ("Camarão Cinza Fresco", False),                 # sem peso nenhum
+]
+
+
 def main():
     falhas = 0
+    for titulo, esperado in CASOS_AMBIGUO:
+        obtido = quantidade_ambigua(titulo)
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} ambíguo    {titulo!r} -> {obtido}")
     for titulo, ok, nao, esperado in CASOS_PALAVRA:
         ing = {"palavras_ok": ok, "palavras_nao": nao}
         obtido, motivo = produto_valido(titulo, ing)
@@ -156,7 +176,8 @@ def main():
         ok = obtido == esperado and len(mantidos) + len(cortados) == len(precos)
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} decil      {precos} -> {obtido} (esperado {esperado})")
-    total = len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA) + len(CASOS_DECIL)
+    total = (len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA)
+             + len(CASOS_DECIL) + len(CASOS_AMBIGUO))
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
