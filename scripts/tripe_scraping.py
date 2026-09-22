@@ -203,7 +203,7 @@ TRIPE = {
 
     # ── Ovos ─────────────────────────────────────────────────────────────────
     "Ovo": {
-        "busca": "ovos bandeja 30 unidades", "unidade": "unidade", "peso_ref_g": 55,
+        "busca": "ovo branco 30 unidades", "unidade": "unidade", "peso_ref_g": 55,
         "ok": ["ovo", "ovos"],
         "nao": ["codorna", "chocolate", "páscoa", "desidratado", "porta", "organizador", "kit", "cartela plástica", "suporte", "cartela", "papelão", "papelao", "tampa", "cavidades", "plástico", "plastico", "dispensador", "camadas", "bandejas"]},
 
