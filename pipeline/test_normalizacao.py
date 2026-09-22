@@ -120,11 +120,15 @@ CASOS_PALAVRA = [
     ("Açaí Bioorganico 1kg", ["açaí"], [], True),
 ]
 
-# (preços, esperado_mantidos) — corte dos decis extremos
+# (preços, esperado_mantidos) — corte do decil SUPERIOR apenas.
+# A ponta de baixo deixou de ser cortada em 21/09: ela estava eliminando a
+# oferta de supermercado quando o lote vinha tomado por kit de marketplace
+# (72 casos numa única coleta). Quem protege por baixo agora é o piso do
+# anti-alta, ancorado no histórico do ingrediente.
 CASOS_DECIL = [
-    ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [2, 3, 4, 5, 6, 7, 8, 9]),   # n=10 → 1 de cada ponta
-    ([1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8, 9]),    # n=9  → não corta
-    ([5, 5, 5, 5, 5, 5, 5, 5, 5, 99], [5] * 8),                    # empate cortado 1 a 1
+    ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3, 4, 5, 6, 7, 8, 9]),  # n=10 → só o topo
+    ([1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8, 9]),      # n=9  → não corta
+    ([5, 5, 5, 5, 5, 5, 5, 5, 5, 99], [5] * 9),                      # o caro sai, os iguais ficam
     ([], []),
 ]
 

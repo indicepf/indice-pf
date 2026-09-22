@@ -98,8 +98,13 @@ def main():
         med_ant = {}
         for r in janela:
             for iid, (m, q) in r.items():
-                if q >= AMOSTRA_MIN_REF and (iid not in med_ant or m > med_ant[iid][0]):
-                    med_ant[iid] = (m, q)
+                if q < AMOSTRA_MIN_REF:
+                    continue
+                if iid not in med_ant:
+                    med_ant[iid] = (m, m, q)
+                else:
+                    ma, mi, qq = med_ant[iid]
+                    med_ant[iid] = (max(ma, m), min(mi, m), max(qq, q))
 
         ofertas = ofertas_do_snapshot(sid)
         antes = {p["ingrediente_id"]: (p["mediana_exibicao"], p["qtd_resultados"] or 0, p["label"])

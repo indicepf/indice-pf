@@ -168,8 +168,11 @@ def medianas_coleta_anterior(janela=5):
     e quebraria a Pimenta do reino, cujo valor certo (R$ 299) é justamente o mais
     recente, contra R$ 59,98 de mediana das quatro anteriores.
 
-    Devolve (mediana em R$/g, qtd_resultados da coleta que deu o máximo) — a qtd
-    vai junto porque o chamador ainda exige AMOSTRA_MIN_REF para usar o teto.
+    Devolve (maior, menor, qtd) em R$/g. São dois valores porque teto e piso
+    precisam de âncoras opostas: o teto sai do MAIOR (errar deixando passar) e o
+    piso sai do MENOR (idem). Ancorar os dois no máximo, como fiz na primeira
+    versão, transformava o piso no filtro mais agressivo do pipeline — cortava
+    Repolho a R$ 2,69 e Limão a R$ 6,66, que são preços certos de supermercado.
     """
     hoje = datetime.now().strftime("%Y-%m-%d")
     # data<hoje de propósito: em coleta por blocos o snapshot mais recente é o
@@ -187,16 +190,19 @@ def medianas_coleta_anterior(janela=5):
                      f"&snapshot_id=in.({ids})",
                      headers=SUPA_HEADERS, timeout=30)
     r.raise_for_status()
-    melhor = {}
+    faixa = {}
     for p in r.json():
         iid, med = p["ingrediente_id"], p["mediana_normalizada"]
         qtd = p.get("qtd_resultados") or 0
         if iid is None or med in (None, 0) or qtd < AMOSTRA_MIN_REF:
             continue
         med = float(med)
-        if iid not in melhor or med > melhor[iid][0]:
-            melhor[iid] = (med, qtd)
-    return melhor
+        if iid not in faixa:
+            faixa[iid] = (med, med, qtd)
+        else:
+            maior, menor, q = faixa[iid]
+            faixa[iid] = (max(maior, med), min(menor, med), max(q, qtd))
+    return faixa
 
 
 def carregar_catalogo():
@@ -473,16 +479,28 @@ def filtrar_outliers(precos):
 
 # ─── Corte dos decis extremos ─────────────────────────────────────────────────
 def cortar_decis(resultados, fracao=FRACAO_DECIL):
-    """Descarta os `fracao` menores e os `fracao` maiores preços normalizados do
-    ingrediente. Trabalha sobre os REGISTROS (e não sobre a lista de preços)
-    porque duas ofertas de preço idêntico precisam ser cortadas uma a uma.
-    Retorna (mantidos, cortados); com n < 1/fracao o corte é 0 e nada sai."""
+    """Descarta os `fracao` MAIORES preços normalizados do ingrediente.
+
+    O corte era nas duas pontas e a ponta de baixo estava jogando fora o dado
+    certo: na coleta 46 foram 155 ofertas cortadas, das quais 72 eram de
+    supermercado e mais baratas que TODAS as aceitas — Arroz a R$ 3,29 no
+    Angeloni (mediana ficou 4,84), Cachaça a R$ 22,41 (mediana 45,45), Camarão
+    fresco a R$ 44,98 na Zona Sul (mediana 136,24). Quando o lote está tomado
+    por kit de marketplace, a oferta de supermercado é a mais barata e o corte
+    inferior a elimina por ser minoria, empurrando o índice para cima.
+
+    A ponta de cima continua cortada: é lá que moram kit, embalagem pequena e
+    linha premium. Quem protege a ponta de baixo agora é o piso do anti-alta,
+    ancorado no histórico do próprio ingrediente, e não um quantil cego.
+
+    Trabalha sobre os REGISTROS porque duas ofertas de preço idêntico precisam
+    ser cortadas uma a uma. Retorna (mantidos, cortados)."""
     n = len(resultados)
     k = int(n * fracao)
     if k == 0:
         return resultados, []
     ordenados = sorted(resultados, key=lambda r: r["preco_normalizado"])
-    return ordenados[k:n - k], ordenados[:k] + ordenados[n - k:]
+    return ordenados[:n - k], ordenados[n - k:]
 
 # ─── Mediana ──────────────────────────────────────────────────────────────────
 def mediana(valores):
@@ -655,20 +673,29 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
     #   2. o filtro nunca zera o ingrediente — se ele cortaria TUDO, quem está
     #      errada é a referência, não o mercado.
     ref = (medianas_ant or {}).get(ingrediente["id"])
-    med_ant, n_ant = ref if ref else (None, 0)
+    med_ant, med_min, n_ant = ref if ref else (None, None, 0)
     inflados = 0
     if med_ant and n_ant >= AMOSTRA_MIN_REF:
         teto = med_ant * TETO_ANTI_ALTA
+        # Piso testado e DESCARTADO em 21/09. Com o corte de decil inferior fora,
+        # tentei ancorar um piso no histórico para barrar preço impossível por
+        # baixo (o Feijão preto a R$ 0,45/kg cotado em saco de lixo). Nas duas
+        # ancoragens — maior e menor mediana recente — o piso cortou preço CERTO
+        # de supermercado e afastou o índice da série: razão 1,048 e 1,029 contra
+        # 1,023 sem piso nenhum. Limão ia de R$ 6,66 para 18,12 (série 10,00),
+        # Cebola de 5,99 para 8,99 (série 7,74). Quem barra o saco de lixo é o
+        # filtro de produto, que é onde aquele defeito sempre esteve.
         sobreviventes = [r for r in resultados if r["preco_normalizado"] <= teto]
         if resultados and not sobreviventes:
             print(f"  ⚠️  anti-alta cortaria TODAS as {len(resultados)} ofertas "
-                  f"(teto R${teto * 1000:.2f}/kg vindo da coleta anterior) — "
+                  f"(teto R${teto * 1000:.2f}/kg vindo das coletas anteriores) — "
                   f"referência provavelmente errada, filtro ignorado nesta rodada")
         else:
             for r in resultados:
                 if r["preco_normalizado"] > teto:
                     _registrar_descarte(descartados_out, ingrediente, r["titulo"], r["loja"], r["link"],
-                                        r["preco_bruto"], r["preco_normalizado"], f"alta_50pct: teto R${teto * 1000:.2f}/kg")
+                                        r["preco_bruto"], r["preco_normalizado"],
+                                        f"alta_50pct: teto R${teto * 1000:.2f}/kg")
             inflados = len(resultados) - len(sobreviventes)
             resultados = sobreviventes
             if inflados:
