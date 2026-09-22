@@ -83,6 +83,38 @@ AMOSTRA_MIN_REF = 4
 # 5,6%), corta 42% menos oferta (2.251 contra 3.892) e o nível volta a se mover.
 # Desligar de vez não serve: sem teto nenhum o ruído dobra (23,2% e 10,6%).
 TETO_ANTI_ALTA = 2.0
+# ─── Faixa de embalagem aceita (g ou ml), por ingrediente ────────────────────
+# O preço por quilo de um sachê de 10 g e o de um granel de 1 kg são negócios
+# diferentes, e a mediana não deveria misturar os dois: quando o mix de
+# embalagem da resposta muda, a série se mexe sem o mercado ter mexido. Medido
+# na coleta 46 (terço de embalagem menor contra terço maior, mesmo ingrediente):
+#   Pimenta do reino  sachê 10 g a R$ 299/kg  x  granel 1 kg a R$  77/kg  (3,9x)
+#   Tucupi            500 ml   a R$  45/L     x  4 L      a R$  13/L     (3,5x)
+#   Guariroba         200 g    a R$ 148/kg    x  1,16 kg  a R$  84/kg    (1,8x)
+#   Louro             20 g     a R$ 125/kg    x  500 g    a R$  79/kg    (1,6x)
+# Milho verde e Pimenta fresca tinham viés medido também, mas toda faixa que
+# tentei neles AFASTOU a mediana da série (13,54 -> 18,76 contra 14,67 no milho;
+# 42,00 -> 49,84 contra 41,00 na pimenta). Ficam de fora até haver critério
+# melhor que o meu palpite sobre qual embalagem a casa compra.
+# O critério da faixa é a embalagem que uma casa compra para fazer o prato, que
+# é o que o índice mede — não a mais barata por quilo. Ingrediente fora deste
+# dicionário não tem faixa: só entram os que têm distorção medida.
+FAIXA_EMBALAGEM = {
+    # tempero seco: sachê/pote pequeno, não granel de atacado
+    "Pimenta do reino":   (20, 200),
+    "Louro (folha)":      (5, 100),
+    "Açafrão da terra":   (50, 500),
+    # conserva e polpa
+    "Guariroba":          (150, 700),
+    "Tucupi":             (300, 2000),
+    "Extrato de tomate":  (100, 500),
+    # frios e queijos: peça/pedaço, não fatia de 130 g
+    "Queijo prato":       (300, 1500),
+    "Queijo mussarela":   (300, 1500),
+    "Linguiça calabresa": (300, 1500),
+    # salgadinho de pacote
+    "Batata palha":       (80, 600),
+}
 # Orçamento de tempo do bloco, em minutos (0 = sem limite, padrão local). Ao
 # estourar, o scraper para no ingrediente atual, grava o snapshot com o que já
 # coletou e sai com código 4 — o workflow salva no banco e abre outro bloco, que
@@ -582,6 +614,16 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
             _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
                                 limpar_preco(preco_txt), None, f"produto_invalido: {motivo}")
             continue
+        faixa = FAIXA_EMBALAGEM.get(ingrediente["nome"])
+        if faixa and ingrediente["unidade"] in ("g", "ml"):
+            qtd_emb = extrair_quantidade(titulo)
+            if qtd_emb and not (faixa[0] <= qtd_emb <= faixa[1]):
+                rejeitados += 1
+                motivos.append((titulo, f"embalagem de {qtd_emb:.0f} fora da faixa {faixa}"))
+                _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
+                                    limpar_preco(preco_txt), None,
+                                    f"embalagem_fora_da_faixa: {qtd_emb:.0f} nao esta em {faixa[0]}-{faixa[1]}")
+                continue
         preco = limpar_preco(preco_txt)
         if not preco:
             _registrar_descarte(descartados_out, ingrediente, titulo, loja, link, None, None, "preco_ilegivel")
