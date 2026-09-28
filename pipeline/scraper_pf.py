@@ -262,6 +262,9 @@ _UNIDADES_QTD = [
     (r'kilos?',  1000),
     (r'quilos?', 1000),
     (r'litros?', 1000),
+    # "Leite Longa Vida Nestle Ninho 1lt": o l\b não fecha antes do 't', e o
+    # leite de supermercado da coleta 47 saía como "sem quantidade no título"
+    (r'lts?\b',  1000),
     (r'l\b',     1000),
     (r'ml\b',    1),
     (r'gramas?', 1),
@@ -295,6 +298,14 @@ _KIT_ANTES = re.compile(r'\b(?:kit|leve|combo|pack)\s*(?:c/|com|de)?\s*(\d{1,2})
 # "2 Forma Queijo Muçarela ... 2,5 Kg". Não vale quando esse número JÁ é a
 # quantidade ("8,5 Kg Carne Seca Salgada"), daí o lookahead de unidade.
 _CONTAGEM_INICIO = re.compile(r'^\s*(\d{1,2})\s*x?\s+(?!kg|g\b|ml|l\b|kilos?|quilos?|litros?)[a-zà-ÿ]')
+# Contagem DEPOIS da quantidade, só com marcador explícito de kit ou de "com N
+# unidades": "Pão Francês Panetto 60g Com 4 unidades" (lido R$ 103,83/kg, é
+# R$ 25,96), "Leite Integral Italac 1 l (Cx 12 un)", "Macarrão ... 500g Kit
+# C/26", "Cachaça Pitú 965ml - C/ 4un" (coleta 47). Número solto depois da
+# quantidade continua ignorado: em "Caldo Maggi Caixa 114g 12 Unidades" e
+# "Caldo Maggi 114g C/12 Carne" os 114 g já são o total da caixa.
+_KIT_DEPOIS = re.compile(r'\b(?:kit|pack|fardo|cx|caixa|embalagem|emb\.?)\s*(?:c/|com|de)?\s*(\d{1,2})(?![\d.,])'
+                         r'|(?:\bcom|c/)\s*(\d{1,2})\s*(?:unidades?|unid|und|un)\b')
 
 # Peso "aproximado" no título: o número é o peso do ITEM, não o da embalagem, e
 # o preço anunciado costuma ser o do quilo. O mesmo texto significa o contrário
@@ -320,14 +331,17 @@ def quantidade_ambigua(titulo):
     return bool(qtd) and not (900 <= qtd <= 1100)
 
 
-def _contagem_kit(prefixo):
-    """Quantas unidades o título anuncia ANTES de dizer a quantidade. Só o
-    prefixo é lido de propósito: em "Caldo Tablete Carne Maggi Caixa 114g 12
-    Unidades" os 114 g já são o total da caixa, e multiplicar por 12 quebraria
-    as 6 ofertas de caldo da coleta 45. Contagem escrita depois da quantidade
-    fica como está."""
+def _contagem_kit(prefixo, sufixo=""):
+    """Quantas unidades o título anuncia além da quantidade. No prefixo vale
+    qualquer marcador de kit; no sufixo só os de _KIT_DEPOIS, porque em "Caldo
+    Tablete Carne Maggi Caixa 114g 12 Unidades" os 114 g já são o total da
+    caixa, e multiplicar por 12 quebraria as 6 ofertas de caldo da coleta 45."""
     m = _KIT_ANTES.search(prefixo) or _CONTAGEM_INICIO.search(prefixo)
-    n = int(m.group(1)) if m else 1
+    if m:
+        n = int(m.group(1))
+    else:
+        m = _KIT_DEPOIS.search(sufixo)
+        n = int(m.group(1) or m.group(2)) if m else 1
     return n if n > 1 else 1
 
 def _quantidades_distintas(titulo_lower):
@@ -361,7 +375,7 @@ def extrair_quantidade(titulo):
         m = re.search(r'(\d+[\.,]?\d*)\s*' + unidade, titulo_lower)
         if m:
             valor = float(m.group(1).replace(',', '.'))
-            return valor * multiplicador * _contagem_kit(titulo_lower[:m.start()])
+            return valor * multiplicador * _contagem_kit(titulo_lower[:m.start()], titulo_lower[m.end():])
     # último recurso, só depois de falharem todos os padrões COM número
     if _UNIDADE_SOZINHA.search(titulo_lower):
         return 1000.0
@@ -402,23 +416,22 @@ def limpar_preco(preco_txt):
         return None
 
 # ─── Origem da oferta ────────────────────────────────────────────────────────
-# Anúncio de marketplace é de terceiro, e foi ele que inflou a coleta 46 com kit,
-# embalagem pequena e importado: a participação de marketplace nas observações
-# subiu de 17% (31/08) para 31% (21/09) quando o location quebrou. Nos queijos,
-# onde a diferença entre peça de supermercado e anúncio avulso é grande, a
-# decisão do responsável em 21/09 foi só supermercado — "é melhor e mais
-# confiável". Vale só para os itens listados; no resto o marketplace continua
-# valendo, porque em vários ingredientes ele é a única oferta que existe.
+# Anúncio de marketplace é de terceiro, e é dele que vem quase todo produto
+# errado: kit lido como unidade, semente, embalagem industrial, marca premium.
+# Na coleta 47 o Leite fechava em R$ 11,03/L com kit de marketplace e em
+# R$ 7,44 só com supermercado; o Arroz, 7,44 contra 5,83; o Feijão branco,
+# 19,42 contra 14,90. Decisão do responsável em 28/09: SUPERMERCADO PRIMEIRO —
+# o marketplace só entra quando, depois de todos os filtros, não sobra nenhuma
+# oferta de supermercado (Camarão seco, Pimenta do reino e Pirarucu seco só
+# existem lá). Nos queijos nem assim: só supermercado, decisão de 21/09.
 LOJAS_MARKETPLACE = ("mercado livre", "mercadolivre", "shopee", "magalu",
-                     "ebay", "aliexpress", "amazon")
+                     "ebay", "aliexpress", "amazon", "americanas")
 SO_SUPERMERCADO = {"Queijo prato", "Queijo mussarela"}
 
 
-def loja_aceita(ingrediente, loja):
-    if ingrediente["nome"] not in SO_SUPERMERCADO:
-        return True
+def eh_marketplace(loja):
     l = (loja or "").lower()
-    return not any(m in l for m in LOJAS_MARKETPLACE)
+    return any(m in l for m in LOJAS_MARKETPLACE)
 
 
 # ─── Validação de produto ─────────────────────────────────────────────────────
@@ -631,7 +644,24 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
     replay estaria testando um código diferente do que roda na produção.
 
     Cada item é um dict no formato da SerpAPI: title, price, source, link.
+
+    Supermercado primeiro: roda sem marketplace e só refaz com ele se não sobrou
+    nenhuma oferta (ver LOJAS_MARKETPLACE). Os descartes registrados são os da
+    passada que valeu.
     """
+    descartes = []
+    resultados = _filtrar(ingrediente, itens, medianas_ant, descartes, aceita_marketplace=False)
+    if (not resultados and ingrediente["nome"] not in SO_SUPERMERCADO
+            and any(eh_marketplace(i.get("source")) for i in itens[:MAX_OFERTAS])):
+        print("  ↩️  nenhuma oferta de supermercado sobrou — refazendo com marketplace")
+        descartes = []
+        resultados = _filtrar(ingrediente, itens, medianas_ant, descartes, aceita_marketplace=True)
+    if descartados_out is not None:
+        descartados_out.extend(descartes)
+    return resultados
+
+
+def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketplace):
     resultados, rejeitados, motivos = [], 0, []
     for item in itens[:MAX_OFERTAS]:
         titulo    = item.get("title", "")
@@ -643,7 +673,7 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
             qs = urllib.parse.urlencode({"q": ingrediente["busca"], "tbm": "shop"})
             link = f"https://www.google.com/search?{qs}"
 
-        if not loja_aceita(ingrediente, loja):
+        if not aceita_marketplace and eh_marketplace(loja):
             rejeitados += 1
             motivos.append((titulo, f"loja de marketplace ({loja})"))
             _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
