@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scraper_pf import (extrair_quantidade, extrair_contagem, produto_valido,  # noqa: E402
-                        cortar_decis, quantidade_ambigua)
+                        cortar_decis, quantidade_ambigua, filtrar_ofertas)
 
 CASOS_CONTAGEM = [
     ("1 dúzia", 12),
@@ -74,6 +74,9 @@ CASOS_QUANTIDADE = [
     ("Colorifico 200gr (colorau) -", 200.0),
     ("Feijão de Fava Rajado Preto 1kilo Sofia Magia", 1000.0),
     ("CALDO DE CARNE CART 10X57GR KNORR", 570.0),
+    # 'lt' (coleta 47)
+    ("Leite Longa Vida Nestle Ninho 1lt Integral", 1000.0),
+    ("Leite Lg Vd Ninho 1lt Integral", 1000.0),
     # duas quantidades diferentes sem multipack: embalagem indecidível, sai
     ("COLORAU EXTRA FORTE COLORIFICO 100% 2 kg 1kg 500g 300g COM LAUDO", None),
     ("Bisteca Suína Sadia 540g a 1,020Kg", None),
@@ -83,7 +86,14 @@ CASOS_QUANTIDADE = [
     # multipack explícito decide mesmo com o total repetido no título
     ("Polpa de Açaí 1Kg - 10 pacotes de 100g", 1000.0),
     ("Açaí Médio 11% Polpa 1 Kg (10x100g)", 1000.0),
-    # LIMITE CONHECIDO: contagem escrita DEPOIS da quantidade continua ignorada.
+    # contagem DEPOIS da quantidade, com marcador explícito (coleta 47)
+    ("Pão Francês Panetto 60g Com 4 unidades", 240.0),
+    ("Leite Integral Italac 1 l (Cx 12 un)", 12000.0),
+    ("Macarrão Com Ovos Espaguete N.8 Dona Benta 500g Kit C/26", 13000.0),
+    ("Cachaça Pitú Original Garrafa 965ml - C/ 4un", 3860.0),
+    ("Arroz Branco Camil 1kg Tipo 1 - Kit Com 6 Unidades", 6000.0),
+    ("Macarrão Espaguete c/ Ovos 500g Emb. c/ 24 un. - Dona Benta", 12000.0),
+    # LIMITE CONHECIDO: número solto depois da quantidade continua ignorado.
     # Aqui subconta (são 2 pacotes de 500 g), mas a regra oposta quebraria o
     # caldo Maggi logo acima, onde os 114 g já são o total da caixa. O título
     # não distingue os dois casos.
@@ -118,6 +128,12 @@ CASOS_PALAVRA = [
     # o radical casa por prefixo de palavra ("Orgânicos do Sul", "Organics"),
     # mas não no meio dela
     ("Açaí Bioorganico 1kg", ["açaí"], [], True),
+    # palavra inteira não casa o plural: 'semente' deixava passar "Sementes"
+    # (coleta 47, Abóbora). O plural vai escrito na lista do ingrediente.
+    ("Sementes de Abóbora Híbrida Tetsukabuto Takii (Cabotia) Lata Com 300 Gramas",
+     ["abóbora"], ["semente"], True),
+    ("Sementes de Abóbora Híbrida Tetsukabuto Takii (Cabotia) Lata Com 300 Gramas",
+     ["abóbora"], ["semente", "sementes"], False),
 ]
 
 # (preços, esperado_mantidos) — corte do decil SUPERIOR apenas.
@@ -146,9 +162,26 @@ CASOS_AMBIGUO = [
     ("Camarão Cinza Fresco", False),                 # sem peso nenhum
 ]
 
+# (lojas das ofertas, nome do ingrediente, lojas esperadas nas aceitas) —
+# supermercado primeiro, marketplace só se não sobrar nenhuma (28/09)
+_LEITE = {"id": 1, "nome": "Leite", "busca": "leite", "unidade": "ml", "peso_ref_g": None,
+          "palavras_ok": ["leite"], "palavras_nao": []}
+CASOS_ORIGEM = [
+    (["Angeloni", "Mercado Livre", "Shopee"], "Leite", {"Angeloni"}),
+    (["Mercado Livre", "Shopee"], "Leite", {"Mercado Livre", "Shopee"}),   # só existe marketplace
+    (["Mercado Livre", "Shopee"], "Queijo prato", set()),                 # queijo: nunca marketplace
+]
+
 
 def main():
     falhas = 0
+    for lojas, nome, esperado in CASOS_ORIGEM:
+        ing = {**_LEITE, "nome": nome}
+        itens = [{"title": "Leite Integral 1L", "price": "R$ 5,00", "source": l} for l in lojas]
+        obtido = {r["loja"] for r in filtrar_ofertas(ing, itens)}
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} origem     {nome} {lojas} -> {sorted(obtido)}")
     for titulo, esperado in CASOS_AMBIGUO:
         obtido = quantidade_ambigua(titulo)
         ok = obtido == esperado
@@ -177,7 +210,7 @@ def main():
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} decil      {precos} -> {obtido} (esperado {esperado})")
     total = (len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA)
-             + len(CASOS_DECIL) + len(CASOS_AMBIGUO))
+             + len(CASOS_DECIL) + len(CASOS_AMBIGUO) + len(CASOS_ORIGEM))
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
