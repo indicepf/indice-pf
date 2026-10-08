@@ -7,6 +7,11 @@ on:
     # Obs.: o cron do GitHub é "melhor esforço" — costuma atrasar horas em
     # horários cheios; o dia da coleta é o que importa, não a hora exata.
     - cron: '0 11 * * 1'
+    # Resgate: terça no mesmo horário. Só coleta se a semana ainda não tem
+    # snapshot. Em 05/10 nenhum runner pegou o job de segunda ("not acquired by
+    # Runner ... even after multiple attempts"), o job morreu sem rodar uma linha
+    # e a semana ficou sem coleta até alguém notar.
+    - cron: '0 11 * * 2'
   workflow_dispatch:  # permite rodar manualmente pelo GitHub
     inputs:
       modo:
@@ -30,19 +35,41 @@ jobs:
     timeout-minutes: 150
 
     steps:
+      - name: Resgate de terça — a coleta da semana já existe?
+        id: semana
+        if: github.event.schedule == '0 11 * * 2'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          segunda=$(python3 -c "import datetime as d; t = d.datetime.now(d.timezone.utc).date(); print(t - d.timedelta(days=t.weekday()))")
+          n=$(curl -sf "$SUPABASE_URL/rest/v1/snapshots?select=id&data=gte.$segunda" \
+                -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" \
+              | python3 -c "import sys, json; print(len(json.load(sys.stdin)))")
+          if [ "$n" -gt 0 ]; then
+            echo "pular=1" >> "$GITHUB_OUTPUT"
+            echo "Já existe coleta desde $segunda — nada a fazer."
+          else
+            echo "::warning::Nenhuma coleta desde $segunda — rodando a coleta de resgate."
+          fi
+
       - name: Checkout repositório
+        if: steps.semana.outputs.pular != '1'
         uses: actions/checkout@v4
 
       - name: Configurar Python
+        if: steps.semana.outputs.pular != '1'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Instalar dependências
+        if: steps.semana.outputs.pular != '1'
         run: |
           pip install requests python-dotenv
 
       - name: Coletar e salvar (staging — índice só atualiza após aprovação no admin)
+        if: steps.semana.outputs.pular != '1'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -102,7 +129,7 @@ jobs:
           # Admin → Coleta ("Aprovar coleta e integrar ao índice").
 
       - name: Notificar sucesso
-        if: success()
+        if: success() && steps.semana.outputs.pular != '1'
         run: echo "📋 Coleta em staging — revisar e aprovar em /admin (aba Coleta) para entrar no índice"
 
       - name: Notificar falha
