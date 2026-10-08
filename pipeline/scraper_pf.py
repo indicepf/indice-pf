@@ -548,6 +548,31 @@ def mediana(valores):
     return v[meio] if len(v) % 2 != 0 else (v[meio - 1] + v[meio]) / 2
 
 # ─── Busca via SerpAPI ────────────────────────────────────────────────────────
+def chaves_com_saldo(chaves):
+    """Tira da coleta as contas com saldo zero no mês. A consulta ao /account
+    da SerpAPI não gasta crédito.
+
+    A rotação começa sempre pela conta #1, então ela é a primeira a zerar e fica
+    zerada até a renovação. Zerada, ela contava como "conta que não respondeu" e
+    transformava todo "não encontrado" em falha de busca: a Carne de bode saiu do
+    snapshot de 08/10 assim. Fora da lista, o vazio de todas as contas COM saldo
+    volta a valer como fato de mercado. Conta cujo saldo não deu para ler
+    (rede, chave inválida) fica: o 429/401 continua tratado na própria busca."""
+    ativas = []
+    for n, key in enumerate(chaves, 1):
+        try:
+            saldo = requests.get("https://serpapi.com/account", params={"api_key": key},
+                                 timeout=30).json().get("total_searches_left")
+        except (requests.RequestException, ValueError, AttributeError):
+            saldo = None
+        if saldo == 0:
+            print(f"  ⏭️  conta #{n} sem saldo neste mês — fora desta coleta")
+            continue
+        print(f"  🔑 conta #{n}: {saldo if saldo is not None else 'saldo ilegível'} busca(s) disponível(is)")
+        ativas.append(key)
+    return ativas
+
+
 def _buscar_serp(query):
     """Consulta a SerpAPI, alternando entre as contas quando a cota esgota.
     Retorna o JSON da resposta ou None em caso de falha em todas as chaves."""
@@ -862,6 +887,7 @@ def gravar_snapshot(resumo, todos, descartados, falhas_busca):
 
 
 def main():
+    global SERP_API_KEYS
     print("🍽️  ÍNDICE PF — Scraper (catálogo dinâmico, modelo por prato)")
     print(f"📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     print("=" * 60)
@@ -871,6 +897,8 @@ def main():
     if not catalogo:
         print("✅ Nada pendente para coletar.")
         sys.exit(SAI_NADA_PENDENTE)
+
+    SERP_API_KEYS = chaves_com_saldo(SERP_API_KEYS)
 
     # referência anti-alta: mediana de cada ingrediente na coleta anterior
     # (lida ANTES desta coleta gravar o snapshot novo)
