@@ -58,6 +58,24 @@ def _rodar(respostas):
     return "vazio" if "error" in obtido else "dados"
 
 
+# Ofertas lidas da resposta: lista principal + blocos categorizados ("Opções
+# populares"), sem repetir a oferta que aparece nas duas. (nome, resposta, títulos)
+_A = {"title": "Frango Inteiro Swift Kg", "source": "SS", "price": "R$ 8,50"}
+_B = {"title": "Frango Seara Inteiro Congelado kg", "source": "Muffato", "price": "R$ 11,30"}
+_C = {"title": "Big Chicken 1kg", "source": "Prezunic", "price": "R$ 31,99"}
+CASOS_LISTAS = [
+    ("só lista principal",   {"shopping_results": [_C]}, ["Big Chicken 1kg"]),
+    ("principal + blocos",   {"shopping_results": [_C],
+                              "categorized_shopping_results": [{"shopping_results": [_A]},
+                                                               {"shopping_results": [_B]}]},
+     ["Big Chicken 1kg", _A["title"], _B["title"]]),
+    ("repetida entra 1 vez", {"shopping_results": [_A],
+                              "categorized_shopping_results": [{"shopping_results": [_A, _B]}]},
+     [_A["title"], _B["title"]]),
+    ("só blocos",            {"categorized_shopping_results": [{"shopping_results": [_B]}]}, [_B["title"]]),
+]
+
+
 def main():
     falhas = 0
     for nome, respostas, esperado in CASOS:
@@ -65,7 +83,13 @@ def main():
         ok = obtido == esperado
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} {nome} -> {obtido} (esperado {esperado})")
-    print(f"\n{len(CASOS) - falhas}/{len(CASOS)} casos passaram")
+    for nome, dados, esperado in CASOS_LISTAS:
+        obtido = [i["title"] for i in S.ofertas_da_resposta(dados)]
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} {nome} -> {len(obtido)} oferta(s)")
+    total = len(CASOS) + len(CASOS_LISTAS)
+    print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
 

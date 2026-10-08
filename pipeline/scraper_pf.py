@@ -794,6 +794,26 @@ def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketpla
     return resultados
 
 
+def ofertas_da_resposta(dados):
+    """Ofertas da resposta da SerpAPI: a lista principal + os blocos de
+    categorized_shopping_results (o "Opções populares" do Google Shopping).
+
+    Até 08/10 só a lista principal era lida. Na coleta de 08/10 o Frango inteiro
+    ('frango inteiro congelado kg') trouxe 40 ofertas na principal, só 4 de frango
+    inteiro, e as 15 dos blocos eram quase todas frango inteiro de supermercado:
+    1 válido lendo só a principal, 8 lendo as duas. Mesma chamada, zero crédito.
+    Oferta repetida entre as listas (título + loja + preço) entra uma vez só."""
+    itens = list(dados.get("shopping_results", []))
+    vistos = {(i.get("title"), i.get("source"), i.get("price")) for i in itens}
+    for bloco in dados.get("categorized_shopping_results", []):
+        for item in bloco.get("shopping_results", []):
+            chave = (item.get("title"), item.get("source"), item.get("price"))
+            if chave not in vistos:
+                vistos.add(chave)
+                itens.append(item)
+    return itens
+
+
 def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=None):
     chave = chave_cache(ingrediente)
     if chave in cache:
@@ -810,7 +830,7 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
         # gravar qtd_resultados=0 e mandá-lo para a fila de leitura manual
         print("  ❌ busca falhou (cota/rede) — ingrediente fica FORA deste snapshot")
         return None
-    itens = dados.get("shopping_results", [])
+    itens = ofertas_da_resposta(dados)
     if not itens:
         # grava o vazio no cache do dia: a SerpAPI guarda a própria busca por ~1h
         # e devolve o mesmo vazio instantaneamente, então re-perguntar nos blocos
