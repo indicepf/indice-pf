@@ -76,8 +76,62 @@ CASOS_LISTAS = [
 ]
 
 
+# Contas sem saldo saem da coleta antes da primeira busca. (nome, resposta do
+# /account por conta, contas que ficam). "rede" = a consulta falhou.
+CASOS_SALDO = [
+    ("#1 zerada sai",           [0, 230, 250, 250],        ["k2", "k3", "k4"]),
+    ("saldo ilegível fica",     [0, "rede", 250, "lixo"],  ["k2", "k3", "k4"]),
+    ("todas com saldo ficam",   [5, 1, 250, 250],          ["k1", "k2", "k3", "k4"]),
+    ("todas zeradas: nenhuma",  [0, 0, 0, 0],              []),
+]
+
+
+def _saldo(respostas):
+    seq = list(respostas)
+    original = S.requests.get
+
+    def fake_get(url, params=None, timeout=None):
+        r = seq.pop(0)
+        if r == "rede":
+            raise S.requests.RequestException("timeout")
+        return _Resp(200, {"total_searches_left": r} if isinstance(r, int) else {"error": r})
+
+    S.requests.get = fake_get
+    try:
+        return S.chaves_com_saldo(["k1", "k2", "k3", "k4"])
+    finally:
+        S.requests.get = original
+
+
+def _bode():
+    """O caso de 08/10: #1 zerada, as outras três respondem vazio. Com a #1 fora
+    da lista, o resultado tem de ser 'vazio' (não encontrado), não None (falha)."""
+    chaves = _saldo([0, 250, 250, 250])
+    S.SERP_API_KEYS, S._serp_idx = chaves, 0
+    seq = [VAZIO, VAZIO, VAZIO]
+    original = S.requests.get
+    S.requests.get = lambda url, params=None, timeout=None: _Resp(200, seq.pop(0))
+    try:
+        obtido = S._buscar_serp("carne de bode")
+    finally:
+        S.requests.get = original
+    return "None" if obtido is None else ("vazio" if "error" in obtido else "dados")
+
+
 def main():
     falhas = 0
+    import io
+    import contextlib
+    with contextlib.redirect_stdout(io.StringIO()):
+        saldos = [(nome, _saldo(resp), esp) for nome, resp, esp in CASOS_SALDO]
+        bode = _bode()
+    for nome, obtido, esperado in saldos:
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} {nome} -> {obtido} (esperado {esperado})")
+    ok = bode == "vazio"
+    falhas += 0 if ok else 1
+    print(f"  {'ok ' if ok else 'FALHA'} #1 zerada + 3 vazias -> {bode} (esperado vazio)")
     for nome, respostas, esperado in CASOS:
         obtido = _rodar(respostas)
         ok = obtido == esperado
@@ -88,7 +142,7 @@ def main():
         ok = obtido == esperado
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} {nome} -> {len(obtido)} oferta(s)")
-    total = len(CASOS) + len(CASOS_LISTAS)
+    total = len(CASOS) + len(CASOS_LISTAS) + len(CASOS_SALDO) + 1
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
