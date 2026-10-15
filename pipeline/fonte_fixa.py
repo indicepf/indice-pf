@@ -140,9 +140,30 @@ def _para_float(valor):
     return preco if preco > 0 else None
 
 
+def _preco_woocommerce(texto):
+    """Resposta da API pública da WooCommerce (/wp-json/wc/store/products?slug=...).
+    A página do Sururu na centralfishes não traz preço no HTML (18/09), mas a
+    API da mesma loja traz: 3790 com 2 casas = R$ 37,90 (15/10/2026). Só vale
+    com exatamente um produto na resposta."""
+    try:
+        dados = json.loads(texto)
+    except ValueError:
+        return None
+    if not (isinstance(dados, list) and len(dados) == 1 and isinstance(dados[0], dict)):
+        return None
+    precos = dados[0].get("prices") or {}
+    try:
+        return int(precos["price"]) / 10 ** int(precos.get("currency_minor_unit", 2)) or None
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def ler_preco(html):
     """Primeiro preço utilizável da página, na ordem de confiabilidade.
     Retorna (preço, de onde veio) ou (None, motivo)."""
+    preco = _preco_woocommerce(html)
+    if preco:
+        return preco, "woocommerce"
     # comentário HTML no meio da marcação é comum e separava o preço da unidade
     # ("R$ 47,24<span class=unit> /<!-- -->kg</span>" na fonte da Carne de bode)
     html = re.sub(r'<!--.*?-->', '', html, flags=re.S)
