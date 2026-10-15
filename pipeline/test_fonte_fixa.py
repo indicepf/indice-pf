@@ -42,7 +42,14 @@ POR_QUILO = """<html><head><title>Carne de Carneiro Kg</title></head><body>
 SEM_PRECO = """<html><head><title>Costela de cordeiro</title></head>
 <body><div id="root"></div></body></html>"""
 
+# API da WooCommerce (centralfishes / Sururu): preço em centavos
+WOOCOMMERCE = '[{"name":"Sururu limpo congelado","prices":{"price":"3790","currency_minor_unit":2}}]'
+WOO_VARIOS = ('[{"name":"A","prices":{"price":"3790","currency_minor_unit":2}},'
+              '{"name":"B","prices":{"price":"1000","currency_minor_unit":2}}]')
+
 CASOS = [
+    ("api woocommerce",        WOOCOMMERCE,       37.9,  "woocommerce"),
+    ("woocommerce com 2",      WOO_VARIOS,        None,  None),
     ("produto único",          PRODUTO_UNICO,     5.99,  "jsonld"),
     ("vitrine casa com título", VITRINE,          14.0,  "jsonld"),
     ("vitrine sem casar",      VITRINE_SEM_CASAR, None,  None),

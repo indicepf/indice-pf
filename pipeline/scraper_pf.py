@@ -6,6 +6,8 @@ import sys
 import unicodedata
 from datetime import datetime, timedelta
 
+import supermercados
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -121,6 +123,20 @@ FAIXA_EMBALAGEM = {
 # pega só os pendentes. Sem isso a coleta de 14/09 foi morta pelo timeout do
 # runner aos 30 min e perdeu ~120 chamadas de SerpAPI já pagas.
 DEADLINE_MIN = float(os.getenv("DEADLINE_MIN", "0"))
+# Ofertas lidas direto do catálogo dos supermercados (pipeline/supermercados.py),
+# somadas às da SerpAPI. DESLIGADO por padrão: medido em 15/10/2026 no catálogo
+# inteiro, os filtros por ingrediente foram ajustados ao que o Google devolve e
+# deixam passar o sortimento da loja — ração "Filhotes" no Filhote/Piraíba,
+# creme dental no Hortelã, cachaça no Jambu, salsicha na Linguiça defumada —
+# e a mediana do sortimento inteiro sobe de nível (Cachaça 70,02/L contra 14,76).
+LOJAS_DIRETAS = os.getenv("LOJAS_DIRETAS") == "1"
+# Pula a SerpAPI (zero crédito). Com LOJAS_DIRETAS=1 serve para completar um
+# snapshot só com as lojas: SCRAPE_ONLY=... SCRAPE_MERGE=1.
+SEM_SERPAPI = os.getenv("SEM_SERPAPI") == "1"
+# Itens que a busca do Google nunca acha e que têm fonte fixa: buscar só gasta
+# crédito. Carne de bode: "sem resultados" nas contas #2, #3 e #4 em 12/10/2026,
+# três chamadas por semana para terminar sempre na fonte fixa.
+SO_FONTE_FIXA = {"Carne de bode"}
 # Códigos de saída lidos pelo laço de blocos do workflow.
 SAI_NADA_PENDENTE = 3   # catálogo vazio: nada a coletar, nem snapshot escrito
 SAI_BLOCO_PARCIAL = 4   # parou no orçamento; snapshot escrito, ainda falta item
@@ -677,7 +693,7 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
     descartes = []
     resultados = _filtrar(ingrediente, itens, medianas_ant, descartes, aceita_marketplace=False)
     if (not resultados and ingrediente["nome"] not in SO_SUPERMERCADO
-            and any(eh_marketplace(i.get("source")) for i in itens[:MAX_OFERTAS])):
+            and any(eh_marketplace(i.get("source")) for i in itens)):
         print("  ↩️  nenhuma oferta de supermercado sobrou — refazendo com marketplace")
         descartes = []
         resultados = _filtrar(ingrediente, itens, medianas_ant, descartes, aceita_marketplace=True)
@@ -688,7 +704,7 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
 
 def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketplace):
     resultados, rejeitados, motivos = [], 0, []
-    for item in itens[:MAX_OFERTAS]:
+    for item in itens:
         titulo    = item.get("title", "")
         preco_txt = item.get("price", "")
         loja      = item.get("source", "N/A")
@@ -839,6 +855,14 @@ def ofertas_da_resposta(dados):
     return itens
 
 
+def _junta_lojas(itens, ofertas_lojas):
+    """Soma as ofertas das lojas às da SerpAPI. O Google também lista essas
+    lojas: mesma descrição e mesmo preço contam uma vez só."""
+    vistos = {((i.get("title") or "").lower(), limpar_preco(i.get("price"))) for i in itens}
+    return itens + [o for o in ofertas_lojas
+                    if ((o["title"] or "").lower(), limpar_preco(o["price"])) not in vistos]
+
+
 def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=None):
     chave = chave_cache(ingrediente)
     if chave in cache:
@@ -848,14 +872,19 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
         return cache[chave]
 
     print(f"\n🔍 {ingrediente['nome']} → '{ingrediente['busca']}'")
-    dados = _buscar_serp(ingrediente["busca"])
-    if dados is None:
+    if SEM_SERPAPI or ingrediente["nome"] in SO_FONTE_FIXA:
+        print("  ⏭️  SerpAPI pulada")
+        dados = {}
+    else:
+        dados = _buscar_serp(ingrediente["busca"])
+    lojas = supermercados.ofertas_lojas(ingrediente) if LOJAS_DIRETAS else []
+    if dados is None and not lojas:
         # falha de infraestrutura (cota esgotada/rede), não fato de mercado:
         # None faz o main() deixar o ingrediente FORA do snapshot, em vez de
         # gravar qtd_resultados=0 e mandá-lo para a fila de leitura manual
         print("  ❌ busca falhou (cota/rede) — ingrediente fica FORA deste snapshot")
         return None
-    itens = ofertas_da_resposta(dados)
+    itens = _junta_lojas(ofertas_da_resposta(dados or {})[:MAX_OFERTAS], lojas)
     if not itens:
         # grava o vazio no cache do dia: a SerpAPI guarda a própria busca por ~1h
         # e devolve o mesmo vazio instantaneamente, então re-perguntar nos blocos
@@ -864,7 +893,7 @@ def buscar_ingrediente(ingrediente, cache, medianas_ant=None, descartados_out=No
         cache[chave] = []
         salvar_cache(cache)
         return []
-    print(f"  📥 {len(itens)} ofertas devolvidas pela busca (processando até {MAX_OFERTAS})")
+    print(f"  📥 {len(itens)} ofertas para filtrar")
 
     resultados = filtrar_ofertas(ingrediente, itens, medianas_ant, descartados_out)
     cache[chave] = resultados
@@ -898,7 +927,10 @@ def main():
         print("✅ Nada pendente para coletar.")
         sys.exit(SAI_NADA_PENDENTE)
 
-    SERP_API_KEYS = chaves_com_saldo(SERP_API_KEYS)
+    if not SEM_SERPAPI:
+        SERP_API_KEYS = chaves_com_saldo(SERP_API_KEYS)
+    if LOJAS_DIRETAS:
+        print(f"🏪 Supermercados diretos ligados: {len(supermercados.LOJAS)} lojas")
 
     # referência anti-alta: mediana de cada ingrediente na coleta anterior
     # (lida ANTES desta coleta gravar o snapshot novo)
