@@ -184,8 +184,40 @@ CASOS_SECUNDARIO = [
     ("Alho e Cebola Triturados 200g", ["alho"], True),   # ingrediente antes do conector
 ]
 
+# Peça com peso: a leitura mais perto do nível das coletas anteriores.
+# (título, preço, nível R$/kg do histórico, R$/kg esperado; None = saiu)
+_FILE = {"id": 1, "nome": "Filé mignon", "busca": "filé mignon", "unidade": "g",
+         "palavras_ok": ["filé mignon", "laranja", "frango"], "palavras_nao": []}
+CASOS_PECA = [
+    ("Filé Mignon Sem Cordão Bovino Resfriado 2,1kg", "99,90", 90.0, 99.9),
+    ("Filé Mignon Nelore Carabranca 2,0Kg", "259,60", 115.0, 129.8),
+    ("Laranja Pera Pra Valer 3kg", "13,99", 3.9, 4.66),
+    ("Frango Inteiro Swift 3,3kg", "12,90", 10.0, 12.9),
+    ("Filé Mignon Peça 2,0Kg", "199,80", None, None),          # sem referência nenhuma: sai
+    ("Filé Mignon kg", "99,90", None, 99.9),                   # sem dúvida: fica
+]
+
+
 def main():
     falhas = 0
+    # sem histórico, a referência é a resposta: peixe inteiro 2 kg a R$ 53,98 com
+    # outras ofertas a ~30/kg é o peixe a 26,99/kg, não 53,98
+    tamb = {**_FILE, "palavras_ok": ["tambaqui"]}
+    itens = [{"title": t, "price": p, "source": "Loja"} for t, p in
+             (("Tambaqui Escamado kg", "26,00"), ("Tambaqui eviscerado kg", "30,00"),
+              ("Tambaqui Inteiro Fresco 2kg", "53,98"))]
+    res = [r for r in filtrar_ofertas(tamb, itens) if "Inteiro" in r["titulo"]]
+    obtido = round(res[0]["preco_normalizado"] * 1000, 2) if res else None
+    ok = obtido == 26.99
+    falhas += 0 if ok else 1
+    print(f"  {'ok ' if ok else 'FALHA'} peça       sem histórico, referência da resposta -> {obtido} (esperado 26.99)")
+    for titulo, preco, nivel, esperado in CASOS_PECA:
+        ref = {1: (nivel / 1000, nivel / 1000, 10)} if nivel else {}
+        res = filtrar_ofertas(_FILE, [{"title": titulo, "price": preco, "source": "Loja"}], ref)
+        obtido = round(res[0]["preco_normalizado"] * 1000, 2) if res else None
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} peça       {titulo!r} R$ {preco} -> {obtido} (esperado {esperado})")
     for titulo, ok, esperado in CASOS_SECUNDARIO:
         obtido, motivo = produto_valido(titulo, {"palavras_ok": ok, "palavras_nao": []})
         passou = obtido == esperado
@@ -236,7 +268,7 @@ def main():
         print(f"  {'ok ' if ok else 'FALHA'} decil      {precos} -> {obtido} (esperado {esperado})")
     total = (len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA)
              + len(CASOS_DECIL) + len(CASOS_AMBIGUO) + len(CASOS_ORIGEM)
-             + len(CASOS_SECUNDARIO) + 4)
+             + len(CASOS_SECUNDARIO) + len(CASOS_PECA) + 5)
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
