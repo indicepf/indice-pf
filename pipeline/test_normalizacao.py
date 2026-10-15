@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scraper_pf import (extrair_quantidade, extrair_contagem, produto_valido,  # noqa: E402
-                        cortar_decis, quantidade_ambigua, filtrar_ofertas)
+                        cortar_decis, quantidade_ambigua, filtrar_ofertas, normalizar)
 
 CASOS_CONTAGEM = [
     ("1 dúzia", 12),
@@ -173,8 +173,65 @@ CASOS_ORIGEM = [
 ]
 
 
+# Ingrediente secundário (coleta 49): o produto é outra coisa que leva o ingrediente.
+CASOS_SECUNDARIO = [
+    ("Nhoque com Rúcula e Tomate Seco", ["rúcula"], False),
+    ("PIMENTA COM RÚCULA", ["rúcula"], False),
+    ("Tekitos Queijo e Orégano 300g", ["orégano"], False),
+    ("Cachaça Jabuticaba & Jambu 700ml", ["jambu"], False),
+    ("Rúcula Hidropônica Unidade", ["rúcula"], True),
+    ("Coxa com Sobrecoxa de Frango kg", ["coxa"], True),
+    ("Alho e Cebola Triturados 200g", ["alho"], True),   # ingrediente antes do conector
+]
+
+# Peça com peso: a leitura mais perto do nível das coletas anteriores.
+# (título, preço, nível R$/kg do histórico, R$/kg esperado; None = saiu)
+_FILE = {"id": 1, "nome": "Filé mignon", "busca": "filé mignon", "unidade": "g",
+         "palavras_ok": ["filé mignon", "laranja", "frango"], "palavras_nao": []}
+CASOS_PECA = [
+    ("Filé Mignon Sem Cordão Bovino Resfriado 2,1kg", "99,90", 90.0, 99.9),
+    ("Filé Mignon Nelore Carabranca 2,0Kg", "259,60", 115.0, 129.8),
+    ("Laranja Pera Pra Valer 3kg", "13,99", 3.9, 4.66),
+    ("Frango Inteiro Swift 3,3kg", "12,90", 10.0, 12.9),
+    ("Filé Mignon Peça 2,0Kg", "199,80", None, None),          # sem referência nenhuma: sai
+    ("Filé Mignon kg", "99,90", None, 99.9),                   # sem dúvida: fica
+]
+
+
 def main():
     falhas = 0
+    # sem histórico, a referência é a resposta: peixe inteiro 2 kg a R$ 53,98 com
+    # outras ofertas a ~30/kg é o peixe a 26,99/kg, não 53,98
+    tamb = {**_FILE, "palavras_ok": ["tambaqui"]}
+    itens = [{"title": t, "price": p, "source": "Loja"} for t, p in
+             (("Tambaqui Escamado kg", "26,00"), ("Tambaqui eviscerado kg", "30,00"),
+              ("Tambaqui Inteiro Fresco 2kg", "53,98"))]
+    res = [r for r in filtrar_ofertas(tamb, itens) if "Inteiro" in r["titulo"]]
+    obtido = round(res[0]["preco_normalizado"] * 1000, 2) if res else None
+    ok = obtido == 26.99
+    falhas += 0 if ok else 1
+    print(f"  {'ok ' if ok else 'FALHA'} peça       sem histórico, referência da resposta -> {obtido} (esperado 26.99)")
+    for titulo, preco, nivel, esperado in CASOS_PECA:
+        ref = {1: (nivel / 1000, nivel / 1000, 10)} if nivel else {}
+        res = filtrar_ofertas(_FILE, [{"title": titulo, "price": preco, "source": "Loja"}], ref)
+        obtido = round(res[0]["preco_normalizado"] * 1000, 2) if res else None
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} peça       {titulo!r} R$ {preco} -> {obtido} (esperado {esperado})")
+    for titulo, ok, esperado in CASOS_SECUNDARIO:
+        obtido, motivo = produto_valido(titulo, {"palavras_ok": ok, "palavras_nao": []})
+        passou = obtido == esperado
+        falhas += 0 if passou else 1
+        print(f"  {'ok ' if passou else 'FALHA'} secundário {titulo!r} -> {obtido} ({motivo})")
+    rucula = {"unidade": "maco", "peso_ref_g": 100}
+    for titulo, preco, esperado in (("RUCULA 150G", 19.99, 133.27), ("Rúcula Unidade", 3.99, 39.9),
+                                    ("Solução Nutritiva Rúcula 1000 Litros", 48.34, None),
+                                    ("Rúcula 500g", 20.0, None)):
+        norm = normalizar(preco, titulo, rucula)
+        obtido = round(norm[0] * 1000, 2) if norm else None
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} maço       {titulo!r} -> {obtido} (esperado {esperado})")
     for lojas, nome, esperado in CASOS_ORIGEM:
         ing = {**_LEITE, "nome": nome}
         itens = [{"title": "Leite Integral 1L", "price": "R$ 5,00", "source": l} for l in lojas]
@@ -210,7 +267,8 @@ def main():
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} decil      {precos} -> {obtido} (esperado {esperado})")
     total = (len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA)
-             + len(CASOS_DECIL) + len(CASOS_AMBIGUO) + len(CASOS_ORIGEM))
+             + len(CASOS_DECIL) + len(CASOS_AMBIGUO) + len(CASOS_ORIGEM)
+             + len(CASOS_SECUNDARIO) + len(CASOS_PECA) + 5)
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)

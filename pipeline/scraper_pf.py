@@ -1,6 +1,7 @@
 import requests
 import re
 import json
+import math
 import os
 import sys
 import unicodedata
@@ -116,6 +117,14 @@ FAIXA_EMBALAGEM = {
     "Linguiça calabresa": (300, 1500),
     # salgadinho de pacote
     "Batata palha":       (80, 600),
+    # revisão de 15/10/2026: a mediana pulava com o mix de embalagem da semana
+    # (Palmito 31 -> 69 com lata de 1,8 kg x vidro de 300 g; Mostarda 18 -> 181
+    # com galão de 2,9 kg x Dijon de 215 g; Orégano com sachê de 7 g)
+    "Palmito":            (250, 600),
+    "Mostarda":           (150, 500),
+    "Orégano":            (40, 250),
+    "Colorau/Urucum":     (50, 500),
+    "Cominho":            (30, 500),
 }
 # Orçamento de tempo do bloco, em minutos (0 = sem limite, padrão local). Ao
 # estourar, o scraper para no ingrediente atual, grava o snapshot com o que já
@@ -334,6 +343,28 @@ _KIT_DEPOIS = re.compile(r'\b(?:kit|pack|fardo|cx|caixa|embalagem|emb\.?)\s*(?:c
 _PESO_APROXIMADO = re.compile(r'(?:aprox\.?|aproximad[oa]s?|~)', re.I)
 
 
+def peso_de_peca(titulo):
+    """Peso acima de 1,1 kg escrito como peso de UMA peça (sem kit, sem N x Q,
+    sem "preço do kg"). Nesse título o preço pode ser da peça ou do quilo, e a
+    mesma loja faz dos dois jeitos (Pão de Açúcar/Extra, coletas 41-49):
+      "Filé Mignon Sem Cordão Bovino Resfriado 2,1kg" R$ 99,90 -> quilo
+      "Frango Inteiro Swift 3,3kg"                    R$ 12,90 -> quilo
+      "Laranja Pera Pra Valer 3kg"                    R$ 13,99 -> saco
+      "Costela De Cordeiro Guidara Congelado 2kg"     R$ 109,99 -> peça
+    Lido sempre como peça, o quilo do filé virava 47,57 e saía como outlier, e
+    sobrava o corte premium. Devolve o peso em g ou None."""
+    t = titulo.lower()
+    if _PRECO_POR_QUILO.search(t) or re.search(_MULTIPACK + r'\d', t):
+        return None
+    qtd = extrair_quantidade(titulo)
+    if not qtd or qtd <= 1100:
+        return None
+    m = re.search(r'(\d+[\.,]?\d*)\s*(?:kg|kilos?|quilos?|lts?\b|l\b|litros?)', t)
+    if not m or _contagem_kit(t[:m.start()], t[m.end():]) > 1:
+        return None
+    return qtd
+
+
 def quantidade_ambigua(titulo):
     """True quando o peso do título está marcado como aproximado e as duas
     leituras (preço do item x preço do quilo) dariam resultados diferentes.
@@ -441,7 +472,9 @@ def limpar_preco(preco_txt):
 # oferta de supermercado (Camarão seco, Pimenta do reino e Pirarucu seco só
 # existem lá). Nos queijos nem assim: só supermercado, decisão de 21/09.
 LOJAS_MARKETPLACE = ("mercado livre", "mercadolivre", "shopee", "magalu",
-                     "ebay", "aliexpress", "amazon", "americanas")
+                     "ebay", "aliexpress", "amazon", "americanas",
+                     # Leite do 48: caixa com 12 a R$ 13,16/L em Casas Bahia e Pontofrio
+                     "casas bahia", "pontofrio", "ponto frio")
 SO_SUPERMERCADO = {"Queijo prato", "Queijo mussarela"}
 
 
@@ -473,6 +506,22 @@ def _casa_radical(radical, texto_sem_acento):
     return re.search(rf'(?<![0-9a-z]){radical}[a-z]*(?![0-9a-z])', texto_sem_acento) is not None
 
 
+# O ingrediente aparece só DEPOIS de um conector: o produto é outra coisa que o
+# leva. Coleta 49 (12/10/2026): "Nhoque com Rúcula", "Brisket com salada de
+# rúcula", "PIMENTA COM RÚCULA", "Tekitos Queijo e Orégano", "Polpa Abacaxi com
+# Hortelã", "Cachaça Jabuticaba & Jambu". palavras_nao por item nunca fecha essa
+# lista; a posição da palavra fecha.
+_CONECTOR = re.compile(r'\s(?:com|c/|sabor|&|e)\s')
+
+
+def ingrediente_secundario(titulo_lower, palavras_ok):
+    m = _CONECTOR.search(titulo_lower)
+    if not m:
+        return False
+    posicoes = [titulo_lower.find(p.lower()) for p in palavras_ok if p.lower() in titulo_lower]
+    return min(posicoes) > m.start()
+
+
 def produto_valido(titulo, ingrediente):
     titulo_lower = titulo.lower()
     for palavra in PALAVRAS_NAO_GLOBAIS:
@@ -484,6 +533,8 @@ def produto_valido(titulo, ingrediente):
             return False, f"global '{radical}*'"
     if not any(p.lower() in titulo_lower for p in ingrediente["palavras_ok"]):
         return False, "produto fora do escopo"
+    if ingrediente_secundario(titulo_lower, ingrediente["palavras_ok"]):
+        return False, "ingrediente secundário"
     for palavra in ingrediente["palavras_nao"]:
         if _casa_palavra(palavra, titulo_lower):
             return False, f"contém '{palavra}'"
@@ -509,6 +560,17 @@ def normalizar(preco, titulo, ing):
         label = "kg" if u == "g" else "L"
         exib  = f"R$ {norm * 1000:.2f}/{label}"
         return norm, exib, label
+    # maço com peso escrito vale pelo peso: "RUCULA 150G" a R$ 19,99 era lido
+    # como 1 maço de 100 g (R$ 199,90/kg); são R$ 133,27/kg (coleta 49). Peso
+    # acima de 3 maços é outro produto: "MANJERICAO 1KG" a R$ 30 é erva seca a
+    # granel, e "Solução Nutritiva Rúcula 1000 Litros" nem alimento é.
+    if u == "maco":
+        qtd = extrair_quantidade(titulo)
+        if qtd:
+            if qtd > 3 * (ing.get("peso_ref_g") or 0):
+                return None
+            norm = preco / qtd
+            return norm, f"R$ {norm * 1000:.2f}/kg", "kg"
     # 'unidade' (ovo) ou 'maco' (folhas): preço por unidade/maço ÷ peso de ref.
     peso = ing.get("peso_ref_g")
     if not peso:
@@ -703,7 +765,7 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
 
 
 def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketplace):
-    resultados, rejeitados, motivos = [], 0, []
+    resultados, rejeitados, motivos, pecas = [], 0, [], []
     for item in itens:
         titulo    = item.get("title", "")
         preco_txt = item.get("price", "")
@@ -752,6 +814,9 @@ def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketpla
             _registrar_descarte(descartados_out, ingrediente, titulo, loja, link, preco, None, "sem_quantidade_no_titulo")
             continue
         preco_norm, exibicao, _label = norm
+        if ingrediente["unidade"] in ("g", "ml") and peso_de_peca(titulo):
+            pecas.append((titulo, preco, loja, link, preco_norm, _label))
+            continue
 
         resultados.append({
             "ingrediente_id":    ingrediente["id"],
@@ -760,6 +825,39 @@ def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketpla
             "preco_bruto":       preco,
             "preco_normalizado": preco_norm,
             "exibicao":          exibicao,
+            "loja":              loja,
+            "link":              link,
+        })
+
+    # Peça com peso: leitura (peça ou quilo) mais perto do nível do item nas
+    # coletas anteriores (média geométrica da maior e da menor mediana recente).
+    # O histórico só escolhe entre as duas leituras, não corta: para errar,
+    # teria de estar fora por mais que a raiz do peso. Testado em 15/10 com a
+    # mediana da PRÓPRIA resposta como referência principal e descartado: com
+    # corte premium na resposta, a peça de boutique virava preço do quilo. Ela
+    # fica só para item sem histórico (Tambaqui do 41: sem ela, saía o peixe
+    # inteiro e sobravam meia banda e costela). Sem nenhuma referência, sai.
+    ref = (medianas_ant or {}).get(ingrediente["id"])
+    if ref and ref[2] >= AMOSTRA_MIN_REF:
+        nivel = math.sqrt(ref[0] * ref[1])
+    else:
+        nivel = mediana([r["preco_normalizado"] for r in resultados])
+    for titulo, preco, loja, link, por_peca, label in pecas:
+        if not nivel:
+            rejeitados += 1
+            motivos.append((titulo, "peso de peça sem referência para decidir peça x quilo"))
+            _registrar_descarte(descartados_out, ingrediente, titulo, loja, link, preco, None,
+                                "peso_da_peca_sem_referencia")
+            continue
+        por_quilo = preco / 1000
+        norm = por_quilo if abs(math.log(por_quilo / nivel)) < abs(math.log(por_peca / nivel)) else por_peca
+        resultados.append({
+            "ingrediente_id":    ingrediente["id"],
+            "ingrediente":       ingrediente["nome"],
+            "titulo":            titulo,
+            "preco_bruto":       preco,
+            "preco_normalizado": norm,
+            "exibicao":          f"R$ {norm * 1000:.2f}/{label}",
             "loja":              loja,
             "link":              link,
         })
