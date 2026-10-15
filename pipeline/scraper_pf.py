@@ -473,6 +473,22 @@ def _casa_radical(radical, texto_sem_acento):
     return re.search(rf'(?<![0-9a-z]){radical}[a-z]*(?![0-9a-z])', texto_sem_acento) is not None
 
 
+# O ingrediente aparece só DEPOIS de um conector: o produto é outra coisa que o
+# leva. Coleta 49 (12/10/2026): "Nhoque com Rúcula", "Brisket com salada de
+# rúcula", "PIMENTA COM RÚCULA", "Tekitos Queijo e Orégano", "Polpa Abacaxi com
+# Hortelã", "Cachaça Jabuticaba & Jambu". palavras_nao por item nunca fecha essa
+# lista; a posição da palavra fecha.
+_CONECTOR = re.compile(r'\s(?:com|c/|sabor|&|e)\s')
+
+
+def ingrediente_secundario(titulo_lower, palavras_ok):
+    m = _CONECTOR.search(titulo_lower)
+    if not m:
+        return False
+    posicoes = [titulo_lower.find(p.lower()) for p in palavras_ok if p.lower() in titulo_lower]
+    return min(posicoes) > m.start()
+
+
 def produto_valido(titulo, ingrediente):
     titulo_lower = titulo.lower()
     for palavra in PALAVRAS_NAO_GLOBAIS:
@@ -484,6 +500,8 @@ def produto_valido(titulo, ingrediente):
             return False, f"global '{radical}*'"
     if not any(p.lower() in titulo_lower for p in ingrediente["palavras_ok"]):
         return False, "produto fora do escopo"
+    if ingrediente_secundario(titulo_lower, ingrediente["palavras_ok"]):
+        return False, "ingrediente secundário"
     for palavra in ingrediente["palavras_nao"]:
         if _casa_palavra(palavra, titulo_lower):
             return False, f"contém '{palavra}'"
@@ -509,6 +527,17 @@ def normalizar(preco, titulo, ing):
         label = "kg" if u == "g" else "L"
         exib  = f"R$ {norm * 1000:.2f}/{label}"
         return norm, exib, label
+    # maço com peso escrito vale pelo peso: "RUCULA 150G" a R$ 19,99 era lido
+    # como 1 maço de 100 g (R$ 199,90/kg); são R$ 133,27/kg (coleta 49). Peso
+    # acima de 3 maços é outro produto: "MANJERICAO 1KG" a R$ 30 é erva seca a
+    # granel, e "Solução Nutritiva Rúcula 1000 Litros" nem alimento é.
+    if u == "maco":
+        qtd = extrair_quantidade(titulo)
+        if qtd:
+            if qtd > 3 * (ing.get("peso_ref_g") or 0):
+                return None
+            norm = preco / qtd
+            return norm, f"R$ {norm * 1000:.2f}/kg", "kg"
     # 'unidade' (ovo) ou 'maco' (folhas): preço por unidade/maço ÷ peso de ref.
     peso = ing.get("peso_ref_g")
     if not peso:

@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scraper_pf import (extrair_quantidade, extrair_contagem, produto_valido,  # noqa: E402
-                        cortar_decis, quantidade_ambigua, filtrar_ofertas)
+                        cortar_decis, quantidade_ambigua, filtrar_ofertas, normalizar)
 
 CASOS_CONTAGEM = [
     ("1 dúzia", 12),
@@ -173,8 +173,33 @@ CASOS_ORIGEM = [
 ]
 
 
+# Ingrediente secundário (coleta 49): o produto é outra coisa que leva o ingrediente.
+CASOS_SECUNDARIO = [
+    ("Nhoque com Rúcula e Tomate Seco", ["rúcula"], False),
+    ("PIMENTA COM RÚCULA", ["rúcula"], False),
+    ("Tekitos Queijo e Orégano 300g", ["orégano"], False),
+    ("Cachaça Jabuticaba & Jambu 700ml", ["jambu"], False),
+    ("Rúcula Hidropônica Unidade", ["rúcula"], True),
+    ("Coxa com Sobrecoxa de Frango kg", ["coxa"], True),
+    ("Alho e Cebola Triturados 200g", ["alho"], True),   # ingrediente antes do conector
+]
+
 def main():
     falhas = 0
+    for titulo, ok, esperado in CASOS_SECUNDARIO:
+        obtido, motivo = produto_valido(titulo, {"palavras_ok": ok, "palavras_nao": []})
+        passou = obtido == esperado
+        falhas += 0 if passou else 1
+        print(f"  {'ok ' if passou else 'FALHA'} secundário {titulo!r} -> {obtido} ({motivo})")
+    rucula = {"unidade": "maco", "peso_ref_g": 100}
+    for titulo, preco, esperado in (("RUCULA 150G", 19.99, 133.27), ("Rúcula Unidade", 3.99, 39.9),
+                                    ("Solução Nutritiva Rúcula 1000 Litros", 48.34, None),
+                                    ("Rúcula 500g", 20.0, None)):
+        norm = normalizar(preco, titulo, rucula)
+        obtido = round(norm[0] * 1000, 2) if norm else None
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} maço       {titulo!r} -> {obtido} (esperado {esperado})")
     for lojas, nome, esperado in CASOS_ORIGEM:
         ing = {**_LEITE, "nome": nome}
         itens = [{"title": "Leite Integral 1L", "price": "R$ 5,00", "source": l} for l in lojas]
@@ -210,7 +235,8 @@ def main():
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} decil      {precos} -> {obtido} (esperado {esperado})")
     total = (len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA)
-             + len(CASOS_DECIL) + len(CASOS_AMBIGUO) + len(CASOS_ORIGEM))
+             + len(CASOS_DECIL) + len(CASOS_AMBIGUO) + len(CASOS_ORIGEM)
+             + len(CASOS_SECUNDARIO) + 4)
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
