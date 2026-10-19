@@ -1202,7 +1202,7 @@ export async function getSeriePratos(): Promise<SeriePratos> {
 }
 
 // preço por ingrediente × região (tabela "produtos por região" da home).
-// Online = mediana nacional da coleta (label próprio). Campo = R$/kg por
+// Online = mediana nacional da coleta (label próprio); sem oferta, preço da fonte fixa. Campo = R$/kg por
 // região a partir das contribuições aprovadas (itens por unidade/maço
 // convertidos pelo peso de referência) — célula vazia onde não há dado (D7).
 export type ProdutoRegiao = {
@@ -1214,7 +1214,7 @@ export type ProdutoRegiao = {
 export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoRegiao[]> {
   const [precos, ingsQ, contribs, receitas] = await Promise.all([
     supabase.from('precos').select('ingrediente_id,nome_ingrediente,mediana_exibicao,label').eq('snapshot_id', snapshotId),
-    supabase.from('ingredientes').select('id,unidade,peso_ref_g'),
+    supabase.from('ingredientes').select('id,unidade,peso_ref_g,preco_manual'),
     fetchAll(() => supabase.from('contribuicoes').select('ingrediente_id,preco,peso_g,regiao,uf').eq('status', 'aprovada')),
     fetchAll(() => supabase.from('receitas').select('ingrediente_id,qtd_pb_g,qtd_cozida_g').order('id')),
   ])
@@ -1244,9 +1244,12 @@ export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoReg
       const vals = porIngReg[key]
       campo[regiao] = { valor: mediana(vals), n: vals.length }
     }
+    // sem oferta do scraper na coleta: usa o preço da fonte fixa (também online nacional)
+    const man = ing.get(p.ingrediente_id)?.preco_manual
+    const online = p.mediana_exibicao != null ? Number(p.mediana_exibicao) : man != null ? Number(man) : null
     return {
       id: p.ingrediente_id, nome: p.nome_ingrediente, label: p.label,
-      online: p.mediana_exibicao != null ? Number(p.mediana_exibicao) : null, campo,
+      online, campo,
       fc: fcAgg[p.ingrediente_id]?.length ? mediana(fcAgg[p.ingrediente_id]) : 1,
     }
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
