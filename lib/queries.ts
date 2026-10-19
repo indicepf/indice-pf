@@ -1202,7 +1202,7 @@ export async function getSeriePratos(): Promise<SeriePratos> {
 }
 
 // preço por ingrediente × região (tabela "produtos por região" da home).
-// Online = mediana nacional da coleta (label próprio); sem oferta, preço da fonte fixa. Campo = R$/kg por
+// Online = preço nacional usado no índice: mediana da coleta e fonte fixa (média quando há os dois). Campo = R$/kg por
 // região a partir das contribuições aprovadas (itens por unidade/maço
 // convertidos pelo peso de referência) — célula vazia onde não há dado (D7).
 export type ProdutoRegiao = {
@@ -1244,9 +1244,11 @@ export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoReg
       const vals = porIngReg[key]
       campo[regiao] = { valor: mediana(vals), n: vals.length }
     }
-    // sem oferta do scraper na coleta: usa o preço da fonte fixa (também online nacional)
+    // mesmo preço do índice (integrar_snapshot): média de scraper e fonte fixa quando há os dois
     const man = ing.get(p.ingrediente_id)?.preco_manual
-    const online = p.mediana_exibicao != null ? Number(p.mediana_exibicao) : man != null ? Number(man) : null
+    const o = p.mediana_exibicao != null ? Number(p.mediana_exibicao) : null
+    const m = man != null ? Number(man) : null
+    const online = o != null && m != null ? (o + m) / 2 : (o ?? m)
     return {
       id: p.ingrediente_id, nome: p.nome_ingrediente, label: p.label,
       online, campo,
