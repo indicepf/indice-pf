@@ -158,12 +158,34 @@ def _preco_woocommerce(texto):
         return None
 
 
+def _preco_vtex(texto):
+    """Resposta da API pública de catálogo da VTEX
+    (/api/catalog_system/pub/products/search/<slug>/p). Mercantil (Carne de sol)
+    e Bemol (Tucupi) montam a página no navegador e o HTML não traz preço; a API
+    da mesma loja traz (19/10/2026). Item vendido por kg vem com o preço do kg.
+    Só vale com exatamente um produto na resposta."""
+    try:
+        dados = json.loads(texto)
+    except ValueError:
+        return None
+    if not (isinstance(dados, list) and len(dados) == 1 and isinstance(dados[0], dict)):
+        return None
+    try:
+        oferta = dados[0]["items"][0]["sellers"][0]["commertialOffer"]
+        return float(oferta["Price"]) or None
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+
+
 def ler_preco(html):
     """Primeiro preço utilizável da página, na ordem de confiabilidade.
     Retorna (preço, de onde veio) ou (None, motivo)."""
     preco = _preco_woocommerce(html)
     if preco:
         return preco, "woocommerce"
+    preco = _preco_vtex(html)
+    if preco:
+        return preco, "vtex"
     # comentário HTML no meio da marcação é comum e separava o preço da unidade
     # ("R$ 47,24<span class=unit> /<!-- -->kg</span>" na fonte da Carne de bode)
     html = re.sub(r'<!--.*?-->', '', html, flags=re.S)
