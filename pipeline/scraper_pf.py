@@ -128,7 +128,11 @@ FAIXA_EMBALAGEM = {
     # (Palmito 31 -> 69 com lata de 1,8 kg x vidro de 300 g; Mostarda 18 -> 181
     # com galão de 2,9 kg x Dijon de 215 g; Orégano com sachê de 7 g)
     "Palmito":            (250, 600),
-    "Mostarda":           (150, 500),
+    # 19/10/2026: embalagem de restaurante (bisnaga/pote de 700 g a 1 kg) com a
+    # busca "mostarda amarela 1kg". Com a busca antiga a resposta mudava de mix
+    # toda semana: sachê de 200 g a 15–45/kg, marca cara de 170–375 g a 40–85,
+    # Hemmer de 700 g–1 kg a 24–30. Replay do 50 com esta faixa: 23,99 (n=11).
+    "Mostarda":           (500, 1100),
     "Orégano":            (40, 250),
     "Colorau/Urucum":     (50, 500),
     "Cominho":            (30, 500),
@@ -485,7 +489,9 @@ LOJAS_MARKETPLACE = ("mercado livre", "mercadolivre", "shopee", "magalu",
 # 19/10/2026: Carne de sol (marketplace a 73–170/kg contra 42–52 no atacarejo)
 # e Tucupi (35–39/L contra 15/L na Bemol). Sem oferta de supermercado na
 # semana, entra a fonte fixa (Mercantil e Bemol, API de catálogo).
-SO_SUPERMERCADO = {"Queijo prato", "Queijo mussarela", "Carne de sol", "Tucupi"}
+# Mostarda idem (marketplace a 51–61/kg contra ~25 no supermercado; fonte fixa
+# Prezunic, Hemmer 1 kg).
+SO_SUPERMERCADO = {"Queijo prato", "Queijo mussarela", "Carne de sol", "Tucupi", "Mostarda"}
 
 
 def eh_marketplace(loja):
