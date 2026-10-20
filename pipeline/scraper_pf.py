@@ -115,8 +115,15 @@ FAIXA_EMBALAGEM = {
     "Queijo prato":       (300, 1500),
     "Queijo mussarela":   (300, 1500),
     "Linguiça calabresa": (300, 1500),
-    # salgadinho de pacote
-    "Batata palha":       (80, 600),
+    # salgadinho de pacote; 19/10/2026: só pacote de 500 g a 1 kg (decisão do
+    # responsável: os menores não fazem sentido para restaurante)
+    "Batata palha":       (500, 1000),
+    # 19/10/2026: pacote de 300 g da Banca do Ramon saía a 123/kg contra 68–80
+    # do pacote de 1 kg (coletas 46, 48–50); galão de 10 kg também fora
+    "Camarão seco":       (500, 1500),
+    # 19/10/2026: pacote de 500 g de loja pequena a 73,50/kg (coletas 48–49)
+    # contra 42–52 do quilo no atacarejo
+    "Carne de sol":       (1000, 5000),
     # revisão de 15/10/2026: a mediana pulava com o mix de embalagem da semana
     # (Palmito 31 -> 69 com lata de 1,8 kg x vidro de 300 g; Mostarda 18 -> 181
     # com galão de 2,9 kg x Dijon de 215 g; Orégano com sachê de 7 g)
@@ -475,7 +482,10 @@ LOJAS_MARKETPLACE = ("mercado livre", "mercadolivre", "shopee", "magalu",
                      "ebay", "aliexpress", "amazon", "americanas",
                      # Leite do 48: caixa com 12 a R$ 13,16/L em Casas Bahia e Pontofrio
                      "casas bahia", "pontofrio", "ponto frio")
-SO_SUPERMERCADO = {"Queijo prato", "Queijo mussarela"}
+# 19/10/2026: Carne de sol (marketplace a 73–170/kg contra 42–52 no atacarejo)
+# e Tucupi (35–39/L contra 15/L na Bemol). Sem oferta de supermercado na
+# semana, entra a fonte fixa (Mercantil e Bemol, API de catálogo).
+SO_SUPERMERCADO = {"Queijo prato", "Queijo mussarela", "Carne de sol", "Tucupi"}
 
 
 def eh_marketplace(loja):

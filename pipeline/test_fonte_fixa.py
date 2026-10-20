@@ -47,8 +47,16 @@ WOOCOMMERCE = '[{"name":"Sururu limpo congelado","prices":{"price":"3790","curre
 WOO_VARIOS = ('[{"name":"A","prices":{"price":"3790","currency_minor_unit":2}},'
               '{"name":"B","prices":{"price":"1000","currency_minor_unit":2}}]')
 
+# API de catálogo da VTEX (bemol / Tucupi, mercantilatacado / Carne de sol)
+VTEX = ('[{"productName":"Molho Tucupi Virrosas 500ml","items":[{"measurementUnit":"un",'
+        '"sellers":[{"commertialOffer":{"Price":7.89}}]}]}]')
+VTEX_VARIOS = ('[{"items":[{"sellers":[{"commertialOffer":{"Price":7.89}}]}]},'
+               '{"items":[{"sellers":[{"commertialOffer":{"Price":10.19}}]}]}]')
+
 CASOS = [
     ("api woocommerce",        WOOCOMMERCE,       37.9,  "woocommerce"),
+    ("api vtex",               VTEX,              7.89,  "vtex"),
+    ("vtex com 2",             VTEX_VARIOS,       None,  None),
     ("woocommerce com 2",      WOO_VARIOS,        None,  None),
     ("produto único",          PRODUTO_UNICO,     5.99,  "jsonld"),
     ("vitrine casa com título", VITRINE,          14.0,  "jsonld"),

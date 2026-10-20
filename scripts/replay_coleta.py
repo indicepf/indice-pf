@@ -91,8 +91,10 @@ def ofertas_do_snapshot(snap_id, runs=None):
 
 
 def medianas_de(snap_id):
-    """(mediana R$/g, qtd) por ingrediente — referência anti-alta do snapshot dado."""
-    return {p["ingrediente_id"]: (float(p["mediana_normalizada"]), p.get("qtd_resultados") or 0)
+    """(maior, menor, qtd) por ingrediente, no formato de medianas_coleta_anterior
+    do scraper — aqui maior = menor = a mediana do snapshot dado."""
+    return {p["ingrediente_id"]: (float(p["mediana_normalizada"]), float(p["mediana_normalizada"]),
+                                  p.get("qtd_resultados") or 0)
             for p in get_all("precos", "ingrediente_id,mediana_normalizada,qtd_resultados",
                              f"&snapshot_id=eq.{snap_id}&mediana_normalizada=not.is.null"
                              "&ingrediente_id=not.is.null")}
