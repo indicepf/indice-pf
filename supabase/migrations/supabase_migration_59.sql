@@ -23,6 +23,7 @@ end $$;
 
 alter table dish_cost_components disable trigger trg_dcc_append_only;
 alter table shadow_publicacoes   disable trigger trg_shadow_pub_append_only;
+alter table price_observations   disable trigger user;
 
 delete from dish_cost_components where snapshot_id <= 31;
 delete from shadow_publicacoes   where snapshot_id <= 31;
@@ -35,5 +36,6 @@ delete from snapshots            where id <= 31;
 
 alter table dish_cost_components enable trigger trg_dcc_append_only;
 alter table shadow_publicacoes   enable trigger trg_shadow_pub_append_only;
+alter table price_observations   enable trigger user;
 
 commit;
