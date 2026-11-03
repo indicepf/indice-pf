@@ -1,8 +1,8 @@
 """Releitura da fonte fixa dos ingredientes que a coleta não achou.
 
 Roda DEPOIS de salvar_supabase.py. Para cada ingrediente ativo que tem
-`fonte_fixa_url` e fechou o último snapshot sem nenhuma oferta
-(qtd_resultados = 0 ou sem linha em precos), abre a página, lê o preço,
+`fonte_fixa_url` e fechou o último snapshot com menos de AMOSTRA_MIN ofertas
+(sem linha em precos conta como zero), abre a página, lê o preço,
 converte para R$/kg com `fonte_fixa_qtd_g` e grava uma LEITURA MANUAL em
 precos_manuais_hist com origem 'link'.
 
@@ -47,6 +47,10 @@ TIMEOUT = 45
 # conhece — se o número saiu dessa faixa, ou a página mudou de produto ou o
 # extrator pegou o campo errado, e nos dois casos é caso de olhar, não de gravar.
 RAZAO_MIN, RAZAO_MAX = 1 / 3, 3.0
+# Abaixo disso a mediana online é uma ou duas ofertas soltas: na coleta 52
+# (02/11/2026) Siri e Filhote fecharam com 1 oferta cada (120,00 e 75,90/kg) e
+# a fonte fixa não rodou. Com a leitura, o custo entra no blend manual×online.
+AMOSTRA_MIN = 3
 
 
 def _get(caminho):
@@ -249,7 +253,8 @@ def main():
         return
     snapshot_id, data = snaps[0]["id"], snaps[0]["data"]
     com_oferta = {p["ingrediente_id"] for p in
-                  _get(f"precos?select=ingrediente_id&snapshot_id=eq.{snapshot_id}&qtd_resultados=gt.0")}
+                  _get(f"precos?select=ingrediente_id&snapshot_id=eq.{snapshot_id}"
+                       f"&qtd_resultados=gte.{AMOSTRA_MIN}")}
 
     print(f"Fonte fixa — coleta de {data} (snapshot {snapshot_id}){' [DRY RUN]' if DRY else ''}")
     lidos = pulados = falhas = 0

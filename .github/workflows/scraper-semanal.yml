@@ -118,7 +118,7 @@ jobs:
           if [ "$rc" -eq 4 ]; then
             echo "::warning::Coleta incompleta após 3 blocos — rode o workflow em modo 'faltantes' para completar."
           fi
-          # Fonte fixa: ingrediente que fechou a coleta sem NENHUMA oferta e tem
+          # Fonte fixa: ingrediente que fechou a coleta com menos de 3 ofertas e tem
           # loja cadastrada é relido direto da página e vira leitura manual
           # (origem 'link'). Não escreve em precos/resultados_brutos e não
           # derruba o job se a página estiver fora do ar.

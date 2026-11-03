@@ -127,6 +127,9 @@ FAIXA_EMBALAGEM = {
     # 19/10 e 27/10/2026: o histórico é calabresa defumada a quilo; pacote de
     # 400–500 g saía a 37–48/kg contra 18–27 do quilo (coleta 51)
     "Linguiça defumada":  (1000, 5000),
+    # 03/11/2026: pote de 270–560 g é compra de casa (decisão do responsável);
+    # restaurante compra o balde de 1,8 kg (Tenda: 23–53/kg contra 57–183 do pote)
+    "Palmito":            (1500, 5000),
     # revisão de 15/10/2026: a mediana pulava com o mix de embalagem da semana
     # (Palmito 31 -> 69 com lata de 1,8 kg x vidro de 300 g; Mostarda 18 -> 181
     # com galão de 2,9 kg x Dijon de 215 g; Orégano com sachê de 7 g)
