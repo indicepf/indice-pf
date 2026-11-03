@@ -130,6 +130,9 @@ FAIXA_EMBALAGEM = {
     # 03/11/2026: pote de 270–560 g é compra de casa (decisão do responsável);
     # restaurante compra o balde de 1,8 kg (Tenda: 23–53/kg contra 57–183 do pote)
     "Palmito":            (1500, 5000),
+    # 03/11/2026: mesma regra; vidro de pequi fatiado de 140–600 g saía a 61–145/kg
+    # contra 20–42 do pacote com caroço, fardo congelado (15 kg) e polpa em balde
+    "Pequi":              (900, 15000),
     # revisão de 15/10/2026: a mediana pulava com o mix de embalagem da semana
     # (Palmito 31 -> 69 com lata de 1,8 kg x vidro de 300 g; Mostarda 18 -> 181
     # com galão de 2,9 kg x Dijon de 215 g; Orégano com sachê de 7 g)
