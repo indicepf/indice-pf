@@ -170,6 +170,24 @@ CASOS_ORIGEM = [
     (["Angeloni", "Mercado Livre", "Shopee"], "Leite", {"Angeloni"}),
     (["Mercado Livre", "Shopee"], "Leite", {"Mercado Livre", "Shopee"}),   # só existe marketplace
     (["Mercado Livre", "Shopee"], "Queijo prato", set()),                 # queijo: nunca marketplace
+    # lojas premium (10/11/2026): nunca entram, nem como último recurso
+    (["Mambo Delivery", "Casa Santa Luzia", "Angeloni"], "Leite", {"Angeloni"}),
+    (["Mambo", "Santa Luzia"], "Leite", set()),
+    (["Mambo", "Shopee"], "Leite", {"Shopee"}),
+    (["Supermercado Santa Luzia"], "Leite", {"Supermercado Santa Luzia"}),  # nome exato, não substring
+]
+
+# Oferta repetida (coleta 53): mesma loja + título + preço conta uma vez.
+# (ofertas (título, preço, loja), quantas aceitas)
+CASOS_REPETIDA = [
+    ([("Leite Integral 1L", "R$ 5,00", "Oba Hortifruti")] * 3, 1),
+    ([("Leite Integral 1L", "R$ 5,00", "Oba Hortifruti"),
+      ("Leite Integral 1L", "R$5,00", "Oba Hortifruti "),
+      ("leite integral 1l", "R$ 5,00", "oba hortifruti")], 1),           # grafia do preço/caixa
+    ([("Leite Integral 1L", "R$ 5,00", "Oba Hortifruti"),
+      ("Leite Integral 1L", "R$ 5,00", "Angeloni")], 2),                 # outra loja: fica
+    ([("Leite Integral 1L", "R$ 5,00", "Oba Hortifruti"),
+      ("Leite Integral 1L", "R$ 5,10", "Oba Hortifruti")], 2),           # outro preço: fica
 ]
 
 
@@ -239,6 +257,14 @@ def main():
         ok = obtido == esperado
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} origem     {nome} {lojas} -> {sorted(obtido)}")
+    for ofertas, esperado in CASOS_REPETIDA:
+        itens = [{"title": t, "price": p, "source": l} for t, p, l in ofertas]
+        descartes = []
+        obtido = len(filtrar_ofertas(_LEITE, itens, descartados_out=descartes))
+        rep = sum(1 for d in descartes if d["motivo"] == "oferta_repetida")
+        ok = obtido == esperado and rep == len(ofertas) - esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} repetida   {len(ofertas)} ofertas -> {obtido} aceitas, {rep} repetidas (esperado {esperado})")
     for titulo, esperado in CASOS_AMBIGUO:
         obtido = quantidade_ambigua(titulo)
         ok = obtido == esperado
@@ -268,7 +294,7 @@ def main():
         print(f"  {'ok ' if ok else 'FALHA'} decil      {precos} -> {obtido} (esperado {esperado})")
     total = (len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA)
              + len(CASOS_DECIL) + len(CASOS_AMBIGUO) + len(CASOS_ORIGEM)
-             + len(CASOS_SECUNDARIO) + len(CASOS_PECA) + 5)
+             + len(CASOS_SECUNDARIO) + len(CASOS_PECA) + len(CASOS_REPETIDA) + 5)
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
