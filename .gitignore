@@ -48,3 +48,6 @@ __pycache__/
 pipeline/cache_serpapi.json
 pipeline/snapshot_pf.json
 data/tabela_canonica_ingredientes.xlsx
+
+# backups de dados do banco (ficam também no bucket privado "backups" do Supabase)
+backups/
