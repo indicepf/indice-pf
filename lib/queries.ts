@@ -120,7 +120,7 @@ function montarItens(rec: any[], precoMap: Record<number, number>, manRecMap: Re
     const ing = r.ingredientes
     const qtd = Number(r.qtd_g)
     let preco_g: number | null = null, origem: ItemDetalhe['origem'] = 'sem', custo = 0, link: string | null = null
-    const mRec  = manRecMap[r.ingrediente_id] ?? null                               // manual recente (janela ±10d) R$/g
+    const mRec  = manRecMap[r.ingrediente_id] ?? null                               // manual recente (janela ±N dias) R$/g
     const mLast = ing.preco_manual != null ? Number(ing.preco_manual) / 1000 : null // último manual conhecido (fallback)
     const o     = precoMap[r.ingrediente_id] ?? null                                // R$/g online
     const linkM = ing.preco_manual_link ?? null
@@ -134,20 +134,25 @@ function montarItens(rec: any[], precoMap: Record<number, number>, manRecMap: Re
   }).sort((a, b) => b.custo - a.custo)
 }
 
+// Janela do preço manual: leituras de [data − N dias, data + N dias], N igual ao
+// do índice (migração 61, pipeline/calcular_custos_pratos.py). Decisão 10/11/2026.
+const JANELA_MANUAL_DIAS = 5
+const DIA_MS = 86400000
+
 // mediana simples (mesma regra do Python: média dos dois centrais quando par)
 function mediana(v: number[]): number {
   const s = [...v].sort((a, b) => a - b), n = s.length, mid = Math.floor(n / 2)
   return n % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
 }
 
-// Preço manual da janela da coleta ([data-10d, data+10d], a mesma do índice —
+// Preço manual da janela da coleta ([data−N, data+N], a mesma do índice —
 // migração 60): mediana das leituras por ingrediente, em R$/kg. Leitura fora da
 // janela não conta; sem ela o item vale só o online.
 async function manualDaJanela(snapData: string): Promise<Record<number, number>> {
   const base = new Date(snapData + 'T00:00:00Z').getTime()
   const { data } = await supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual')
-    .gte('criado_em', new Date(base - 10 * 86400000).toISOString())
-    .lte('criado_em', new Date(base + 11 * 86400000 - 1000).toISOString())
+    .gte('criado_em', new Date(base - JANELA_MANUAL_DIAS * DIA_MS).toISOString())
+    .lte('criado_em', new Date(base + (JANELA_MANUAL_DIAS + 1) * DIA_MS - 1000).toISOString())
     .not('preco_manual', 'is', null)
   const agg: Record<number, number[]> = {}
   ;((data || []) as any[]).forEach(m => { (agg[m.ingrediente_id] ||= []).push(Number(m.preco_manual)) })
@@ -159,8 +164,8 @@ async function manualDaJanela(snapData: string): Promise<Record<number, number>>
 // Carrega a composição de TODOS os pratos de uma vez (gaveta abre instantânea, sem rede no clique).
 export async function getAllDetalhes(snapshotId: number, snapData: string): Promise<Record<number, ItemDetalhe[]>> {
   const base = new Date(snapData + 'T00:00:00Z').getTime()
-  const ini = new Date(base - 10 * 86400000).toISOString()          // janela do manual: [data-10d, data+10d]
-  const fim = new Date(base + 11 * 86400000 - 1000).toISOString()
+  const ini = new Date(base - JANELA_MANUAL_DIAS * DIA_MS).toISOString()          // janela do manual: [data−N, data+N]
+  const fim = new Date(base + (JANELA_MANUAL_DIAS + 1) * DIA_MS - 1000).toISOString()
   const [rec, { data: precos }, { data: manuais }] = await Promise.all([
     fetchAll(() => supabase.from('receitas').select('prato_id,qtd_g,qtd_pb_g,qtd_cozida_g,qtd_meta_g,ingrediente_id,ingredientes(nome,categoria,custo_fixo,preco_manual,preco_manual_link)').order('id')),
     supabase.from('precos').select('ingrediente_id,mediana_normalizada').eq('snapshot_id', snapshotId),
@@ -168,7 +173,7 @@ export async function getAllDetalhes(snapshotId: number, snapData: string): Prom
   ])
   const precoMap: Record<number, number> = {}
   ;(precos || []).forEach((p: any) => { if (p.mediana_normalizada != null) precoMap[p.ingrediente_id] = Number(p.mediana_normalizada) })
-  // manual recente (janela ±10d): mediana das leituras por ingrediente → R$/g. Só ele conta como manual atual.
+  // manual recente (janela ±N dias): mediana das leituras por ingrediente → R$/g. Só ele conta como manual atual.
   const manAgg: Record<number, number[]> = {}
   ;((manuais || []) as any[]).forEach(m => { (manAgg[m.ingrediente_id] ||= []).push(Number(m.preco_manual)) })
   const manRecMap: Record<number, number> = {}
@@ -195,12 +200,12 @@ export async function getAllFontes(snapshotId: number): Promise<Record<number, F
 
 export type FonteManual = { preco_manual: number | null; loja: string | null; link: string | null; criado_em: string; origem: string | null }
 
-// Leituras manuais por ingrediente: as da janela do snapshot [data-10d, data+10d]
+// Leituras manuais por ingrediente: as da janela do snapshot [data−N, data+N]
 // (as que alimentam a mediana atual); se não houver nenhuma na janela, mostra a
 // última leitura conhecida (fallback dos itens de nicho sem cotação online).
 export async function getAllFontesManuais(snapData: string): Promise<Record<number, FonteManual[]>> {
   const base = new Date(snapData + 'T00:00:00Z').getTime()
-  const ini = base - 10 * 86400000, fim = base + 11 * 86400000 - 1000
+  const ini = base - JANELA_MANUAL_DIAS * DIA_MS, fim = base + (JANELA_MANUAL_DIAS + 1) * DIA_MS - 1000
   const data = await fetchAll(() => supabase.from('precos_manuais_hist')
     .select('ingrediente_id,preco_manual,loja,link,criado_em,origem')
     .not('preco_manual', 'is', null)
@@ -211,7 +216,7 @@ export async function getAllFontesManuais(snapData: string): Promise<Record<numb
   for (const k of Object.keys(todas)) {
     const arr = todas[+k]
     const naJanela = arr.filter(f => { const t = new Date(f.criado_em).getTime(); return t >= ini && t <= fim })
-    out[+k] = naJanela.length ? naJanela : [arr[0]]   // janela ±10d, ou a última leitura conhecida
+    out[+k] = naJanela.length ? naJanela : [arr[0]]   // janela ±N dias, ou a última leitura conhecida
   }
   return out
 }
@@ -265,7 +270,7 @@ export async function getFatoresRendimento(): Promise<Record<number, number>> {
 // custo de cada prato no cliente, sob outra premissa de preço (simulação):
 //   blend  = média manual×online;
 //   online = online preferido (cai p/ manual/fixo onde não há online);
-//   manual = manual (janela ±10d) preferido (cai p/ online/fixo onde não há manual).
+//   manual = manual (janela ±N dias) preferido (cai p/ online/fixo onde não há manual).
 export async function getEvolucao(): Promise<Evolucao> {
   const [cp, snaps, receitas, ingRows, precosRows, manRows, pratosRows] = await Promise.all([
     // fetchAll: custos_pratos passa de 1000 linhas — sem paginação os snapshots
@@ -313,7 +318,7 @@ export async function getEvolucao(): Promise<Evolucao> {
     const cvIngThis = cvIngPorSnap[snap.id] || {}
     const oficial = oficialPorSnap[snap.id] || {}
     const base = new Date(snap.data + 'T00:00:00Z').getTime()
-    const ini = base - 10 * 86400000, fim = base + 11 * 86400000 - 1000
+    const ini = base - JANELA_MANUAL_DIAS * DIA_MS, fim = base + (JANELA_MANUAL_DIAS + 1) * DIA_MS - 1000
     const manG: Record<number, number> = {}
     for (const k in manPorIng) {
       const vs = manPorIng[+k].filter(x => x.t >= ini && x.t <= fim).map(x => x.v)

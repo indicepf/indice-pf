@@ -23,7 +23,7 @@ export default function ModalFontes({ nome, fontes, manuais, dataColeta, onClose
         <div className="p-4 space-y-4">
           {manuais.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[0.65rem] uppercase tracking-wide text-muted">Leituras de campo e manuais (janela ±10 dias)</p>
+              <p className="text-[0.65rem] uppercase tracking-wide text-muted">Leituras de campo e manuais (janela ±5 dias)</p>
               {manuais.map((m, i) => (
                 <div key={i} className="border border-line rounded-md px-3 py-2.5">
                   <div className="flex justify-between gap-3">
