@@ -92,13 +92,14 @@ def main():
     preco_atual = {}
     for p in get_all("precos", "ingrediente_id,mediana_normalizada",
                      f"&snapshot_id=eq.{snap_id}&mediana_normalizada=not.is.null"
-                     "&ingrediente_id=not.is.null"):
+                     "&ingrediente_id=not.is.null&superseded_by=is.null"):
         preco_atual[p["ingrediente_id"]] = float(p["mediana_normalizada"])
 
     # histórico p/ fallback: ingrediente_id -> [(data, R$/g)] de snapshots anteriores
     hist = defaultdict(list)
     for p in get_all("precos", "ingrediente_id,snapshot_id,mediana_normalizada",
-                     "&mediana_normalizada=not.is.null&ingrediente_id=not.is.null"):
+                     "&mediana_normalizada=not.is.null&ingrediente_id=not.is.null"
+                     "&superseded_by=is.null"):
         d = data_por_snap.get(p["snapshot_id"])
         if d and d < snap_data:
             hist[p["ingrediente_id"]].append((d, float(p["mediana_normalizada"])))

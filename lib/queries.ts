@@ -140,6 +140,22 @@ function mediana(v: number[]): number {
   return n % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
 }
 
+// Preço manual da janela da coleta ([data-10d, data+10d], a mesma do índice —
+// migração 60): mediana das leituras por ingrediente, em R$/kg. Leitura fora da
+// janela não conta; sem ela o item vale só o online.
+async function manualDaJanela(snapData: string): Promise<Record<number, number>> {
+  const base = new Date(snapData + 'T00:00:00Z').getTime()
+  const { data } = await supabase.from('precos_manuais_hist').select('ingrediente_id,preco_manual')
+    .gte('criado_em', new Date(base - 10 * 86400000).toISOString())
+    .lte('criado_em', new Date(base + 11 * 86400000 - 1000).toISOString())
+    .not('preco_manual', 'is', null)
+  const agg: Record<number, number[]> = {}
+  ;((data || []) as any[]).forEach(m => { (agg[m.ingrediente_id] ||= []).push(Number(m.preco_manual)) })
+  const out: Record<number, number> = {}
+  for (const k of Object.keys(agg)) out[+k] = mediana(agg[+k])
+  return out
+}
+
 // Carrega a composição de TODOS os pratos de uma vez (gaveta abre instantânea, sem rede no clique).
 export async function getAllDetalhes(snapshotId: number, snapData: string): Promise<Record<number, ItemDetalhe[]>> {
   const base = new Date(snapData + 'T00:00:00Z').getTime()
@@ -1212,11 +1228,13 @@ export type ProdutoRegiao = {
   fc: number   // rendimento mediano do preparo (PB/PC): R$/kg no prato = R$/kg cru × fc
 }
 export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoRegiao[]> {
-  const [precos, ingsQ, contribs, receitas] = await Promise.all([
+  const { data: snap } = await supabase.from('snapshots').select('data').eq('id', snapshotId).single()
+  const [precos, ingsQ, contribs, receitas, manJanela] = await Promise.all([
     supabase.from('precos').select('ingrediente_id,nome_ingrediente,mediana_exibicao,label').eq('snapshot_id', snapshotId),
     supabase.from('ingredientes').select('id,unidade,peso_ref_g,preco_manual'),
     fetchAll(() => supabase.from('contribuicoes').select('ingrediente_id,preco,peso_g,regiao,uf').eq('status', 'aprovada')),
     fetchAll(() => supabase.from('receitas').select('ingrediente_id,qtd_pb_g,qtd_cozida_g').order('id')),
+    snap?.data ? manualDaJanela(snap.data) : Promise.resolve({} as Record<number, number>),
   ])
   // fator de correção mediano por ingrediente (PB/PC nas receitas que o usam)
   const fcAgg: Record<number, number[]> = {}
@@ -1244,10 +1262,11 @@ export async function getPrecosPorRegiao(snapshotId: number): Promise<ProdutoReg
       const vals = porIngReg[key]
       campo[regiao] = { valor: mediana(vals), n: vals.length }
     }
-    // mesmo preço do índice (integrar_snapshot): média de scraper e fonte fixa quando há os dois
-    const man = ing.get(p.ingrediente_id)?.preco_manual
+    // mesmo preço do índice (integrar_snapshot): média de online e manual da janela quando há os dois
     const o = p.mediana_exibicao != null ? Number(p.mediana_exibicao) : null
-    const m = man != null ? Number(man) : null
+    // manual fora da janela só entra em item sem online (nicho), como no índice
+    const pm = ing.get(p.ingrediente_id)?.preco_manual
+    const m = manJanela[p.ingrediente_id] ?? (o == null && pm != null ? Number(pm) : null)
     const online = o != null && m != null ? (o + m) / 2 : (o ?? m)
     return {
       id: p.ingrediente_id, nome: p.nome_ingrediente, label: p.label,
@@ -1265,11 +1284,12 @@ export type ItemCalc = { id: number; nome: string; categoria: string | null; gru
 export async function getCalculadora(): Promise<ItemCalc[]> {
   const novos = await getSnapshotsNovos()
   if (!novos.length) return []
-  const [{ data: precos }, { data: ings }, receitas] = await Promise.all([
+  const [{ data: precos }, { data: ings }, receitas, manJanela] = await Promise.all([
     supabase.from('precos').select('ingrediente_id,mediana_normalizada')
       .eq('snapshot_id', novos[0].id).not('mediana_normalizada', 'is', null),
     supabase.from('ingredientes').select('id,nome,categoria,preco_manual,custo_fixo').eq('ativo', true),
     fetchAll(() => supabase.from('receitas').select('ingrediente_id,qtd_pb_g,qtd_cozida_g').order('id')),
+    manualDaJanela(novos[0].data),
   ])
   const precoMap: Record<number, number> = {}
   ;(precos || []).forEach((p: any) => { precoMap[p.ingrediente_id] = Number(p.mediana_normalizada) })
@@ -1282,7 +1302,9 @@ export async function getCalculadora(): Promise<ItemCalc[]> {
     .filter(i => i.custo_fixo == null)   // itens de custo fixo não têm preço/g
     .map(i => {
       const o = precoMap[i.id]
-      const m = i.preco_manual != null ? Number(i.preco_manual) / 1000 : null
+      // manual da janela; fora dela, só em item sem online (nicho), como no índice
+      const m = manJanela[i.id] != null ? manJanela[i.id] / 1000
+        : (o == null && i.preco_manual != null ? Number(i.preco_manual) / 1000 : null)
       const preco_g = o != null && m != null ? (o + m) / 2 : (o ?? m)
       if (preco_g == null) return null
       return { id: i.id, nome: i.nome as string, categoria: i.categoria ?? null, grupo: grupoDe(i.categoria), preco_g,
