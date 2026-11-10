@@ -57,6 +57,11 @@ def get_all(tabela, select, extra=""):
     return linhas
 
 
+# Janela do preço manual em dias, antes e depois da data da coleta (decisão de
+# 10/11/2026: 5 + 5; leitura fora dela não entra, o item vale só o online).
+JANELA_MANUAL_DIAS = 5
+
+
 def main():
     # ── snapshot alvo ────────────────────────────────────────────────────────
     snaps = get_all("snapshots", "id,data", "&order=data.desc")
@@ -109,13 +114,14 @@ def main():
         h = sorted(hist.get(ing_id, []), reverse=True)
         return h[0][1] if h else None
 
-    # manual da JANELA do snapshot: leituras de [data-10d, data+10d] por ingrediente → R$/g.
+    # manual da JANELA do snapshot: leituras de [data-N, data+N] por ingrediente → R$/g,
+    # N = JANELA_MANUAL_DIAS (igual à migração 61 e a lib/queries.ts).
     # Só o manual dessa janela conta como "manual atual" (entra no blend / tag). Fora
     # dela NÃO é misturado com o online; serve só de fallback p/ itens de nicho sem
     # cotação online (via ingredientes.preco_manual).
     _d = datetime.strptime(snap_data, "%Y-%m-%d")
-    _ini = (_d - timedelta(days=10)).strftime("%Y-%m-%dT00:00:00Z")
-    _fim = (_d + timedelta(days=10)).strftime("%Y-%m-%dT23:59:59Z")
+    _ini = (_d - timedelta(days=JANELA_MANUAL_DIAS)).strftime("%Y-%m-%dT00:00:00Z")
+    _fim = (_d + timedelta(days=JANELA_MANUAL_DIAS)).strftime("%Y-%m-%dT23:59:59Z")
     man_rec = defaultdict(list)
     for h in get_all("precos_manuais_hist", "ingrediente_id,preco_manual,criado_em",
                      f"&preco_manual=not.is.null&ingrediente_id=not.is.null"
@@ -138,7 +144,7 @@ def main():
             ing = ingredientes.get(ing_id, {})
             cfixo = ing.get("custo_fixo")
             pman  = ing.get("preco_manual")
-            m_rec  = manual_recente(ing_id)                          # manual da janela ±10d, R$/g
+            m_rec  = manual_recente(ing_id)                          # manual da janela ±N dias, R$/g
             m_last = float(pman) / 1000 if pman is not None else None # último manual conhecido (fallback)
             o_now = preco_atual.get(ing_id)                          # R$/g online desta coleta
             o_g   = o_now if o_now is not None else ultimo_online(ing_id)  # senão, último online conhecido
