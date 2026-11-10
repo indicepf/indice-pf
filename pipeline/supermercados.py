@@ -11,7 +11,9 @@ igual.
 
 Lojas testadas em 15/10/2026 (respondem sem cookie de região):
 RJ Zona Sul, Prezunic · PR Super Muffato · SC Giassi, Bistek ·
-SP Savegnago, Covabra, Mambo, Santa Luzia · MG Supernosso · SE/BA GBarbosa.
+SP Savegnago, Covabra · MG Supernosso · SE/BA GBarbosa.
+Mambo e Santa Luzia (SP) respondem, mas saíram em 10/11/2026: lojas premium,
+bloqueadas também no filtro (scraper_pf.LOJAS_PREMIUM).
 Sem resposta: Angeloni, Condor, Carrefour, Atacadão, Pão de Açúcar, Nordestão,
 Koch, Comper e outras. Norte e Centro-Oeste ainda sem loja.
 """
@@ -28,8 +30,6 @@ LOJAS = [
     ("Bistek",        "www.bistek.com.br"),
     ("Savegnago",     "www.savegnago.com.br"),
     ("Covabra",       "www.covabra.com.br"),
-    ("Mambo",         "www.mambo.com.br"),
-    ("Santa Luzia",   "www.santaluzia.com.br"),
     ("Supernosso",    "www.supernosso.com"),
     ("GBarbosa",      "www.gbarbosa.com.br"),
 ]

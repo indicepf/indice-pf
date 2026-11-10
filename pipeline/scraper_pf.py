@@ -508,6 +508,20 @@ def eh_marketplace(loja):
     return any(m in l for m in LOJAS_MARKETPLACE)
 
 
+# Lojas premium: nunca entram, nem quando não sobra outra oferta. Na coleta 53
+# (09/11/2026) Mambo e Santa Luzia tinham 92 ofertas e puxavam o nível para
+# cima; foram tiradas na revisão de 10/11 e o bloqueio vale daqui em diante.
+# Nome EXATO da loja (sem caixa/espaço): "Santa Luzia" por substring pegaria
+# supermercado comum de mesmo nome em outra cidade. Nomes conferidos pelo
+# domínio do link no histórico (mambo.com.br, santaluzia.com.br).
+LOJAS_PREMIUM = {"mambo", "mambo delivery", "mambo supermercados",
+                 "santa luzia", "casa santa luzia"}
+
+
+def eh_premium(loja):
+    return (loja or "").strip().lower() in LOJAS_PREMIUM
+
+
 # ─── Validação de produto ─────────────────────────────────────────────────────
 def _casa_palavra(termo, texto):
     """Casamento por palavra inteira. Com substring pura, palavra_nao curta
@@ -791,6 +805,11 @@ def filtrar_ofertas(ingrediente, itens, medianas_ant=None, descartados_out=None)
 
 def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketplace):
     resultados, rejeitados, motivos, pecas = [], 0, [], []
+    # Mesma loja, mesmo título, mesmo preço: conta uma vez. ofertas_da_resposta
+    # compara o texto cru do preço e deixou passar 8 linhas repetidas na coleta
+    # 53 (laranja Oba 2x2, fubá redestore 3x, azeite bigbox 2x); antes, o
+    # Londripeixe meia banda entrou até 5x no Tambaqui (47–49).
+    vistos = set()
     for item in itens:
         titulo    = item.get("title", "")
         preco_txt = item.get("price", "")
@@ -801,6 +820,18 @@ def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketpla
             qs = urllib.parse.urlencode({"q": ingrediente["busca"], "tbm": "shop"})
             link = f"https://www.google.com/search?{qs}"
 
+        chave = ((loja or "").strip().lower(), (titulo or "").strip().lower(), limpar_preco(preco_txt))
+        if chave in vistos:
+            _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
+                                limpar_preco(preco_txt), None, "oferta_repetida")
+            continue
+        vistos.add(chave)
+        if eh_premium(loja):
+            rejeitados += 1
+            motivos.append((titulo, f"loja premium ({loja})"))
+            _registrar_descarte(descartados_out, ingrediente, titulo, loja, link,
+                                limpar_preco(preco_txt), None, "loja_premium")
+            continue
         if not aceita_marketplace and eh_marketplace(loja):
             rejeitados += 1
             motivos.append((titulo, f"loja de marketplace ({loja})"))
