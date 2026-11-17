@@ -502,6 +502,11 @@ LOJAS_MARKETPLACE = ("mercado livre", "mercadolivre", "shopee", "magalu",
 # Prezunic, Hemmer 1 kg).
 SO_SUPERMERCADO = {"Queijo prato", "Queijo mussarela", "Carne de sol", "Tucupi", "Mostarda"}
 
+# Título sem peso lido como preço do quilo, se o preço couber na faixa (R$/kg).
+# 17/11/2026: açougue anuncia "Carne de Sol Coxão Duro" a 55,99 sem escrever kg;
+# na coleta 54 saíram 4 ofertas certas assim (Oba, Machado, Casa do Norte, Vitalia).
+SEM_PESO_E_QUILO = {"Carne de sol": (30, 90)}
+
 
 def eh_marketplace(loja):
     l = (loja or "").lower()
@@ -866,6 +871,9 @@ def _filtrar(ingrediente, itens, medianas_ant, descartados_out, aceita_marketpla
             _registrar_descarte(descartados_out, ingrediente, titulo, loja, link, None, None, "preco_ilegivel")
             continue
         norm = normalizar(preco, titulo, ingrediente)
+        faixa_kg = SEM_PESO_E_QUILO.get(ingrediente["nome"])
+        if not norm and faixa_kg and faixa_kg[0] <= preco <= faixa_kg[1]:
+            norm = (preco / 1000, f"R$ {preco:.2f}/kg", "kg")
         if not norm:
             _registrar_descarte(descartados_out, ingrediente, titulo, loja, link, preco, None, "sem_quantidade_no_titulo")
             continue

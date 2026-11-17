@@ -216,6 +216,16 @@ CASOS_PECA = [
 ]
 
 
+# Carne de sol sem peso no título = preço do quilo, só dentro de 30–90 (17/11/2026)
+CASOS_SEM_PESO = [
+    ("Carne de Sol Coxão Duro", "55,99", 55.99),
+    ("Carne Do Sol Especial Tipo A", "53,99", 53.99),   # "carne do sol" vale
+    ("Carne de sol", "256,50", None),                   # fora da faixa: não é quilo
+    ("Carne de sol desfiada", "12,99", None),           # abaixo da faixa
+    ("Carne De Sol - Adicione A Cada 500g", "49,99", None),  # tem peso: regra de embalagem
+]
+
+
 def main():
     falhas = 0
     # sem histórico, a referência é a resposta: peixe inteiro 2 kg a R$ 53,98 com
@@ -292,9 +302,17 @@ def main():
         ok = obtido == esperado and len(mantidos) + len(cortados) == len(precos)
         falhas += 0 if ok else 1
         print(f"  {'ok ' if ok else 'FALHA'} decil      {precos} -> {obtido} (esperado {esperado})")
+    sol = {**_FILE, "nome": "Carne de sol", "palavras_ok": ["carne de sol", "carne sol", "carne do sol"]}
+    for titulo, preco, esperado in CASOS_SEM_PESO:
+        res = filtrar_ofertas(sol, [{"title": titulo, "price": preco, "source": "Loja"}])
+        obtido = round(res[0]["preco_normalizado"] * 1000, 2) if res else None
+        ok = obtido == esperado
+        falhas += 0 if ok else 1
+        print(f"  {'ok ' if ok else 'FALHA'} sem peso   {titulo!r} R$ {preco} -> {obtido} (esperado {esperado})")
     total = (len(CASOS_CONTAGEM) + len(CASOS_QUANTIDADE) + len(CASOS_PALAVRA)
              + len(CASOS_DECIL) + len(CASOS_AMBIGUO) + len(CASOS_ORIGEM)
-             + len(CASOS_SECUNDARIO) + len(CASOS_PECA) + len(CASOS_REPETIDA) + 5)
+             + len(CASOS_SECUNDARIO) + len(CASOS_PECA) + len(CASOS_REPETIDA)
+             + len(CASOS_SEM_PESO) + 5)
     print(f"\n{total - falhas}/{total} casos passaram")
     if falhas:
         sys.exit(1)
